@@ -52,7 +52,17 @@ struct Time: Equatable, Comparable, Hashable, Codable {
     }
 
     func hash(into hasher: inout Hasher) {
-        hasher.combine(seconds)
+        // 规约到最简分数再 hash,保证与 ==(整数 commonize)一致,不用 Double
+        let v = value < 0 ? -value : value
+        let g = Self.gcd64(v, Int64(timescale))
+        hasher.combine(value / g)
+        hasher.combine(Int64(timescale) / g)
+    }
+
+    private static func gcd64(_ a: Int64, _ b: Int64) -> Int64 {
+        var a = a, b = b
+        while b != 0 { (a, b) = (b, a % b) }
+        return a == 0 ? 1 : a
     }
 
     func clamped(to range: ClosedRange<Time>) -> Time {
@@ -73,5 +83,7 @@ private func gcd(_ a: Int32, _ b: Int32) -> Int32 {
 }
 
 private func lcm(_ a: Int32, _ b: Int32) -> Int32 {
-    a / gcd(a, b) * b
+    let result = Int64(a) / Int64(gcd(a, b)) * Int64(b)
+    precondition(result <= Int64(Int32.max), "lcm overflow: \(a), \(b)")
+    return Int32(result)
 }

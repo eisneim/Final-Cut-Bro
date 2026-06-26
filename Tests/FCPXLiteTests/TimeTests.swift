@@ -37,4 +37,11 @@ final class TimeTests: XCTestCase {
         XCTAssertEqual(Time(value: 3600, timescale: 600).fcpxmlString, "3600/600s")
         XCTAssertEqual(Time.zero.fcpxmlString, "0s")
     }
+
+    func testHashConsistentWithEquality() {
+        let a = Time(value: 1, timescale: 2)
+        let b = Time(value: 3, timescale: 6)   // 都是 0.5s
+        XCTAssertEqual(a, b)
+        XCTAssertEqual(a.hashValue, b.hashValue)
+    }
 }
