@@ -1,46 +1,26 @@
 import SwiftUI
+import AppKit
 
 struct RootView: View {
     let store: DocumentStore
 
     var body: some View {
-        VStack(spacing: 0) {
-            statusBar
-            Divider().overlay(Tokens.Palette.divider)
-            HStack(spacing: 0) {
-                leftWorkspace
-                ChatPanelView()
-            }
+        HStack(spacing: 0) {
+            leftWorkspace
+            ChatPanelView()
         }
         .background(Tokens.Palette.chrome)
         .frame(minWidth: 1100, minHeight: 680)
     }
 
-    private var statusBar: some View {
-        HStack(spacing: 8) {
-            Circle().fill(Tokens.Palette.windowClose).frame(width: 10, height: 10)
-            Circle().fill(Tokens.Palette.windowMinimize).frame(width: 10, height: 10)
-            Circle().fill(Tokens.Palette.windowZoom).frame(width: 10, height: 10)
-            Spacer()
-            Text("FCPX-lite").font(Tokens.Typeface.title).foregroundStyle(Tokens.Palette.textPrimary)
-            Spacer()
-            Button { store.dispatch(.setInspector(!store.ui.showInspector)) } label: { Text("≡|||") }
-                .help("检查器开关 ⌘4")
-                .buttonStyle(.plain)
-                .foregroundStyle(store.ui.showInspector ? Tokens.Palette.selectYellow : Tokens.Palette.textMuted)
-        }
-        .padding(.horizontal, 12).frame(height: Tokens.Metric.titlebarHeight)
-        .background(Tokens.Palette.titlebar)
-    }
-
     private var leftWorkspace: some View {
         VStack(spacing: 0) {
-            PanelPlaceholder(title: "格式工具栏").frame(height: Tokens.Metric.toolbarHeight)
+            formatToolbar
             Divider().overlay(Tokens.Palette.divider)
             HStack(spacing: 0) {
                 PanelPlaceholder(title: "边栏").frame(width: 80)
                 Divider().overlay(Tokens.Palette.divider)
-                PanelPlaceholder(title: "资源管理器").frame(width: Tokens.Metric.browserWidth)
+                BrowserView(store: store).frame(width: Tokens.Metric.browserWidth)
                 Divider().overlay(Tokens.Palette.divider)
                 PanelPlaceholder(title: "预览 Viewer", background: Tokens.Palette.canvas)
                 if store.ui.showInspector {
@@ -48,30 +28,59 @@ struct RootView: View {
                     PanelPlaceholder(title: "检查器").frame(width: Tokens.Metric.inspectorWidth)
                 }
             }
-            timelineToolbar
+            timelineResizeHandle
+            TimelineToolbar(store: store)
             Divider().overlay(Tokens.Palette.divider)
             HStack(spacing: 0) {
-                PanelPlaceholder(title: "磁性时间线", background: Tokens.Palette.canvas)
+                TimelineView(store: store)
                 if store.ui.showEffects {
                     Divider().overlay(Tokens.Palette.divider)
                     PanelPlaceholder(title: "效果/转场", background: Tokens.Palette.effectsPanel)
                         .frame(width: Tokens.Metric.effectsWidth)
                 }
             }
-            .frame(height: 200)
+            .frame(height: store.ui.timelineHeight)
         }
     }
 
-    private var timelineToolbar: some View {
-        HStack {
-            Text("索引 ✛⊟✄").font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
+    // MARK: - Format Toolbar
+
+    private var formatToolbar: some View {
+        HStack(spacing: 12) {
+            Text("所有片段 ⌄").font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
             Spacer()
-            Button { store.dispatch(.setEffects(!store.ui.showEffects)) } label: { Text("▤▤") }
-                .help("效果开关 ⌘5")
+            Text("1080p HD 25p,立体声").font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
+            Spacer()
+            Button { store.dispatch(.setInspector(!store.ui.showInspector)) } label: { Text("≡|||") }
+                .help("检查器开关 ⌘4")
                 .buttonStyle(.plain)
-                .foregroundStyle(store.ui.showEffects ? Tokens.Palette.selectYellow : Tokens.Palette.textMuted)
+                .foregroundStyle(store.ui.showInspector ? Tokens.Palette.selectYellow : Tokens.Palette.textMuted)
         }
-        .padding(.horizontal, 12).frame(height: Tokens.Metric.timelineToolbarHeight)
+        .padding(.horizontal, 12).frame(height: Tokens.Metric.toolbarHeight)
         .background(Tokens.Palette.chrome)
+    }
+
+    // MARK: - Resize Handle
+
+    private var timelineResizeHandle: some View {
+        Rectangle()
+            .fill(Tokens.Palette.divider)
+            .frame(height: 4)
+            .onHover { inside in
+                if inside {
+                    NSCursor.resizeUpDown.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
+            .gesture(
+                DragGesture(minimumDistance: 1)
+                    .onChanged { drag in
+                        // Dragging UP (negative translation.height) increases timeline height
+                        store.dispatch(.setTimelineHeight(
+                            store.ui.timelineHeight - drag.translation.height
+                        ))
+                    }
+            )
     }
 }
