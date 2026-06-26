@@ -76,4 +76,42 @@ final class TimelineGeometryTests: XCTestCase {
         let idx = TimelineGeometry.spineIndex(ofClipID: ClipID(), in: seq)
         XCTAssertNil(idx)
     }
+
+    // MARK: - 画布坐标几何
+
+    func testSecondsToXAndBack() {
+        XCTAssertEqual(TimelineGeometry.x(forSeconds: 2, pxPerSecond: 60), 120)
+        XCTAssertEqual(TimelineGeometry.seconds(forX: 120, pxPerSecond: 60), 2, accuracy: 1e-9)
+    }
+
+    func testSecondsForXClampsToZero() {
+        // 负 x → clamp 到 0
+        XCTAssertEqual(TimelineGeometry.seconds(forX: -50, pxPerSecond: 60), 0, accuracy: 1e-9)
+    }
+
+    func testSecondsForXZeroPxIsZero() {
+        XCTAssertEqual(TimelineGeometry.seconds(forX: 100, pxPerSecond: 0), 0, accuracy: 1e-9)
+    }
+
+    func testLaneTopYBaselineAndStacking() {
+        // ruler=24, laneHeight=44, gap=4 → step=48; maxPositiveLanes=2 → baselineTop=24+2*48=120
+        let h: CGFloat = 44, gap: CGFloat = 4, ruler: CGFloat = 24, maxPos = 2
+        let lane0 = TimelineGeometry.laneTopY(lane: 0, rulerHeight: ruler, laneHeight: h, laneGap: gap, maxPositiveLanes: maxPos)
+        XCTAssertEqual(lane0, 120)
+        // lane 1 上方一行
+        let lane1 = TimelineGeometry.laneTopY(lane: 1, rulerHeight: ruler, laneHeight: h, laneGap: gap, maxPositiveLanes: maxPos)
+        XCTAssertEqual(lane1, 120 - 48)
+        // lane -1 下方一行
+        let laneNeg1 = TimelineGeometry.laneTopY(lane: -1, rulerHeight: ruler, laneHeight: h, laneGap: gap, maxPositiveLanes: maxPos)
+        XCTAssertEqual(laneNeg1, 120 + 48)
+    }
+
+    func testTickIntervalAdaptsToZoom() {
+        // 60px/s,目标 80px:1s*60=60 <80,2s*60=120 ≥80 → 2
+        XCTAssertEqual(TimelineGeometry.tickIntervalSeconds(pxPerSecond: 60), 2, accuracy: 1e-9)
+        // 大缩放 200px/s:1s*200=200 ≥80 → 1
+        XCTAssertEqual(TimelineGeometry.tickIntervalSeconds(pxPerSecond: 200), 1, accuracy: 1e-9)
+        // 极小缩放 8px/s:10s*8=80 ≥80 → 10
+        XCTAssertEqual(TimelineGeometry.tickIntervalSeconds(pxPerSecond: 8), 10, accuracy: 1e-9)
+    }
 }

@@ -32,4 +32,41 @@ enum TimelineGeometry {
         }
         return nil
     }
+
+    // MARK: - 画布坐标(纯几何,供 AppKit 画布与单元测试共用)
+
+    /// 时间(秒)→ 时间线 x 像素。
+    static func x(forSeconds seconds: Double, pxPerSecond: CGFloat) -> CGFloat {
+        CGFloat(seconds) * pxPerSecond
+    }
+
+    /// 时间线 x 像素 → 时间(秒),clamp 到 ≥0。
+    static func seconds(forX x: CGFloat, pxPerSecond: CGFloat) -> Double {
+        guard pxPerSecond > 0 else { return 0 }
+        return max(0, Double(x / pxPerSecond))
+    }
+
+    /// 车道(lane)→ 该车道行的 y 顶部坐标(在 isFlipped 坐标系下,y 向下增长)。
+    /// 布局:顶部 rulerHeight 留给标尺;lane 0(主轴)位于 baseline 行;
+    /// lane n>0 在主轴【上方】(y 更小),lane n<0 在主轴【下方】(y 更大)。
+    /// baselineTop = rulerHeight + maxPositiveLanes * (laneHeight + laneGap)。
+    static func laneTopY(lane: Int,
+                         rulerHeight: CGFloat,
+                         laneHeight: CGFloat,
+                         laneGap: CGFloat,
+                         maxPositiveLanes: Int) -> CGFloat {
+        let baselineTop = rulerHeight + CGFloat(maxPositiveLanes) * (laneHeight + laneGap)
+        return baselineTop - CGFloat(lane) * (laneHeight + laneGap)
+    }
+
+    /// 标尺刻度间隔(秒):选一个“好看”的秒数,使相邻标签 ≈ targetLabelPx 像素。
+    /// 从 {1,2,5,10,15,30,60,120,300,600} 里挑第一个满足 spacing*px ≥ targetLabelPx 的;
+    /// 都不够则用最大值。保证 pxPerSecond 任意时标签不挤成一团。
+    static func tickIntervalSeconds(pxPerSecond: CGFloat, targetLabelPx: CGFloat = 80) -> Double {
+        let candidates: [Double] = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600]
+        for c in candidates where CGFloat(c) * pxPerSecond >= targetLabelPx {
+            return c
+        }
+        return candidates.last!
+    }
 }
