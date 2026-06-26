@@ -5,4 +5,5 @@ import Foundation
 struct UIState: Codable, Equatable {
     var showInspector = false
     var showEffects = false
+    var selectedClipID: ClipID? = nil
 }

@@ -27,6 +27,8 @@ import Observation
         case let .connect(c, host, lane, off):   apply { Mutations.connectClip(c, toHostIndex: host, lane: lane, offset: off, in: $0) }
         case let .setInspector(v):               ui.showInspector = v
         case let .setEffects(v):                 ui.showEffects = v
+        case let .importAsset(a):                document.assetLibrary.append(a)
+        case let .selectClip(id):                ui.selectedClipID = id
         }
     }
 }

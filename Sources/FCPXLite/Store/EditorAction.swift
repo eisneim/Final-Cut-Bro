@@ -14,4 +14,6 @@ enum EditorAction: Codable, Equatable {
     case connect(Clip, host: Int, lane: Int, offset: Time)
     case setInspector(Bool)
     case setEffects(Bool)
+    case importAsset(Asset)
+    case selectClip(ClipID?)
 }
