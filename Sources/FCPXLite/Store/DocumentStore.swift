@@ -29,6 +29,11 @@ import Observation
         case let .setEffects(v):                 ui.showEffects = v
         case let .importAsset(a):                document.assetLibrary.append(a)
         case let .selectClip(id):                ui.selectedClipID = id
+        case let .setTool(t):                    ui.currentTool = t
+        case let .setZoom(z):                    ui.pxPerSecond = max(8, min(400, z))
+        case let .setPlayhead(t):                ui.playhead = t
+        case let .setTimelineHeight(h):          ui.timelineHeight = max(120, min(640, h))
+        case let .selectAsset(id):               ui.selectedAssetID = id
         }
     }
 }

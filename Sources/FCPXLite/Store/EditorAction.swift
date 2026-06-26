@@ -16,4 +16,9 @@ enum EditorAction: Codable, Equatable {
     case setEffects(Bool)
     case importAsset(Asset)
     case selectClip(ClipID?)
+    case setTool(EditTool)
+    case setZoom(Double)
+    case setPlayhead(Time)
+    case setTimelineHeight(Double)
+    case selectAsset(AssetID?)
 }
