@@ -67,6 +67,100 @@ enum Mutations {
         return s
     }
 
+    /// 把某个 clip(可能在主轴,也可能是某宿主的 connected 子项)移动到 (目标lane, 目标绝对时间)。
+    /// lane==0 → 放回主轴:从原处移除,按目标时间插入主轴对应下标(磁性,无缝)。
+    /// lane!=0 → 作为连接片段:从原处移除,挂到目标时间所在的主轴 clip 上,offset=目标时间−宿主起点。
+    static func relocate(clipID: ClipID, toLane lane: Int, atTime t: Time, in seq: Sequence) -> Sequence {
+        var s = seq
+
+        // 1) 按 id 定位并提取 clip 值(主轴元素或某宿主的连接子项)。
+        guard let extracted = extractClip(clipID, from: &s) else { return seq } // 未知 id → no-op
+
+        if lane == 0 {
+            // 2a) 放回主轴:按目标时间在缩减后的主轴里算插入下标(prefix-sum,磁性)。
+            var clip = extracted
+            clip.lane = 0
+            clip.offset = .zero
+            let idx = spineInsertionIndex(forTime: t, in: s)
+            s.spine.insert(.clip(clip), at: idx)
+        } else {
+            // 2b) 作为连接片段挂到目标时间所在的主轴 clip 上。
+            guard let host = hostSpineIndex(forTime: t, in: s) else { return seq } // 无主轴 clip → no-op
+            let hostAbsStart = s.spine[0..<host.index].reduce(Time.zero) { $0 + $1.duration }
+            var clip = extracted
+            clip.lane = lane
+            let off = t - hostAbsStart
+            clip.offset = off < .zero ? .zero : off   // clamp offset ≥ 0
+            guard case .clip(var hostClip) = s.spine[host.index] else { return seq }
+            hostClip.connected.append(clip)
+            s.spine[host.index] = .clip(hostClip)
+        }
+
+        assertInvariants(s)
+        return s
+    }
+
+    /// 从 spine(直接元素或某宿主的 connected 列表)按 id 找到并移除该 clip,返回其值。
+    /// 找不到返回 nil(调用方据此 no-op)。
+    private static func extractClip(_ id: ClipID, from s: inout Sequence) -> Clip? {
+        // 主轴直接元素
+        for (i, el) in s.spine.enumerated() {
+            if case .clip(let c) = el, c.id == id {
+                s.spine.remove(at: i)
+                return c
+            }
+        }
+        // 某宿主的连接子项
+        for (i, el) in s.spine.enumerated() {
+            guard case .clip(var host) = el else { continue }
+            if let j = host.connected.firstIndex(where: { $0.id == id }) {
+                let child = host.connected.remove(at: j)
+                s.spine[i] = .clip(host)
+                return child
+            }
+        }
+        return nil
+    }
+
+    /// 目标时间 t 在主轴里的插入下标 = 累计起点 < t 的 spine 元素数量(clamp 到 [0, count])。
+    private static func spineInsertionIndex(forTime t: Time, in seq: Sequence) -> Int {
+        var acc = Time.zero
+        var count = 0
+        for el in seq.spine {
+            if acc < t { count += 1 }
+            acc = acc + el.duration
+        }
+        return max(0, min(count, seq.spine.count))
+    }
+
+    /// 找到半开区间 [absStart, absStart+duration) 包含 t 的主轴 clip;无包含则取最近;无 spine clip 返回 nil。
+    private static func hostSpineIndex(forTime t: Time, in seq: Sequence) -> (index: Int, absStart: Time)? {
+        var entries: [(index: Int, absStart: Time, duration: Time)] = []
+        var acc = Time.zero
+        for (i, el) in seq.spine.enumerated() {
+            if case .clip = el {
+                entries.append((index: i, absStart: acc, duration: el.duration))
+            }
+            acc = acc + el.duration
+        }
+        guard !entries.isEmpty else { return nil }
+
+        var best = entries[0]
+        var bestDist: Time? = nil
+        for e in entries {
+            let end = e.absStart + e.duration
+            if t >= e.absStart && t < end {
+                return (e.index, e.absStart)   // 完全包含
+            }
+            let dist: Time = t < e.absStart ? (e.absStart - t) : (t - end)
+            if bestDist == nil || dist < bestDist! {
+                bestDist = dist
+                best = e
+            }
+        }
+        return (best.index, best.absStart)
+    }
+
     // MARK: - Private: re-anchoring helpers
 
     /// 计算 spine[index] 上各 connected child 的绝对起始时间。
