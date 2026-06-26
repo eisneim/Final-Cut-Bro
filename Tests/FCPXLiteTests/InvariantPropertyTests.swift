@@ -37,15 +37,18 @@ final class InvariantPropertyTests: XCTestCase {
             in: Mutations.insertClip(clip(1), at: 1, in: base))
         let delThenIns = Mutations.insertClip(clip(1), at: 1,
             in: Mutations.rippleDelete(at: 0, in: base))
-        // 两者位置表不同 —— 证明顺序敏感且各自确定
-        XCTAssertNotEqual(ExperimentReport.placementTable(insThenDel),
-                          ExperimentReport.placementTable(delThenIns))
+        let posA = ExperimentReport.placementTable(insThenDel).map(\.absStartSeconds)
+        let posB = ExperimentReport.placementTable(delThenIns).map(\.absStartSeconds)
+        // 顺序敏感且各自确定: insThenDel=[clip1@0, clip3@1]; delThenIns=[clip3@0, clip1@3]
+        XCTAssertEqual(posA, [0, 1])
+        XCTAssertEqual(posB, [0, 3])
+        XCTAssertNotEqual(posA, posB)
     }
 
     // 参数扫描:trim duration 从 1..9,后续 clip 起点应单调左移。
     func testTrimSweepMonotonic() {
         var prevStart = Double.infinity
-        for d in stride(from: 9, through: 1, by: -1) {
+        for d in stride(from: 10, through: 1, by: -1) {
             let seq = Mutations.rippleTrimRight(at: 0, newDuration: .seconds(Double(d)),
                 assetDuration: .seconds(20),
                 in: Sequence(spine: [.clip(clip(10)), .clip(clip(2))]))
@@ -70,6 +73,17 @@ final class InvariantPropertyTests: XCTestCase {
         let csv = ExperimentReport.csv(seq)
         XCTAssertTrue(csv.contains("clipID,absStart,duration,lane"))
         XCTAssertEqual(csv.split(separator: "\n").count, 3) // header + 2 rows
+    }
+
+    func testConnectedClipsAcrossLanesPreserveInvariants() {
+        var seq = Sequence(spine: [.clip(clip(10))])
+        for lane in 1...4 {
+            seq = Mutations.connectClip(clip(2), toHostIndex: 0, lane: lane,
+                                        offset: .seconds(Double(lane)), in: seq)
+            XCTAssertNoThrow(try Invariants.check(seq))
+        }
+        let connected = Layout.compute(seq).filter(\.isConnected)
+        XCTAssertEqual(connected.count, 4)
     }
 }
 
