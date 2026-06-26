@@ -29,4 +29,14 @@ final class InvariantTests: XCTestCase {
         let seq = Sequence(spine: [.clip(clip(5, connected: [a, b]))])
         XCTAssertNoThrow(try Invariants.check(seq))
     }
+
+    func testConnectedClipAtLaneZeroThrows() {
+        // 直接构造(绕过 connectClip 的守卫)一个 lane==0 的连接片段,Invariants 必须抓到
+        let badConn = clip(1, lane: 0, offset: .seconds(1))
+        let host = clip(5, connected: [badConn])
+        let seq = Sequence(spine: [.clip(host)])
+        XCTAssertThrowsError(try Invariants.check(seq)) { err in
+            XCTAssertEqual(err as? InvariantViolation, .laneCollision)
+        }
+    }
 }
