@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 enum MediaKind: String, Codable { case video, audio, image }
 
@@ -13,6 +14,7 @@ struct Asset: Identifiable, Codable, Equatable {
     var hasAudio: Bool
 
     enum CodingKeys: String, CodingKey {
+        // NOTE: CGSize 扁平成独立 key(naturalSizeWidth/Height),对齐 FCPXML 且避免嵌套;此为持久化契约,改动需迁移。
         case id, url, kind, duration, naturalSizeWidth, naturalSizeHeight, frameRate, hasAudio
     }
 

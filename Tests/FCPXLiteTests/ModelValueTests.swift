@@ -23,4 +23,15 @@ final class ModelValueTests: XCTestCase {
         let back = try JSONDecoder().decode(Asset.self, from: data)
         XCTAssertEqual(asset, back)
     }
+
+    func testTransformCodableRoundTrip() throws {
+        var t = Transform()
+        t.position = CGPoint(x: 12, y: -8)
+        t.scale = CGSize(width: 2, height: 0.5)
+        t.rotation = 45
+        t.anchor = CGPoint(x: 1, y: 2)
+        let data = try JSONEncoder().encode(t)
+        let back = try JSONDecoder().decode(Transform.self, from: data)
+        XCTAssertEqual(t, back)
+    }
 }

@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 struct Transform: Codable, Equatable {
     var position = CGPoint(x: 0, y: 0)
@@ -7,6 +8,7 @@ struct Transform: Codable, Equatable {
     var anchor = CGPoint(x: 0, y: 0)
 
     enum CodingKeys: String, CodingKey {
+        // NOTE: CGPoint/CGSize 扁平成独立 key(positionX/Y 等),对齐 FCPXML 且避免嵌套;此为持久化契约,改动需迁移。
         case positionX, positionY, scaleWidth, scaleHeight, rotation, anchorX, anchorY
     }
 
