@@ -1,0 +1,122 @@
+import SwiftUI
+import AppKit
+
+/// NSViewRepresentable:NSScrollView(原生横向/纵向滚动)+ 自定义 TimelineContentView 画布。
+/// 状态作为存储属性传入 → SwiftUI diff → 调 updateNSView 把状态推入画布并重画。
+struct TimelineCanvas: NSViewRepresentable {
+    let store: DocumentStore
+
+    // 这些都作为存储属性,SwiftUI 会对它们 diff;变化即触发 updateNSView。
+    let pxPerSecond: CGFloat
+    let playheadSeconds: Double
+    let selectedClipID: ClipID?
+    let tool: EditTool
+    let sequence: Sequence            // Equatable,内容变化即触发更新
+    let assetLibrary: [Asset]
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSScrollView()
+        scrollView.hasHorizontalScroller = true
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
+        scrollView.drawsBackground = true
+        scrollView.backgroundColor = TimelineColors.canvas
+        scrollView.horizontalScrollElasticity = .allowed
+
+        let content = TimelineContentView(frame: NSRect(x: 0, y: 0, width: 1000, height: 600))
+        content.dispatch = { [weak store] action in
+            store?.dispatch(action)
+        }
+        scrollView.documentView = content
+        return scrollView
+    }
+
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        guard let content = scrollView.documentView as? TimelineContentView else { return }
+
+        content.apply(state: TimelineContentView.State(
+            sequence: sequence,
+            assetLibrary: assetLibrary,
+            pxPerSecond: pxPerSecond,
+            playheadSeconds: playheadSeconds,
+            selectedClipID: selectedClipID,
+            currentTool: tool
+        ))
+
+        // 内容宽度 = max(可视宽, 总时长*px + 200);高度足够 ~7 条车道。
+        let visibleWidth = scrollView.contentView.bounds.width
+        let totalSeconds = Layout.compute(sequence)
+            .map { ($0.absStart + $0.duration).seconds }
+            .max() ?? 0
+        let neededWidth = CGFloat(totalSeconds) * pxPerSecond + 200
+        let width = max(visibleWidth, neededWidth)
+
+        // 高度:标尺 + (上下各 ~3 条) 车道,固定够 7 条。
+        let lanes = 7
+        let height = TimelineContentView.rulerHeight
+            + CGFloat(lanes) * (TimelineContentView.laneHeight + TimelineContentView.laneGap)
+            + 20
+        let visibleHeight = scrollView.contentView.bounds.height
+        let frameHeight = max(visibleHeight, height)
+
+        content.frame = NSRect(x: 0, y: 0, width: width, height: frameHeight)
+        content.needsDisplay = true
+    }
+}
+
+/// SwiftUI 入口。READ store 上被观察的字段(@Observable 据此跟踪并重渲染),
+/// 把它们作为存储属性传给 TimelineCanvas,从而驱动 updateNSView。
+/// 名称/签名保持 `TimelineView(store:)`,RootView 无需改动。
+struct TimelineView: View {
+    let store: DocumentStore
+
+    var body: some View {
+        VStack(spacing: 0) {
+            timelineHeader
+            Divider().overlay(Tokens.Palette.divider)
+            TimelineCanvas(
+                store: store,
+                pxPerSecond: CGFloat(store.ui.pxPerSecond),
+                playheadSeconds: store.ui.playhead.seconds,
+                selectedClipID: store.ui.selectedClipID,
+                tool: store.ui.currentTool,
+                sequence: store.document.sequence,
+                assetLibrary: store.document.assetLibrary
+            )
+        }
+        .background(Tokens.Palette.canvas)
+    }
+
+    // MARK: - Header(细控制条:保留删除选中按钮)
+
+    private var timelineHeader: some View {
+        HStack(spacing: 8) {
+            Text("主时间线")
+                .font(Tokens.Typeface.label)
+                .foregroundStyle(Tokens.Palette.textMuted)
+            Spacer()
+            if store.ui.selectedClipID != nil {
+                Button("✕ 删除选中") { deleteSelected() }
+                    .font(Tokens.Typeface.label)
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Tokens.Palette.selectYellow)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Tokens.Palette.elevated)
+                    .cornerRadius(4)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Tokens.Palette.chrome)
+        .frame(height: 24)
+    }
+
+    private func deleteSelected() {
+        guard let clipID = store.ui.selectedClipID else { return }
+        if let idx = TimelineGeometry.spineIndex(ofClipID: clipID, in: store.document.sequence) {
+            store.dispatch(.rippleDelete(at: idx))
+            store.dispatch(.selectClip(nil))
+        }
+    }
+}
