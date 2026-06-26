@@ -3,6 +3,7 @@ import AppKit
 
 struct RootView: View {
     let store: DocumentStore
+    @State private var dragStartHeight: Double?
 
     var body: some View {
         HStack(spacing: 0) {
@@ -76,11 +77,13 @@ struct RootView: View {
             .gesture(
                 DragGesture(minimumDistance: 1)
                     .onChanged { drag in
-                        // Dragging UP (negative translation.height) increases timeline height
-                        store.dispatch(.setTimelineHeight(
-                            store.ui.timelineHeight - drag.translation.height
-                        ))
+                        // 捕获起始高度,基于它累加,避免对“已更新高度”二次累加导致过冲
+                        if dragStartHeight == nil { dragStartHeight = store.ui.timelineHeight }
+                        let base = dragStartHeight ?? store.ui.timelineHeight
+                        // 向上拖(translation.height 为负)增高
+                        store.dispatch(.setTimelineHeight(base - drag.translation.height))
                     }
+                    .onEnded { _ in dragStartHeight = nil }
             )
     }
 }
