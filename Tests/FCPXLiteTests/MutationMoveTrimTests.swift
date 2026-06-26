@@ -38,8 +38,7 @@ final class MutationMoveTrimTests: XCTestCase {
     func testRippleTrimLeftAdjustsSourceInAndDuration() {
         // clip sourceIn=2, duration=5(用素材 [2,7]);左边缘内移 1s → sourceIn=3, duration=4
         let seq0 = Sequence(spine: [.clip(clip(5, sourceIn: .seconds(2)))])
-        let seq1 = Mutations.rippleTrimLeft(at: 0, deltaIn: .seconds(1),
-                                            assetDuration: .seconds(10), in: seq0)
+        let seq1 = Mutations.rippleTrimLeft(at: 0, deltaIn: .seconds(1), in: seq0)
         XCTAssertEqual(seq1.spine[0].asClip?.sourceIn, .seconds(3))
         XCTAssertEqual(seq1.spine[0].duration, .seconds(4))
     }
@@ -49,7 +48,6 @@ final class MutationMoveTrimTests: XCTestCase {
         // 越界 index 应原样返回,不崩溃
         XCTAssertEqual(Mutations.rippleTrimRight(at: 9, newDuration: .seconds(2),
                           assetDuration: .seconds(10), in: seq0), seq0)
-        XCTAssertEqual(Mutations.rippleTrimLeft(at: 9, deltaIn: .seconds(1),
-                          assetDuration: .seconds(10), in: seq0), seq0)
+        XCTAssertEqual(Mutations.rippleTrimLeft(at: 9, deltaIn: .seconds(1), in: seq0), seq0)
     }
 }

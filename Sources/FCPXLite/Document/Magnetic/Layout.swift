@@ -1,5 +1,3 @@
-import Foundation
-
 /// 算出来的绝对位置(不存储在文档里)。供画布绘制与合成引擎使用。
 struct Placed: Equatable {
     let clipID: ClipID
