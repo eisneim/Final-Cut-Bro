@@ -62,4 +62,15 @@ final class MutationBladeConnectTests: XCTestCase {
         XCTAssertEqual(Mutations.connectClip(clip(2), toHostIndex: 9, lane: 1,
                           offset: .seconds(1), in: seq0), seq0)
     }
+
+    func testConnectLaneZeroRejected() {
+        // lane 0 は主轴保留 → connectClip 应原样返回,宿主 connected 数量保持为 0
+        let host = clip(5)
+        let seq0 = Sequence(spine: [.clip(host)])
+        let seq1 = Mutations.connectClip(clip(2), toHostIndex: 0, lane: 0,
+                                         offset: .seconds(1), in: seq0)
+        XCTAssertEqual(seq1, seq0, "lane:0 的 connectClip 应原样返回不变")
+        XCTAssertEqual(seq1.spine[0].asClip!.connected.count, 0,
+                       "宿主 connected 应仍为 0")
+    }
 }
