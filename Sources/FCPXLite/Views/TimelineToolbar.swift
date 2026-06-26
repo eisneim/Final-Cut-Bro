@@ -4,15 +4,18 @@ struct TimelineToolbar: View {
     let store: DocumentStore
 
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 8) {
+            // 左:标题 + 动作按钮 + 工具下拉(全部靠左)
+            Text("时间线").font(Tokens.Typeface.title).foregroundStyle(Tokens.Palette.textPrimary)
             editButtons
-            Spacer()
             toolSelector
             Spacer()
+            // 右:缩放 + 效果开关
             zoomControls
+            effectsToggle
         }
-        .padding(.horizontal, 8)
-        .frame(height: Tokens.Metric.timelineToolbarHeight)
+        .padding(.horizontal, 10)
+        .frame(height: 32)
         .background(Tokens.Palette.chrome)
     }
 
@@ -20,19 +23,10 @@ struct TimelineToolbar: View {
 
     private var editButtons: some View {
         HStack(spacing: 2) {
-            editButton(icon: ConnectIcon(), help: "连接到主情节 (Q)") {
-                connectAction()
-            }
-            editButton(icon: InsertIcon(), help: "插入到播放头处 (W)") {
-                insertAction()
-            }
-            editButton(icon: AppendIcon(), help: "追加到末尾 (E)") {
-                appendAction()
-            }
-            editButton(icon: OverwriteIcon(), help: "覆盖 (D)") {
-                // TODO Pass2: true overwrite semantics
-                insertAction()
-            }
+            editButton(icon: ConnectIcon(), help: "连接到主情节 (Q)") { connectAction() }
+            editButton(icon: InsertIcon(), help: "插入到播放头处 (W)") { insertAction() }
+            editButton(icon: AppendIcon(), help: "追加到末尾 (E)") { appendAction() }
+            editButton(icon: OverwriteIcon(), help: "覆盖 (D)") { insertAction() } // TODO Pass2: 真覆盖语义
         }
         .disabled(store.document.assetLibrary.isEmpty)
     }
@@ -40,29 +34,22 @@ struct TimelineToolbar: View {
     private func editButton<I: View>(icon: I, help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             icon
+                .frame(width: 16, height: 16)
                 .foregroundStyle(store.document.assetLibrary.isEmpty
                     ? Tokens.Palette.textMuted
                     : Tokens.Palette.textIcon)
         }
         .buttonStyle(.plain)
-        .frame(width: 28, height: 28)
+        .frame(width: 26, height: 26)
         .help(help)
     }
 
     // MARK: - Edit Actions
 
     private func clipFromSelection() -> Clip? {
-        // Use explicitly selected asset, else fall back to first in library
-        let assetID: AssetID?
-        if let sel = store.ui.selectedAssetID {
-            assetID = sel
-        } else {
-            assetID = store.document.assetLibrary.first?.id
-        }
+        let assetID = store.ui.selectedAssetID ?? store.document.assetLibrary.first?.id
         guard let id = assetID,
-              let asset = store.document.assetLibrary.first(where: { $0.id == id }) else {
-            return nil
-        }
+              let asset = store.document.assetLibrary.first(where: { $0.id == id }) else { return nil }
         return Clip(assetID: asset.id, sourceIn: .zero, duration: asset.duration)
     }
 
@@ -73,22 +60,19 @@ struct TimelineToolbar: View {
 
     private func insertAction() {
         guard let clip = clipFromSelection() else { return }
-        let index = spineIndexAtPlayhead()
-        store.dispatch(.insertClip(clip, at: index))
+        store.dispatch(.insertClip(clip, at: spineIndexAtPlayhead()))
     }
 
     private func connectAction() {
         guard let clip = clipFromSelection() else { return }
         let hostIndex = spineIndexAtPlayhead()
         guard hostIndex < store.document.sequence.spine.count else {
-            // No host clip exists — fall back to append
             store.dispatch(.insertClip(clip, at: store.document.sequence.spine.count))
             return
         }
         store.dispatch(.connect(clip, host: hostIndex, lane: 1, offset: .zero))
     }
 
-    /// Returns the spine index of the clip that contains the playhead position.
     private func spineIndexAtPlayhead() -> Int {
         let playhead = store.ui.playhead
         var elapsed = Time.zero
@@ -111,24 +95,23 @@ struct TimelineToolbar: View {
                     store.dispatch(.setTool(tool))
                 } label: {
                     HStack {
-                        toolIcon(for: tool)
-                            .foregroundStyle(Tokens.Palette.textIcon)
+                        toolIcon(for: tool).foregroundStyle(Tokens.Palette.textIcon)
                         Text(tool.label)
                         Spacer()
-                        Text(tool.shortcut)
-                            .foregroundStyle(Tokens.Palette.textMuted)
+                        Text(tool.shortcut).foregroundStyle(Tokens.Palette.textMuted)
                     }
                 }
             }
         } label: {
             HStack(spacing: 4) {
                 toolIcon(for: store.ui.currentTool)
+                    .frame(width: 16, height: 16)
                     .foregroundStyle(Tokens.Palette.textIcon)
                 Image(systemName: "chevron.down")
                     .font(.system(size: 8))
                     .foregroundStyle(Tokens.Palette.textMuted)
             }
-            .frame(width: 40, height: 28)
+            .frame(width: 38, height: 26)
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
@@ -138,42 +121,30 @@ struct TimelineToolbar: View {
 
     private var zoomControls: some View {
         HStack(spacing: 4) {
-            Button {
-                store.dispatch(.setZoom(store.ui.pxPerSecond / 1.5))
-            } label: {
-                Text("−")
-                    .font(Tokens.Typeface.label)
-                    .foregroundStyle(Tokens.Palette.textIcon)
+            Button { store.dispatch(.setZoom(store.ui.pxPerSecond / 1.5)) } label: {
+                Text("−").font(Tokens.Typeface.body).foregroundStyle(Tokens.Palette.textIcon)
             }
-            .buttonStyle(.plain)
-            .frame(width: 20, height: 20)
-            .help("缩小时间线 (⌥−)")
+            .buttonStyle(.plain).frame(width: 22, height: 22).help("缩小 (⌥−)")
 
             Text("\(Int(store.ui.pxPerSecond)) px/s")
-                .font(Tokens.Typeface.label)
-                .foregroundStyle(Tokens.Palette.textMuted)
-                .frame(width: 52)
+                .font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted).frame(width: 52)
 
-            Button {
-                store.dispatch(.setZoom(store.ui.pxPerSecond * 1.5))
-            } label: {
-                Text("+")
-                    .font(Tokens.Typeface.label)
-                    .foregroundStyle(Tokens.Palette.textIcon)
+            Button { store.dispatch(.setZoom(store.ui.pxPerSecond * 1.5)) } label: {
+                Text("+").font(Tokens.Typeface.body).foregroundStyle(Tokens.Palette.textIcon)
             }
-            .buttonStyle(.plain)
-            .frame(width: 20, height: 20)
-            .help("放大时间线 (⌥+)")
-
-            // Effects panel toggle (moved from old timelineToolbar)
-            Button { store.dispatch(.setEffects(!store.ui.showEffects)) } label: {
-                Text("▤▤")
-                    .font(Tokens.Typeface.label)
-            }
-            .help("效果开关 ⌘5")
-            .buttonStyle(.plain)
-            .foregroundStyle(store.ui.showEffects ? Tokens.Palette.selectYellow : Tokens.Palette.textMuted)
-            .padding(.leading, 8)
+            .buttonStyle(.plain).frame(width: 22, height: 22).help("放大 (⌥+)")
         }
+    }
+
+    // MARK: - Effects toggle (最右)
+
+    private var effectsToggle: some View {
+        Button { store.dispatch(.setEffects(!store.ui.showEffects)) } label: {
+            Text("▤▤").font(Tokens.Typeface.body)
+        }
+        .help("效果开关 ⌘5")
+        .buttonStyle(.plain)
+        .foregroundStyle(store.ui.showEffects ? Tokens.Palette.selectYellow : Tokens.Palette.textMuted)
+        .padding(.leading, 6)
     }
 }
