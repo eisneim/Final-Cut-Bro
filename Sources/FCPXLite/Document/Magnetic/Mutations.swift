@@ -31,6 +31,47 @@ enum Mutations {
         return s
     }
 
+    /// 主轴内移动/换序 = remove + insert(等价于一次 ripple)。
+    static func moveClip(from: Int, to: Int, in seq: Sequence) -> Sequence {
+        var s = seq
+        guard s.spine.indices.contains(from) else { return s }
+        let el = s.spine.remove(at: from)
+        let dest = max(0, min(to, s.spine.count))
+        s.spine.insert(el, at: dest)
+        assertInvariants(s)
+        return s
+    }
+
+    /// ripple trim 右边缘:改 duration,夹在 (0, assetDuration - sourceIn]。
+    static func rippleTrimRight(at index: Int, newDuration: Time,
+                                assetDuration: Time, in seq: Sequence) -> Sequence {
+        var s = seq
+        guard case .clip(var c) = s.spine[index] else { return s }
+        let maxDur = assetDuration - c.sourceIn
+        let minDur = Time(value: 1, timescale: maxDur.timescale) // 至少 1 个 timescale 单位
+        guard minDur <= maxDur else { return s }                 // 素材已无可用余量,放弃
+        c.duration = newDuration.clamped(to: minDur...maxDur)
+        s.spine[index] = .clip(c)
+        assertInvariants(s)
+        return s
+    }
+
+    /// ripple trim 左边缘:同时调 sourceIn(+delta)与 duration(-delta),夹在素材内。
+    static func rippleTrimLeft(at index: Int, deltaIn: Time,
+                               assetDuration: Time, in seq: Sequence) -> Sequence {
+        var s = seq
+        guard case .clip(var c) = s.spine[index] else { return s }
+        // 新 sourceIn 不得 < 0,也不得使 duration ≤ 0
+        let newSourceIn = (c.sourceIn + deltaIn).clamped(
+            to: Time.zero...(c.sourceIn + c.duration - Time(value: 1, timescale: c.duration.timescale)))
+        let consumed = newSourceIn - c.sourceIn
+        c.sourceIn = newSourceIn
+        c.duration = c.duration - consumed
+        s.spine[index] = .clip(c)
+        assertInvariants(s)
+        return s
+    }
+
     private static func assertInvariants(_ seq: Sequence) {
         #if DEBUG
         do { try Invariants.check(seq) }
