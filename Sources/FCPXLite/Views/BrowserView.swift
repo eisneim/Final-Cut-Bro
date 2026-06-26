@@ -69,6 +69,18 @@ struct BrowserView: View {
             LazyVGrid(columns: columns, spacing: 8) {
                 ForEach(store.document.assetLibrary) { asset in
                     AssetCardView(asset: asset)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .strokeBorder(
+                                    store.ui.selectedAssetID == asset.id
+                                        ? Tokens.Palette.selectYellow
+                                        : Color.clear,
+                                    lineWidth: 1.5
+                                )
+                        )
+                        .onTapGesture {
+                            store.dispatch(.selectAsset(asset.id))
+                        }
                 }
             }
             .padding(8)
