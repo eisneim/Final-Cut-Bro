@@ -31,7 +31,7 @@ enum Mutations {
         return s
     }
 
-    static func assertInvariants(_ seq: Sequence) {
+    private static func assertInvariants(_ seq: Sequence) {
         #if DEBUG
         do { try Invariants.check(seq) }
         catch { assertionFailure("磁性不变量被破坏: \(error)") }
