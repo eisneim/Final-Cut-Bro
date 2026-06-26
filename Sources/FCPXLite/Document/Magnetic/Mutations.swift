@@ -78,6 +78,7 @@ enum Mutations {
     /// 在主轴第 index 个 clip 内部 localTime(相对该 clip 起点)处切两半。
     static func blade(at index: Int, localTime: Time, in seq: Sequence) -> Sequence {
         var s = seq
+        guard s.spine.indices.contains(index) else { return s }
         guard case .clip(let c) = s.spine[index] else { return s }
         guard localTime > .zero, localTime < c.duration else { return s } // 边界不切
 
@@ -102,6 +103,7 @@ enum Mutations {
     static func connectClip(_ clip: Clip, toHostIndex: Int, lane: Int, offset: Time,
                             in seq: Sequence) -> Sequence {
         var s = seq
+        guard s.spine.indices.contains(toHostIndex) else { return s }
         guard case .clip(var host) = s.spine[toHostIndex] else { return s }
         var conn = clip
         conn.lane = lane

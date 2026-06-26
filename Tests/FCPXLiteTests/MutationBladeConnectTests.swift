@@ -47,4 +47,19 @@ final class MutationBladeConnectTests: XCTestCase {
         let placedConn = Layout.compute(seq1).first { $0.isConnected }
         XCTAssertEqual(placedConn?.absStart, .seconds(1))
     }
+
+    func testBladeOutOfBoundsAndBoundaryNoop() {
+        let seq0 = Sequence(spine: [.clip(clip(5))])
+        // 越界 index → 原样返回不崩
+        XCTAssertEqual(Mutations.blade(at: 9, localTime: .seconds(2), in: seq0), seq0)
+        // 边界 localTime(0 与 等于 duration)→ 不切,spine 仍 1 个
+        XCTAssertEqual(Mutations.blade(at: 0, localTime: .zero, in: seq0).spine.count, 1)
+        XCTAssertEqual(Mutations.blade(at: 0, localTime: .seconds(5), in: seq0).spine.count, 1)
+    }
+
+    func testConnectOutOfBoundsReturnsUnchanged() {
+        let seq0 = Sequence(spine: [.clip(clip(5))])
+        XCTAssertEqual(Mutations.connectClip(clip(2), toHostIndex: 9, lane: 1,
+                          offset: .seconds(1), in: seq0), seq0)
+    }
 }
