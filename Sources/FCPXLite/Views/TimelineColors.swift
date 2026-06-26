@@ -18,6 +18,8 @@ import AppKit
 /// 仅 AppKit 画布需要,故只在此声明。
 enum TimelineColors {
     static let canvas       = NSColor(hex: "#1A1A1A")
+    /// 主轴(lane 0)行底色:比 canvas 略深,让主时间线读起来稍暗。仅 AppKit 画布用。
+    static let mainLaneBg   = NSColor(hex: "#141414")
     static let chrome       = NSColor(hex: "#212121")
     static let elevated     = NSColor(hex: "#2C2C2C")
     static let clipBlue     = NSColor(hex: "#243553")

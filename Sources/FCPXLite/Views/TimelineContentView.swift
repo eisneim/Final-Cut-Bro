@@ -22,8 +22,20 @@ final class TimelineContentView: NSView {
     /// dispatch 闭包,避免对 store 的强引用环;由 representable 注入。
     var dispatch: ((EditorAction) -> Void)?
 
+    // MARK: - 拖动片段状态(Pass 2)
+    /// 正在拖动的片段 id(nil = 未拖动 / 在擦洗播放头)。
+    var dragClipID: ClipID?
+    /// 光标相对该片段起点的 x 偏移(像素),保证拖动时片段不"跳"。
+    var dragGrabDX: CGFloat = 0
+    /// 鼠标按下时的起点(用于判断是否构成"真拖动")。
+    var dragStartPoint: NSPoint?
+    /// 当前光标位置(画布坐标),draw 用它画 ghost。
+    var dragCurrentPoint: NSPoint?
+    /// 超过此像素位移才算真拖动,避免误把"点选"当成微移。
+    static let dragThresholdPx: CGFloat = 3
+
     /// 派生:当前布局
-    private var placed: [Placed] { Layout.compute(sequence) }
+    var placed: [Placed] { Layout.compute(sequence) }
 
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
@@ -62,6 +74,7 @@ final class TimelineContentView: NSView {
         TimelineColors.canvas.setFill()
         bounds.fill()
 
+        drawMainLaneBand()
         drawRuler()
 
         let ps = placed
@@ -71,7 +84,47 @@ final class TimelineContentView: NSView {
             for p in ps { drawClip(p) }
         }
 
+        drawDragGhost()
         drawPlayhead()
+    }
+
+    /// lane 0 行底色:略深的全宽横条,让主时间线读起来稍暗。
+    private func drawMainLaneBand() {
+        let y = TimelineGeometry.laneTopY(lane: 0,
+                                          rulerHeight: Self.rulerHeight,
+                                          laneHeight: Self.laneHeight,
+                                          laneGap: Self.laneGap,
+                                          contentHeight: bounds.height)
+        TimelineColors.mainLaneBg.setFill()
+        NSRect(x: 0, y: y, width: bounds.width, height: Self.laneHeight).fill()
+    }
+
+    /// 拖动时画半透明 ghost:x 吸附后位置,lane 由光标 y 决定,蓝底 0.5 alpha + 虚线框。
+    private func drawDragGhost() {
+        guard let id = dragClipID, let cur = dragCurrentPoint,
+              let dragged = placed.first(where: { $0.clipID == id }) else { return }
+        let snappedT = snappedTargetSeconds(forCursorX: cur.x)
+        let lane = TimelineGeometry.lane(forY: cur.y,
+                                         rulerHeight: Self.rulerHeight,
+                                         laneHeight: Self.laneHeight,
+                                         laneGap: Self.laneGap,
+                                         contentHeight: bounds.height)
+        let x = TimelineGeometry.x(forSeconds: snappedT, pxPerSecond: pxPerSecond)
+        let w = max(2, TimelineGeometry.x(forSeconds: dragged.duration.seconds, pxPerSecond: pxPerSecond))
+        let y = TimelineGeometry.laneTopY(lane: lane,
+                                          rulerHeight: Self.rulerHeight,
+                                          laneHeight: Self.laneHeight,
+                                          laneGap: Self.laneGap,
+                                          contentHeight: bounds.height)
+        let rect = NSRect(x: x, y: y, width: w, height: Self.laneHeight)
+        let path = NSBezierPath(roundedRect: rect, xRadius: 3, yRadius: 3)
+        TimelineColors.clipBlue.withAlphaComponent(0.5).setFill()
+        path.fill()
+        TimelineColors.selectBorder.setStroke()
+        path.lineWidth = 1.5
+        let dash: [CGFloat] = [4, 3]
+        path.setLineDash(dash, count: dash.count, phase: 0)
+        path.stroke()
     }
 
     private func drawRuler() {
@@ -177,7 +230,7 @@ final class TimelineContentView: NSView {
     }
 
     /// 命中测试:返回点中的 Placed(优先靠上的 lane / 先绘制的)。
-    private func hitTestClip(at point: NSPoint) -> Placed? {
+    func hitTestClip(at point: NSPoint) -> Placed? {
         for p in placed where clipRect(p).contains(point) {
             return p
         }
@@ -209,34 +262,8 @@ final class TimelineContentView: NSView {
     }
 
     // MARK: - 鼠标交互
-
-    override func mouseDown(with event: NSEvent) {
-        window?.makeFirstResponder(self)
-        let pt = convert(event.locationInWindow, from: nil)
-        let t = TimelineGeometry.seconds(forX: pt.x, pxPerSecond: pxPerSecond)
-        let inRuler = pt.y < Self.rulerHeight
-
-        if !inRuler, let p = hitTestClip(at: pt) {
-            if currentTool == .blade, let spineIdx = TimelineGeometry.spineIndex(ofClipID: p.clipID, in: sequence) {
-                // 切割:localTime = 点击秒 - 该 clip 起点秒
-                let localT = max(0, t - p.absStart.seconds)
-                dispatch?(.blade(at: spineIdx, localTime: Time.seconds(localT)))
-            } else {
-                dispatch?(.selectClip(p.clipID))
-            }
-            return
-        }
-
-        // 空白区或标尺 → 移动播放头
-        dispatch?(.setPlayhead(Time.seconds(t)))
-    }
-
-    override func mouseDragged(with event: NSEvent) {
-        // 拖动即擦洗播放头(片段拖动移动是 Pass 2)
-        let pt = convert(event.locationInWindow, from: nil)
-        let t = TimelineGeometry.seconds(forX: pt.x, pxPerSecond: pxPerSecond)
-        dispatch?(.setPlayhead(Time.seconds(t)))
-    }
+    // mouseDown / mouseDragged / mouseUp(选择/拖动片段换轨/切割/擦洗播放头)在
+    // TimelineContentView+Drag.swift 扩展里。
 
     // MARK: - 鼠标滚轮横向滚动
 
