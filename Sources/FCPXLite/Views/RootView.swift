@@ -1,8 +1,7 @@
 import SwiftUI
 
 struct RootView: View {
-    @State private var showInspector = false
-    @State private var showEffects = false
+    let store: DocumentStore
 
     var body: some View {
         VStack(spacing: 0) {
@@ -25,10 +24,10 @@ struct RootView: View {
             Spacer()
             Text("FCPX-lite").font(Tokens.Typeface.title).foregroundStyle(Tokens.Palette.textPrimary)
             Spacer()
-            Button { showInspector.toggle() } label: { Text("≡|||") }
+            Button { store.dispatch(.setInspector(!store.ui.showInspector)) } label: { Text("≡|||") }
                 .help("检查器开关 ⌘4")
                 .buttonStyle(.plain)
-                .foregroundStyle(showInspector ? Tokens.Palette.selectYellow : Tokens.Palette.textMuted)
+                .foregroundStyle(store.ui.showInspector ? Tokens.Palette.selectYellow : Tokens.Palette.textMuted)
         }
         .padding(.horizontal, 12).frame(height: Tokens.Metric.titlebarHeight)
         .background(Tokens.Palette.titlebar)
@@ -44,7 +43,7 @@ struct RootView: View {
                 PanelPlaceholder(title: "资源管理器").frame(width: Tokens.Metric.browserWidth)
                 Divider().overlay(Tokens.Palette.divider)
                 PanelPlaceholder(title: "预览 Viewer", background: Tokens.Palette.canvas)
-                if showInspector {
+                if store.ui.showInspector {
                     Divider().overlay(Tokens.Palette.divider)
                     PanelPlaceholder(title: "检查器").frame(width: Tokens.Metric.inspectorWidth)
                 }
@@ -53,7 +52,7 @@ struct RootView: View {
             Divider().overlay(Tokens.Palette.divider)
             HStack(spacing: 0) {
                 PanelPlaceholder(title: "磁性时间线", background: Tokens.Palette.canvas)
-                if showEffects {
+                if store.ui.showEffects {
                     Divider().overlay(Tokens.Palette.divider)
                     PanelPlaceholder(title: "效果/转场", background: Tokens.Palette.effectsPanel)
                         .frame(width: Tokens.Metric.effectsWidth)
@@ -67,10 +66,10 @@ struct RootView: View {
         HStack {
             Text("索引 ✛⊟✄").font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
             Spacer()
-            Button { showEffects.toggle() } label: { Text("▤▤") }
+            Button { store.dispatch(.setEffects(!store.ui.showEffects)) } label: { Text("▤▤") }
                 .help("效果开关 ⌘5")
                 .buttonStyle(.plain)
-                .foregroundStyle(showEffects ? Tokens.Palette.selectYellow : Tokens.Palette.textMuted)
+                .foregroundStyle(store.ui.showEffects ? Tokens.Palette.selectYellow : Tokens.Palette.textMuted)
         }
         .padding(.horizontal, 12).frame(height: Tokens.Metric.timelineToolbarHeight)
         .background(Tokens.Palette.chrome)

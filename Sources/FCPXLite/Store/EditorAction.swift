@@ -12,4 +12,6 @@ enum EditorAction: Codable, Equatable {
     case trimLeft(at: Int, deltaIn: Time)
     case blade(at: Int, localTime: Time)
     case connect(Clip, host: Int, lane: Int, offset: Time)
+    case setInspector(Bool)
+    case setEffects(Bool)
 }
