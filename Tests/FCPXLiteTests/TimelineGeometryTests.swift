@@ -93,17 +93,34 @@ final class TimelineGeometryTests: XCTestCase {
         XCTAssertEqual(TimelineGeometry.seconds(forX: 100, pxPerSecond: 0), 0, accuracy: 1e-9)
     }
 
-    func testLaneTopYBaselineAndStacking() {
-        // ruler=24, laneHeight=44, gap=4 → step=48; maxPositiveLanes=2 → baselineTop=24+2*48=120
-        let h: CGFloat = 44, gap: CGFloat = 4, ruler: CGFloat = 24, maxPos = 2
-        let lane0 = TimelineGeometry.laneTopY(lane: 0, rulerHeight: ruler, laneHeight: h, laneGap: gap, maxPositiveLanes: maxPos)
-        XCTAssertEqual(lane0, 120)
-        // lane 1 上方一行
-        let lane1 = TimelineGeometry.laneTopY(lane: 1, rulerHeight: ruler, laneHeight: h, laneGap: gap, maxPositiveLanes: maxPos)
-        XCTAssertEqual(lane1, 120 - 48)
-        // lane -1 下方一行
-        let laneNeg1 = TimelineGeometry.laneTopY(lane: -1, rulerHeight: ruler, laneHeight: h, laneGap: gap, maxPositiveLanes: maxPos)
-        XCTAssertEqual(laneNeg1, 120 + 48)
+    func testLaneTopYCentersLane0() {
+        // contentHeight=600, ruler=24, laneHeight=44, gap=4 → step=48
+        // centerY = 24 + (600-24)/2 = 24 + 288 = 312; lane0Top = 312 - 22 = 290
+        let h: CGFloat = 44, gap: CGFloat = 4, ruler: CGFloat = 24, content: CGFloat = 600
+        let lane0 = TimelineGeometry.laneTopY(lane: 0, rulerHeight: ruler, laneHeight: h, laneGap: gap, contentHeight: content)
+        XCTAssertEqual(lane0, 290, accuracy: 1e-6)
+        // lane0 行心 ≈ 画布心
+        let lane0Center = lane0 + h / 2
+        XCTAssertEqual(lane0Center, content / 2 + ruler / 2, accuracy: 1e-6)
+
+        // lane +1 在上方:y 更小
+        let lane1 = TimelineGeometry.laneTopY(lane: 1, rulerHeight: ruler, laneHeight: h, laneGap: gap, contentHeight: content)
+        XCTAssertEqual(lane1, 290 - 48, accuracy: 1e-6)
+        XCTAssertLessThan(lane1, lane0)
+        // lane -1 在下方:y 更大
+        let laneNeg1 = TimelineGeometry.laneTopY(lane: -1, rulerHeight: ruler, laneHeight: h, laneGap: gap, contentHeight: content)
+        XCTAssertEqual(laneNeg1, 290 + 48, accuracy: 1e-6)
+        XCTAssertGreaterThan(laneNeg1, lane0)
+    }
+
+    func testLaneForYRoundTrips() {
+        let h: CGFloat = 44, gap: CGFloat = 4, ruler: CGFloat = 24, content: CGFloat = 600
+        for lane in [-2, -1, 0, 1, 2, 3] {
+            let top = TimelineGeometry.laneTopY(lane: lane, rulerHeight: ruler, laneHeight: h, laneGap: gap, contentHeight: content)
+            let centerY = top + h / 2
+            let got = TimelineGeometry.lane(forY: centerY, rulerHeight: ruler, laneHeight: h, laneGap: gap, contentHeight: content)
+            XCTAssertEqual(got, lane, "y at lane \(lane) center should map back")
+        }
     }
 
     func testTickIntervalAdaptsToZoom() {

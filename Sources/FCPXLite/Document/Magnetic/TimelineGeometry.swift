@@ -47,16 +47,35 @@ enum TimelineGeometry {
     }
 
     /// 车道(lane)→ 该车道行的 y 顶部坐标(在 isFlipped 坐标系下,y 向下增长)。
-    /// 布局:顶部 rulerHeight 留给标尺;lane 0(主轴)位于 baseline 行;
-    /// lane n>0 在主轴【上方】(y 更小),lane n<0 在主轴【下方】(y 更大)。
-    /// baselineTop = rulerHeight + maxPositiveLanes * (laneHeight + laneGap)。
+    /// 布局:lane 0(主轴)在标尺下方可用区域【垂直居中】;
+    /// lane n>0 连接片段在主轴【上方】(y 更小),lane n<0 在主轴【下方】(y 更大)。
+    /// centerY = rulerHeight + (contentHeight - rulerHeight)/2;lane0Top = centerY - laneHeight/2;
+    /// top = lane0Top - lane*(laneHeight+laneGap)。
     static func laneTopY(lane: Int,
                          rulerHeight: CGFloat,
                          laneHeight: CGFloat,
                          laneGap: CGFloat,
-                         maxPositiveLanes: Int) -> CGFloat {
-        let baselineTop = rulerHeight + CGFloat(maxPositiveLanes) * (laneHeight + laneGap)
-        return baselineTop - CGFloat(lane) * (laneHeight + laneGap)
+                         contentHeight: CGFloat) -> CGFloat {
+        let centerY = rulerHeight + (contentHeight - rulerHeight) / 2
+        let lane0Top = centerY - laneHeight / 2
+        return lane0Top - CGFloat(lane) * (laneHeight + laneGap)
+    }
+
+    /// 逆运算:画布内某 y 落在哪个 lane 行(用于决定拖放目标 lane)。
+    /// 以 lane 0 顶为基准,按行高+间距推算;round 到最近行。
+    static func lane(forY y: CGFloat,
+                     rulerHeight: CGFloat,
+                     laneHeight: CGFloat,
+                     laneGap: CGFloat,
+                     contentHeight: CGFloat) -> Int {
+        let step = laneHeight + laneGap
+        guard step > 0 else { return 0 }
+        let lane0Top = laneTopY(lane: 0, rulerHeight: rulerHeight, laneHeight: laneHeight,
+                                laneGap: laneGap, contentHeight: contentHeight)
+        // y = lane0Top - lane*step  →  lane = (lane0Top - y)/step
+        // 对每行中心做最近取整:用行顶 +laneHeight/2 偏移使边界落在行间隙。
+        let raw = (lane0Top + laneHeight / 2 - y) / step
+        return Int(raw.rounded(.down))
     }
 
     /// 标尺刻度间隔(秒):选一个“好看”的秒数,使相邻标签 ≈ targetLabelPx 像素。

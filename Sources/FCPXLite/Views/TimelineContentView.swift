@@ -25,11 +25,6 @@ final class TimelineContentView: NSView {
     /// 派生:当前布局
     private var placed: [Placed] { Layout.compute(sequence) }
 
-    /// 派生:最大正向 lane(用于把主轴推到合适基线,给上方连接片段留空间)
-    private var maxPositiveLanes: Int {
-        max(0, placed.map { $0.lane }.max() ?? 0)
-    }
-
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
 
@@ -177,7 +172,7 @@ final class TimelineContentView: NSView {
                                           rulerHeight: Self.rulerHeight,
                                           laneHeight: Self.laneHeight,
                                           laneGap: Self.laneGap,
-                                          maxPositiveLanes: maxPositiveLanes)
+                                          contentHeight: bounds.height)
         return NSRect(x: x, y: y, width: w, height: Self.laneHeight)
     }
 
