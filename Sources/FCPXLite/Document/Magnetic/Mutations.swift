@@ -75,6 +75,43 @@ enum Mutations {
         return s
     }
 
+    /// 在主轴第 index 个 clip 内部 localTime(相对该 clip 起点)处切两半。
+    static func blade(at index: Int, localTime: Time, in seq: Sequence) -> Sequence {
+        var s = seq
+        guard case .clip(let c) = s.spine[index] else { return s }
+        guard localTime > .zero, localTime < c.duration else { return s } // 边界不切
+
+        var left = c
+        left.duration = localTime
+        left.connected = c.connected.filter { $0.offset < localTime }
+
+        let right = Clip(assetID: c.assetID,
+                         sourceIn: c.sourceIn + localTime,
+                         duration: c.duration - localTime,
+                         connected: c.connected
+                            .filter { $0.offset >= localTime }
+                            .map { var x = $0; x.offset = x.offset - localTime; return x },
+                         adjust: c.adjust)
+
+        s.spine.replaceSubrange(index...index, with: [.clip(left), .clip(right)])
+        assertInvariants(s)
+        return s
+    }
+
+    /// 把 clip 作为连接片段挂到主轴第 toHostIndex 个 clip 上。
+    static func connectClip(_ clip: Clip, toHostIndex: Int, lane: Int, offset: Time,
+                            in seq: Sequence) -> Sequence {
+        var s = seq
+        guard case .clip(var host) = s.spine[toHostIndex] else { return s }
+        var conn = clip
+        conn.lane = lane
+        conn.offset = offset
+        host.connected.append(conn)
+        s.spine[toHostIndex] = .clip(host)
+        assertInvariants(s)
+        return s
+    }
+
     private static func assertInvariants(_ seq: Sequence) {
         #if DEBUG
         do { try Invariants.check(seq) }
