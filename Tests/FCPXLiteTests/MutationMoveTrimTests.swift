@@ -43,4 +43,13 @@ final class MutationMoveTrimTests: XCTestCase {
         XCTAssertEqual(seq1.spine[0].asClip?.sourceIn, .seconds(3))
         XCTAssertEqual(seq1.spine[0].duration, .seconds(4))
     }
+
+    func testTrimOutOfBoundsReturnsUnchanged() {
+        let seq0 = Sequence(spine: [.clip(clip(5))])
+        // 越界 index 应原样返回,不崩溃
+        XCTAssertEqual(Mutations.rippleTrimRight(at: 9, newDuration: .seconds(2),
+                          assetDuration: .seconds(10), in: seq0), seq0)
+        XCTAssertEqual(Mutations.rippleTrimLeft(at: 9, deltaIn: .seconds(1),
+                          assetDuration: .seconds(10), in: seq0), seq0)
+    }
 }

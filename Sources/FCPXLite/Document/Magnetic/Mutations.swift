@@ -46,6 +46,7 @@ enum Mutations {
     static func rippleTrimRight(at index: Int, newDuration: Time,
                                 assetDuration: Time, in seq: Sequence) -> Sequence {
         var s = seq
+        guard s.spine.indices.contains(index) else { return s }
         guard case .clip(var c) = s.spine[index] else { return s }
         let maxDur = assetDuration - c.sourceIn
         let minDur = Time(value: 1, timescale: maxDur.timescale) // 至少 1 个 timescale 单位
@@ -60,8 +61,10 @@ enum Mutations {
     static func rippleTrimLeft(at index: Int, deltaIn: Time,
                                assetDuration: Time, in seq: Sequence) -> Sequence {
         var s = seq
+        guard s.spine.indices.contains(index) else { return s }
         guard case .clip(var c) = s.spine[index] else { return s }
         // 新 sourceIn 不得 < 0,也不得使 duration ≤ 0
+        // 注:左边缘约束由 sourceIn≥0 与 duration≥1tick 决定;assetDuration 暂为与 trimRight 对称保留
         let newSourceIn = (c.sourceIn + deltaIn).clamped(
             to: Time.zero...(c.sourceIn + c.duration - Time(value: 1, timescale: c.duration.timescale)))
         let consumed = newSourceIn - c.sourceIn
