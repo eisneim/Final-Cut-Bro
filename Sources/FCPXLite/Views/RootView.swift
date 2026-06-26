@@ -7,7 +7,7 @@ struct RootView: View {
     var body: some View {
         VStack(spacing: 0) {
             statusBar
-            Divider().overlay(Color.black)
+            Divider().overlay(Tokens.Palette.divider)
             HStack(spacing: 0) {
                 leftWorkspace
                 ChatPanelView()
@@ -19,9 +19,9 @@ struct RootView: View {
 
     private var statusBar: some View {
         HStack(spacing: 8) {
-            Circle().fill(.red).frame(width: 10, height: 10)
-            Circle().fill(.yellow).frame(width: 10, height: 10)
-            Circle().fill(.green).frame(width: 10, height: 10)
+            Circle().fill(Tokens.Palette.windowClose).frame(width: 10, height: 10)
+            Circle().fill(Tokens.Palette.windowMinimize).frame(width: 10, height: 10)
+            Circle().fill(Tokens.Palette.windowZoom).frame(width: 10, height: 10)
             Spacer()
             Text("FCPX-lite").font(Tokens.Typeface.title).foregroundStyle(Tokens.Palette.textPrimary)
             Spacer()
@@ -37,24 +37,24 @@ struct RootView: View {
     private var leftWorkspace: some View {
         VStack(spacing: 0) {
             PanelPlaceholder(title: "格式工具栏").frame(height: Tokens.Metric.toolbarHeight)
-            Divider().overlay(Color.black)
+            Divider().overlay(Tokens.Palette.divider)
             HStack(spacing: 0) {
                 PanelPlaceholder(title: "边栏").frame(width: 80)
-                Divider().overlay(Color.black)
+                Divider().overlay(Tokens.Palette.divider)
                 PanelPlaceholder(title: "资源管理器").frame(width: Tokens.Metric.browserWidth)
-                Divider().overlay(Color.black)
+                Divider().overlay(Tokens.Palette.divider)
                 PanelPlaceholder(title: "预览 Viewer", background: Tokens.Palette.canvas)
                 if showInspector {
-                    Divider().overlay(Color.black)
+                    Divider().overlay(Tokens.Palette.divider)
                     PanelPlaceholder(title: "检查器").frame(width: Tokens.Metric.inspectorWidth)
                 }
             }
             timelineToolbar
-            Divider().overlay(Color.black)
+            Divider().overlay(Tokens.Palette.divider)
             HStack(spacing: 0) {
                 PanelPlaceholder(title: "磁性时间线", background: Tokens.Palette.canvas)
                 if showEffects {
-                    Divider().overlay(Color.black)
+                    Divider().overlay(Tokens.Palette.divider)
                     PanelPlaceholder(title: "效果/转场", background: Tokens.Palette.effectsPanel)
                         .frame(width: Tokens.Metric.effectsWidth)
                 }

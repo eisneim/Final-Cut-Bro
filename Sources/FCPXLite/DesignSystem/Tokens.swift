@@ -21,6 +21,11 @@ enum Tokens {
         static let selectClipBorder = Color(hex: "#FFDB86")
         static let waveform      = Color(hex: "#8C9CBD")
         static let playhead      = Color.white
+
+        static let windowClose    = Color(hex: "#FF5F57")
+        static let windowMinimize = Color(hex: "#FEBC2E")
+        static let windowZoom     = Color(hex: "#28C840")
+        static let divider        = Color(hex: "#000000")
     }
 
     enum Metric {
