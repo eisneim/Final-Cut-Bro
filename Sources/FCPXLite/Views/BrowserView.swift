@@ -34,7 +34,7 @@ struct BrowserView: View {
                 .foregroundStyle(Tokens.Palette.textPrimary)
             Spacer()
             Button("导入") {
-                Task { @MainActor in openImportPanel() }
+                ImportPanel.present(into: store)
             }
             .font(Tokens.Typeface.label)
             .buttonStyle(.plain)
@@ -84,40 +84,6 @@ struct BrowserView: View {
                 }
             }
             .padding(8)
-        }
-    }
-
-    // MARK: - Import
-
-    @MainActor
-    private func openImportPanel() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = false
-        panel.allowsMultipleSelection = true
-
-        // Build allowed content types from our extensions
-        var contentTypes: [UTType] = []
-        for ext in MediaImporter.allowedExtensions {
-            if let type = UTType(filenameExtension: ext) {
-                contentTypes.append(type)
-            }
-        }
-        panel.allowedContentTypes = contentTypes
-
-        panel.begin { response in
-            guard response == .OK else { return }
-            let urls = panel.urls
-            for url in urls {
-                Task { @MainActor in
-                    do {
-                        let asset = try MediaImporter.importAsset(from: url)
-                        store.dispatch(.importAsset(asset))
-                    } catch {
-                        print("[BrowserView] 导入失败: \(error)")
-                    }
-                }
-            }
         }
     }
 

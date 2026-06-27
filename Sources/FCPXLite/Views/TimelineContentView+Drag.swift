@@ -83,6 +83,7 @@ extension TimelineContentView {
     /// 目标起点时间(秒):cursorX − 抓取偏移 → 秒,再吸附到附近候选边(8px 阈值)。
     func snappedTargetSeconds(forCursorX cursorX: CGFloat) -> Double {
         let rawSeconds = TimelineGeometry.seconds(forX: cursorX - dragGrabDX, pxPerSecond: pxPerSecond)
+        guard snappingEnabled else { return max(0, rawSeconds) }   // 吸附关 → 不吸附
         let target = Time.seconds(rawSeconds)
         let thresholdSeconds = pxPerSecond > 0 ? Double(8.0 / pxPerSecond) : 0
         let threshold = Time.seconds(thresholdSeconds)

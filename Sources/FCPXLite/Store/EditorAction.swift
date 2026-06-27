@@ -24,4 +24,5 @@ enum EditorAction: Codable, Equatable {
     case selectAsset(AssetID?)
     case setPlaying(Bool)
     case togglePlay
+    case toggleSnapping
 }

@@ -12,4 +12,5 @@ struct UIState: Codable, Equatable {
     var timelineHeight: Double = 220
     var selectedAssetID: AssetID? = nil
     var isPlaying: Bool = false
+    var snappingEnabled: Bool = true
 }

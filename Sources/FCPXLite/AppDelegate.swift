@@ -40,6 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 case "=", "+": store.dispatch(.setZoom(store.ui.pxPerSecond * 1.5)); return nil
                 case "-":      store.dispatch(.setZoom(store.ui.pxPerSecond / 1.5)); return nil
                 case "b":      store.bladeAtPlayhead(); return nil
+                case "i":      ImportPanel.present(into: store); return nil
                 default:       return event
                 }
             }
@@ -69,6 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case "b": store.dispatch(.setTool(.blade)); return nil
             case "z": store.dispatch(.setTool(.zoom)); return nil
             case "h": store.dispatch(.setTool(.hand)); return nil
+            case "n": store.dispatch(.toggleSnapping); return nil
             default:  return event
             }
         }

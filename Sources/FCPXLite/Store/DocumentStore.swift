@@ -37,6 +37,7 @@ import Observation
         case let .selectAsset(id):               ui.selectedAssetID = id
         case let .setPlaying(v):                 ui.isPlaying = v
         case .togglePlay:                        ui.isPlaying.toggle()
+        case .toggleSnapping:                    ui.snappingEnabled.toggle()
         }
     }
 

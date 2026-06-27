@@ -88,7 +88,8 @@ enum Mutations {
             guard let host = hostSpineIndex(forTime: t, in: s) else { return seq } // 无主轴 clip → no-op
             let hostAbsStart = s.spine[0..<host.index].reduce(Time.zero) { $0 + $1.duration }
             var clip = extracted
-            clip.lane = lane
+            // 轨道磁吸:不悬空在拖到的原始 lane;按方向从 ±1 向外找第一个不冲突的层级(中间空则弹回 ±1)。
+            clip.lane = magneticLane(direction: lane, start: t, duration: extracted.duration, in: s)
             let off = t - hostAbsStart
             clip.offset = off < .zero ? .zero : off   // clamp offset ≥ 0
             guard case .clip(var hostClip) = s.spine[host.index] else { return seq }
@@ -98,6 +99,22 @@ enum Mutations {
 
         assertInvariants(s)
         return s
+    }
+
+    /// 轨道磁吸:给定拖拽方向(正/负)与目标时间区间,返回该侧从 ±1 起第一个不与现有
+    /// 连接片段时间重叠的层级。中间层级空 → 落在 ±1(贴着主轴),不悬空。
+    private static func magneticLane(direction: Int, start: Time, duration: Time, in seq: Sequence) -> Int {
+        let dir = direction >= 0 ? 1 : -1
+        let end = start + duration
+        let connected = Layout.compute(seq).filter { $0.isConnected }
+        for step in 1...8 {
+            let lane = dir * step
+            let collides = connected.contains { p in
+                p.lane == lane && p.absStart < end && start < (p.absStart + p.duration)
+            }
+            if !collides { return lane }
+        }
+        return dir * 8
     }
 
     /// 从 spine(直接元素或某宿主的 connected 列表)按 id 找到并移除该 clip,返回其值。

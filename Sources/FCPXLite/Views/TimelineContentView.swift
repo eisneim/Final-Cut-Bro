@@ -18,6 +18,7 @@ final class TimelineContentView: NSView {
     private(set) var playheadSeconds: Double = 0
     private(set) var selectedClipID: ClipID? = nil
     private(set) var currentTool: EditTool = .select
+    private(set) var snappingEnabled: Bool = true
 
     /// dispatch 闭包,避免对 store 的强引用环;由 representable 注入。
     var dispatch: ((EditorAction) -> Void)?
@@ -56,6 +57,7 @@ final class TimelineContentView: NSView {
         let playheadSeconds: Double
         let selectedClipID: ClipID?
         let currentTool: EditTool
+        let snappingEnabled: Bool
     }
 
     func apply(state: State) {
@@ -65,6 +67,7 @@ final class TimelineContentView: NSView {
         playheadSeconds = state.playheadSeconds
         selectedClipID = state.selectedClipID
         currentTool = state.currentTool
+        snappingEnabled = state.snappingEnabled
         needsDisplay = true
     }
 

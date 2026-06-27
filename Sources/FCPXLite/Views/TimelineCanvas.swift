@@ -13,6 +13,7 @@ struct TimelineCanvas: NSViewRepresentable {
     let tool: EditTool
     let sequence: Sequence            // Equatable,内容变化即触发更新
     let assetLibrary: [Asset]
+    let snappingEnabled: Bool
 
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSScrollView()
@@ -40,7 +41,8 @@ struct TimelineCanvas: NSViewRepresentable {
             pxPerSecond: pxPerSecond,
             playheadSeconds: playheadSeconds,
             selectedClipID: selectedClipID,
-            currentTool: tool
+            currentTool: tool,
+            snappingEnabled: snappingEnabled
         ))
 
         // 内容宽度 = max(可视宽, 总时长*px + 200);高度足够 ~7 条车道。
@@ -71,52 +73,16 @@ struct TimelineView: View {
     let store: DocumentStore
 
     var body: some View {
-        VStack(spacing: 0) {
-            timelineHeader
-            Divider().overlay(Tokens.Palette.divider)
-            TimelineCanvas(
-                store: store,
-                pxPerSecond: CGFloat(store.ui.pxPerSecond),
-                playheadSeconds: store.ui.playhead.seconds,
-                selectedClipID: store.ui.selectedClipID,
-                tool: store.ui.currentTool,
-                sequence: store.document.sequence,
-                assetLibrary: store.document.assetLibrary
-            )
-        }
+        TimelineCanvas(
+            store: store,
+            pxPerSecond: CGFloat(store.ui.pxPerSecond),
+            playheadSeconds: store.ui.playhead.seconds,
+            selectedClipID: store.ui.selectedClipID,
+            tool: store.ui.currentTool,
+            sequence: store.document.sequence,
+            assetLibrary: store.document.assetLibrary,
+            snappingEnabled: store.ui.snappingEnabled
+        )
         .background(Tokens.Palette.canvas)
-    }
-
-    // MARK: - Header(细控制条:保留删除选中按钮)
-
-    private var timelineHeader: some View {
-        HStack(spacing: 8) {
-            Text("主时间线")
-                .font(Tokens.Typeface.label)
-                .foregroundStyle(Tokens.Palette.textMuted)
-            Spacer()
-            if store.ui.selectedClipID != nil {
-                Button("✕ 删除选中") { deleteSelected() }
-                    .font(Tokens.Typeface.label)
-                    .buttonStyle(.plain)
-                    .foregroundStyle(Tokens.Palette.selectYellow)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Tokens.Palette.elevated)
-                    .cornerRadius(4)
-            }
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(Tokens.Palette.chrome)
-        .frame(height: 24)
-    }
-
-    private func deleteSelected() {
-        guard let clipID = store.ui.selectedClipID else { return }
-        if let idx = TimelineGeometry.spineIndex(ofClipID: clipID, in: store.document.sequence) {
-            store.dispatch(.rippleDelete(at: idx))
-            store.dispatch(.selectClip(nil))
-        }
     }
 }
