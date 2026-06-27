@@ -141,10 +141,14 @@ final class TimelineContentView: NSView {
             for p in ps { drawClip(p) }
         }
 
-        drawDragGhost()
+        drawClipsOrHint()
         drawRuler()      // 刻度尺最后画 → 永远在 clip 之上(拖高的 clip 不会盖住刻度)
         drawPlayhead()   // 播放头红线再压在刻度尺之上
     }
+
+    private func drawClipsOrHint() {
+        // bug4: 拖动改为所见即所得实时 relocate,不再画 ghost 分身。
+        }
 
     /// 画主轴上的 .gap(位置工具留下的灰色占位):lane 0 上的灰条,可被修剪工具调长。
     func drawGaps() {

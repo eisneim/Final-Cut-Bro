@@ -120,10 +120,21 @@ extension TimelineContentView {
             }
             return
         }
-        // 片段拖动:更新 ghost
-        if dragClipID != nil {
+        // 片段拖动:所见即所得 —— 实时 relocate(不画 ghost,空缺立即合拢,FCPX 丝滑磁性)。
+        if let id = dragClipID {
             dragCurrentPoint = pt
-            needsDisplay = true
+            if let start = dragStartPoint, hypot(pt.x - start.x, pt.y - start.y) <= Self.dragThresholdPx { return }
+            let lane = TimelineGeometry.lane(forY: pt.y, rulerHeight: Self.rulerHeight,
+                                             laneHeight: laneH, laneGap: Self.laneGap,
+                                             contentHeight: bounds.height)
+            if currentTool == .position {
+                let raw = max(0, TimelineGeometry.seconds(forX: pt.x - dragGrabDX, pxPerSecond: pxPerSecond))
+                if lane == 0 { dispatch?(.positionMove(id, time: Time.seconds(raw))) }
+                else { dispatch?(.relocateClip(id, lane: lane, time: Time.seconds(raw))) }
+            } else {
+                let snapped = snappedTargetSeconds(forCursorX: pt.x)
+                dispatch?(.relocateClip(id, lane: lane, time: Time.seconds(snapped)))
+            }
             return
         }
         // 空白擦洗播放头
@@ -133,35 +144,10 @@ extension TimelineContentView {
     // MARK: - mouseUp
 
     override func mouseUp(with event: NSEvent) {
-        defer {
-            dragClipID = nil; dragStartPoint = nil; dragCurrentPoint = nil
-            trimDrag = nil; handLastX = nil; zoomStartX = nil
-            needsDisplay = true
-        }
-        guard let id = dragClipID else { return }
-        let pt = convert(event.locationInWindow, from: nil)
-
-        if let start = dragStartPoint {
-            let moved = hypot(pt.x - start.x, pt.y - start.y)
-            if moved <= Self.dragThresholdPx { return }   // 微移视为点选
-        }
-
-        let lane = TimelineGeometry.lane(forY: pt.y, rulerHeight: Self.rulerHeight,
-                                         laneHeight: laneH, laneGap: Self.laneGap,
-                                         contentHeight: bounds.height)
-        if currentTool == .position {
-            // 位置工具:不吸附 + 原处留 gap(仅当落回主轴 lane 0)。
-            let raw = max(0, TimelineGeometry.seconds(forX: pt.x - dragGrabDX, pxPerSecond: pxPerSecond))
-            if lane == 0 {
-                dispatch?(.positionMove(id, time: Time.seconds(raw)))
-            } else {
-                dispatch?(.relocateClip(id, lane: lane, time: Time.seconds(raw)))
-            }
-        } else {
-            // select:吸附 + 磁性 relocate
-            let snapped = snappedTargetSeconds(forCursorX: pt.x)
-            dispatch?(.relocateClip(id, lane: lane, time: Time.seconds(snapped)))
-        }
+        // 片段拖动已在 mouseDragged 中实时完成(所见即所得),这里只清状态。
+        dragClipID = nil; dragStartPoint = nil; dragCurrentPoint = nil
+        trimDrag = nil; handLastX = nil; zoomStartX = nil
+        needsDisplay = true
     }
 
     // MARK: - 光标(随工具)

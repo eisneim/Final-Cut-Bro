@@ -229,6 +229,13 @@ final class DebugControlServer {
                           from: NSPoint(x: cmd.fromX ?? 0, y: cmd.fromY ?? 0),
                           to: NSPoint(x: cmd.toX ?? 0, y: cmd.toY ?? 0))
             }
+        case "mouseDragNoUp":
+            // 只 down+drag 不 up:验证 bug4 拖动中实时(松手前 spine 已变)
+            if let tc = findTimelineContentView() {
+                synthDrag(on: tc,
+                          from: NSPoint(x: cmd.fromX ?? 0, y: cmd.fromY ?? 0),
+                          to: NSPoint(x: cmd.toX ?? 0, y: cmd.toY ?? 0), withUp: false)
+            }
         case "setPanelWidth":
             if let p = cmd.panel, let kind = PanelKind(rawValue: p) {
                 store.dispatch(.setPanelWidth(kind, cmd.width ?? 300))
@@ -285,7 +292,7 @@ final class DebugControlServer {
     }
 
     /// 合成鼠标拖拽:在画布局部坐标 from→to 触发 mouseDown/Dragged/Up,驱动真实工具交互。
-    private func synthDrag(on view: TimelineContentView, from: NSPoint, to: NSPoint) {
+    private func synthDrag(on view: TimelineContentView, from: NSPoint, to: NSPoint, withUp: Bool = true) {
         guard let win = view.window else { return }
         func ev(_ type: NSEvent.EventType, _ p: NSPoint) -> NSEvent? {
             let wp = view.convert(p, to: nil)
@@ -296,7 +303,7 @@ final class DebugControlServer {
         }
         if let d = ev(.leftMouseDown, from) { view.mouseDown(with: d) }
         if let m = ev(.leftMouseDragged, to) { view.mouseDragged(with: m) }
-        if let u = ev(.leftMouseUp, to) { view.mouseUp(with: u) }
+        if withUp, let u = ev(.leftMouseUp, to) { view.mouseUp(with: u) }
     }
 
     // MARK: - 渲染
