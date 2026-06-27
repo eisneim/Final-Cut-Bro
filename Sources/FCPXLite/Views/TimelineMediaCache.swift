@@ -83,17 +83,21 @@ final class TimelineMediaCache {
         let av = AVURLAsset(url: asset.url)
         guard let track = av.tracks(withMediaType: .audio).first,
               let reader = try? AVAssetReader(asset: av) else { return [] }
+        // Float32 PCM。注:极少数文件(如某些 DAW 导出的 AAC)AVFoundation 会解码成近静音
+        // → 波形偏平,这是 AVFoundation 解码限制(同一文件 ffmpeg 正常),非本读取逻辑问题。
         let settings: [String: Any] = [
             AVFormatIDKey: kAudioFormatLinearPCM,
-            AVLinearPCMBitDepthKey: 16,
+            AVLinearPCMBitDepthKey: 32,
+            AVLinearPCMIsFloatKey: true,
             AVLinearPCMIsBigEndianKey: false,
-            AVLinearPCMIsFloatKey: false,
             AVLinearPCMIsNonInterleaved: false,
         ]
         let output = AVAssetReaderTrackOutput(track: track, outputSettings: settings)
         guard reader.canAdd(output) else { return [] }
         reader.add(output)
-        reader.startReading()
+        guard reader.startReading() else { return [] }
+        reader.add(output)
+        guard reader.startReading() else { return [] }
 
         let totalDur = CMTimeGetSeconds(av.duration)
         guard totalDur > 0 else { return [] }
@@ -101,16 +105,24 @@ final class TimelineMediaCache {
         while reader.status == .reading, let sb = output.copyNextSampleBuffer() {
             let pts = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sb))
             var bufPeak: Float = 0
-            if let bb = CMSampleBufferGetDataBuffer(sb) {
-                var length = 0
-                var dataPtr: UnsafeMutablePointer<Int8>?
-                CMBlockBufferGetDataPointer(bb, atOffset: 0, lengthAtOffsetOut: nil,
-                                            totalLengthOut: &length, dataPointerOut: &dataPtr)
-                if let dp = dataPtr {
-                    let n = length / 2
-                    dp.withMemoryRebound(to: Int16.self, capacity: n) { p in
-                        var i = 0
-                        while i < n { let v = abs(Float(p[i])) / Float(Int16.max); if v > bufPeak { bufPeak = v }; i += 16 }
+            // 规范读法:AudioBufferList(正确处理交错/声道/对齐),比 GetDataPointer 鲁棒。
+            var blockBuffer: CMBlockBuffer?
+            var abl = AudioBufferList()
+            let status = CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(
+                sb, bufferListSizeNeededOut: nil, bufferListOut: &abl,
+                bufferListSize: MemoryLayout<AudioBufferList>.size,
+                blockBufferAllocator: nil, blockBufferMemoryAllocator: nil,
+                flags: kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment,
+                blockBufferOut: &blockBuffer)
+            if status == noErr {
+                let list = UnsafeMutableAudioBufferListPointer(&abl)
+                for buf in list {
+                    let n = Int(buf.mDataByteSize) / MemoryLayout<Float32>.size
+                    if n > 0, let md = buf.mData {
+                        md.withMemoryRebound(to: Float32.self, capacity: n) { p in
+                            var i = 0
+                            while i < n { let v = abs(p[i]); if v > bufPeak { bufPeak = v }; i += 8 }
+                        }
                     }
                 }
             }
