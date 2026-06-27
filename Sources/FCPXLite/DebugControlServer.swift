@@ -136,6 +136,7 @@ final class DebugControlServer {
         var tool: String?
         var panel: String?
         var width: Double?
+        var fromX: Double?; var fromY: Double?; var toX: Double?; var toY: Double?
     }
 
     private func execute(body: Data) {
@@ -160,6 +161,13 @@ final class DebugControlServer {
         case "setTool":     if let t = cmd.tool, let tool = EditTool(rawValue: t) { store.dispatch(.setTool(tool)) }
         case "togglePlay":  store.dispatch(.togglePlay)
         case "toggleSnapping": store.dispatch(.toggleSnapping)
+        case "mouseDrag":
+            // 合成鼠标拖拽(画布坐标 px):down(from)→drag(to)→up(to),驱动真实工具交互
+            if let tc = findTimelineContentView() {
+                synthDrag(on: tc,
+                          from: NSPoint(x: cmd.fromX ?? 0, y: cmd.fromY ?? 0),
+                          to: NSPoint(x: cmd.toX ?? 0, y: cmd.toY ?? 0))
+            }
         case "setPanelWidth":
             if let p = cmd.panel, let kind = PanelKind(rawValue: p) {
                 store.dispatch(.setPanelWidth(kind, cmd.width ?? 300))
@@ -213,6 +221,21 @@ final class DebugControlServer {
             stack.append(contentsOf: v.subviews)
         }
         return nil
+    }
+
+    /// 合成鼠标拖拽:在画布局部坐标 from→to 触发 mouseDown/Dragged/Up,驱动真实工具交互。
+    private func synthDrag(on view: TimelineContentView, from: NSPoint, to: NSPoint) {
+        guard let win = view.window else { return }
+        func ev(_ type: NSEvent.EventType, _ p: NSPoint) -> NSEvent? {
+            let wp = view.convert(p, to: nil)
+            return NSEvent.mouseEvent(with: type, location: wp, modifierFlags: [],
+                                      timestamp: ProcessInfo.processInfo.systemUptime,
+                                      windowNumber: win.windowNumber, context: nil,
+                                      eventNumber: 0, clickCount: 1, pressure: 1)
+        }
+        if let d = ev(.leftMouseDown, from) { view.mouseDown(with: d) }
+        if let m = ev(.leftMouseDragged, to) { view.mouseDragged(with: m) }
+        if let u = ev(.leftMouseUp, to) { view.mouseUp(with: u) }
     }
 
     // MARK: - 渲染
