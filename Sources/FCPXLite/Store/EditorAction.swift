@@ -22,4 +22,6 @@ enum EditorAction: Codable, Equatable {
     case setPlayhead(Time)
     case setTimelineHeight(Double)
     case selectAsset(AssetID?)
+    case setPlaying(Bool)
+    case togglePlay
 }

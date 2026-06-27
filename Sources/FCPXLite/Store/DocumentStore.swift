@@ -35,6 +35,56 @@ import Observation
         case let .setPlayhead(t):                ui.playhead = t
         case let .setTimelineHeight(h):          ui.timelineHeight = max(120, min(640, h))
         case let .selectAsset(id):               ui.selectedAssetID = id
+        case let .setPlaying(v):                 ui.isPlaying = v
+        case .togglePlay:                        ui.isPlaying.toggle()
         }
+    }
+
+    // MARK: - 高层编辑操作(工具栏按钮与键盘快捷键共用)
+
+    /// 追加所选素材到主轴末尾。
+    func appendSelected() {
+        guard let clip = clipFromSelection() else { return }
+        dispatch(.insertClip(clip, at: document.sequence.spine.count))
+    }
+
+    /// 在播放头处插入所选素材。
+    func insertAtPlayhead() {
+        guard let clip = clipFromSelection() else { return }
+        dispatch(.insertClip(clip, at: spineIndexAtPlayhead()))
+    }
+
+    /// 把所选素材作为连接片段挂到播放头处的主轴 clip 上方(lane 1)。
+    func connectAtPlayhead() {
+        guard let clip = clipFromSelection() else { return }
+        let host = spineIndexAtPlayhead()
+        guard host < document.sequence.spine.count else {
+            dispatch(.insertClip(clip, at: document.sequence.spine.count))
+            return
+        }
+        dispatch(.connect(clip, host: host, lane: 1, offset: .zero))
+    }
+
+    /// 覆盖(TODO: 真覆盖语义;v1 暂同插入)。
+    func overwriteAtPlayhead() { insertAtPlayhead() }
+
+    private func clipFromSelection() -> Clip? {
+        let assetID = ui.selectedAssetID ?? document.assetLibrary.first?.id
+        guard let id = assetID,
+              let asset = document.assetLibrary.first(where: { $0.id == id }) else { return nil }
+        return Clip(assetID: asset.id, sourceIn: .zero, duration: asset.duration)
+    }
+
+    private func spineIndexAtPlayhead() -> Int {
+        let playhead = ui.playhead
+        var elapsed = Time.zero
+        for (i, element) in document.sequence.spine.enumerated() {
+            if case .clip(let c) = element {
+                let end = elapsed + c.duration
+                if playhead < end { return i }
+                elapsed = end
+            }
+        }
+        return document.sequence.spine.count
     }
 }

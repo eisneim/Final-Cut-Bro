@@ -11,4 +11,5 @@ struct UIState: Codable, Equatable {
     var playhead: Time = .zero
     var timelineHeight: Double = 220
     var selectedAssetID: AssetID? = nil
+    var isPlaying: Bool = false
 }

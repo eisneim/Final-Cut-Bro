@@ -23,7 +23,7 @@ struct RootView: View {
                 Divider().overlay(Tokens.Palette.divider)
                 BrowserView(store: store).frame(width: Tokens.Metric.browserWidth)
                 Divider().overlay(Tokens.Palette.divider)
-                PanelPlaceholder(title: "预览 Viewer", background: Tokens.Palette.canvas)
+                ViewerView(store: store)
                 if store.ui.showInspector {
                     Divider().overlay(Tokens.Palette.divider)
                     PanelPlaceholder(title: "检查器").frame(width: Tokens.Metric.inspectorWidth)
