@@ -64,8 +64,9 @@ enum CompositionBuilder {
         for i in 0..<max(0, sorted.count - 1) {
             let t0 = sorted[i], t1 = sorted[i + 1]
             guard t1 > t0 else { continue }
-            // 该区间活跃的段(start<=t0 且 end>=t1),按 lane 升序(数组末=最上层)。
-            let active = segments.filter { $0.start <= t0 && $0.end >= t1 }.sorted { $0.lane < $1.lane }
+            // 该区间活跃的段(start<=t0 且 end>=t1)。注意:AVFoundation 的 layerInstructions
+            // 数组中【靠前的画在更上层】,故按 lane 降序(高 lane 在前=最上层)。
+            let active = segments.filter { $0.start <= t0 && $0.end >= t1 }.sorted { $0.lane > $1.lane }
             guard !active.isEmpty else { continue }
             let inst = AVMutableVideoCompositionInstruction()
             inst.timeRange = CMTimeRange(start: t0, end: t1)
