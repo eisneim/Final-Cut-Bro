@@ -4,6 +4,8 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     var window: NSWindow!
     private var keyMonitor: Any?
+    private var keyUpMonitor: Any?
+    private var spring = SpringTool()
     private let store = DocumentStore(document: Document(
         formatWidth: 1920, formatHeight: 1080, frameRate: 25,
         assetLibrary: [], sequence: Sequence(spine: [])))
@@ -66,21 +68,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
 
             if mods.contains(.shift) { return event }   // 大写字母放行,工具键用无修饰小写
-            switch event.charactersIgnoringModifiers?.lowercased() {
+            let char = event.charactersIgnoringModifiers?.lowercased()
+            // 编辑动作 / 吸附
+            switch char {
             case "q": store.connectAtPlayhead(); return nil
             case "w": store.insertAtPlayhead(); return nil
             case "e": store.appendSelected(); return nil
             case "d": store.overwriteAtPlayhead(); return nil
-            case "a": store.dispatch(.setTool(.select)); return nil
-            case "t": store.dispatch(.setTool(.trim)); return nil
-            case "p": store.dispatch(.setTool(.position)); return nil
-            case "r": store.dispatch(.setTool(.range)); return nil
-            case "b": store.dispatch(.setTool(.blade)); return nil
-            case "z": store.dispatch(.setTool(.zoom)); return nil
-            case "h": store.dispatch(.setTool(.hand)); return nil
             case "n": store.dispatch(.toggleSnapping); return nil
-            default:  return event
+            default: break
             }
+            // 工具键 → 弹簧:按下临时切;短按=永久,长按=松开还原
+            if let tool = Self.toolForKey(char) {
+                if let t = self.spring.keyDown(tool: tool, current: store.ui.currentTool,
+                                               time: event.timestamp, isRepeat: event.isARepeat) {
+                    store.dispatch(.setTool(t))
+                }
+                return nil
+            }
+            return event
+        }
+
+        keyUpMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyUp) { [weak self] event in
+            guard let self else { return event }
+            let char = event.charactersIgnoringModifiers?.lowercased()
+            // 只在松开的是当前持有的工具键时处理
+            guard let held = self.spring.heldShortcut, held == char else { return event }
+            if let revert = self.spring.keyUp(time: event.timestamp) {
+                self.store.dispatch(.setTool(revert))   // 长按 → 还原
+            }
+            return event
+        }
+    }
+
+    private static func toolForKey(_ char: String?) -> EditTool? {
+        switch char {
+        case "a": return .select
+        case "t": return .trim
+        case "p": return .position
+        case "r": return .range
+        case "b": return .blade
+        case "z": return .zoom
+        case "h": return .hand
+        default:  return nil
         }
     }
 }
