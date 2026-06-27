@@ -33,21 +33,51 @@ struct PreviewView: NSViewRepresentable {
         private var lastSequence: Sequence?
         private var timeObserver: Any?
         private var observing = false
+        private var lastFingerprint: String = ""
 
         func attach(to view: PlayerHostView) {
             view.playerLayer.player = player
         }
 
         func update(sequence: Sequence, store: DocumentStore, playheadSeconds: Double, isPlaying: Bool) {
-            if lastSequence != sequence {
+            let fp = Self.structureFingerprint(sequence)
+            if lastSequence == nil || fp != lastFingerprint {
+                // 轨道结构变(增删/移动/trim/blade)→ 重建 item。
                 lastSequence = sequence
+                lastFingerprint = fp
                 player.replaceCurrentItem(with: CompositionBuilder.build(document: store.document))
                 seek(playheadSeconds)
+            } else if lastSequence != sequence {
+                // 仅参数变(inspector 调 transform/opacity)→ 只更新 videoComposition,不换 item(避免黑屏闪烁)。
+                lastSequence = sequence
+                if let item = player.currentItem,
+                   let rebuilt = CompositionBuilder.build(document: store.document) {
+                    item.videoComposition = rebuilt.videoComposition
+                    item.audioMix = rebuilt.audioMix
+                }
+                if !isPlaying { seek(playheadSeconds) }
             } else if !isPlaying {
-                seek(playheadSeconds)   // 非播放态:跟随播放头精确 seek
+                seek(playheadSeconds)
             }
             if isPlaying { player.play() } else { player.pause() }
             ensureObserver(store: store)
+        }
+
+        /// 结构指纹:只反映影响轨道布局的字段(spine clip 的 asset/in/out/lane/offset),
+        /// 不含 adjust → adjust 变不会触发重建。
+        private static func structureFingerprint(_ seq: Sequence) -> String {
+            var s = ""
+            for el in seq.spine {
+                switch el {
+                case .gap(let d): s += "g\(d.value)/\(d.timescale);"
+                case .clip(let c):
+                    s += "c\(c.assetID.raw):\(c.sourceIn.value)/\(c.sourceIn.timescale):\(c.duration.value)/\(c.duration.timescale);"
+                    for ch in c.connected {
+                        s += "k\(ch.assetID.raw):\(ch.lane):\(ch.offset.value):\(ch.sourceIn.value):\(ch.duration.value);"
+                    }
+                }
+            }
+            return s
         }
 
         private func seek(_ seconds: Double) {

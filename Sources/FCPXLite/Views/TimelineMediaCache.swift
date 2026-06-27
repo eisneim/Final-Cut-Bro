@@ -96,8 +96,6 @@ final class TimelineMediaCache {
         guard reader.canAdd(output) else { return [] }
         reader.add(output)
         guard reader.startReading() else { return [] }
-        reader.add(output)
-        guard reader.startReading() else { return [] }
 
         let totalDur = CMTimeGetSeconds(av.duration)
         guard totalDur > 0 else { return [] }

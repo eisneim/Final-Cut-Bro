@@ -258,12 +258,16 @@ final class TimelineContentView: NSView {
         // 裁剪到 clip 区域,画 filmstrip(上)+ 波形(下),按 vaRatio 分。
         NSGraphicsContext.current?.saveGraphicsState()
         path.addClip()
-        if let aid = assetID(of: p.clipID), let asset = assetLibrary.first(where: { $0.id == aid }) {
+        if let clip = clipByID(p.clipID), let asset = assetLibrary.first(where: { $0.id == clip.assetID }) {
+            // 只显示本 clip 的源区间 [sourceIn, sourceIn+duration) 对应的那段缩略图/波形(blade 后各段不同)。
+            let assetDur = max(0.0001, asset.duration.seconds)
+            let f0 = max(0, min(1, clip.sourceIn.seconds / assetDur))
+            let f1 = max(f0, min(1, (clip.sourceIn.seconds + clip.duration.seconds) / assetDur))
             let videoH = asset.hasAudio ? rect.height * vaRatio : rect.height
             let filmRect = NSRect(x: rect.minX, y: rect.minY, width: rect.width, height: videoH)
             let waveRect = NSRect(x: rect.minX, y: rect.minY + videoH, width: rect.width, height: rect.height - videoH)
-            if asset.kind != .audio { drawFilmstrip(asset, in: filmRect) }
-            if asset.hasAudio { drawWaveform(asset, in: asset.kind == .audio ? rect : waveRect) }
+            if asset.kind != .audio { drawFilmstrip(asset, in: filmRect, range: f0...f1) }
+            if asset.hasAudio { drawWaveform(asset, in: asset.kind == .audio ? rect : waveRect, range: f0...f1) }
         }
         NSGraphicsContext.current?.restoreGraphicsState()
 
@@ -289,21 +293,23 @@ final class TimelineContentView: NSView {
         NSGraphicsContext.current?.restoreGraphicsState()
     }
 
-    /// 缩略图条:按缩略图宽度(高度的 16:9)平铺,每格采样不同帧(非单图拉伸)。
-    private func drawFilmstrip(_ asset: Asset, in r: NSRect) {
+    /// 缩略图条:只取源区间 range(0..1)那一段的帧,按缩略图宽度平铺、每格采样不同帧。
+    private func drawFilmstrip(_ asset: Asset, in r: NSRect, range: ClosedRange<Double>) {
         guard r.height > 2, r.width > 1 else { return }
         guard let all = TimelineMediaCache.shared.thumbnails(for: asset), !all.isEmpty else { return }
         let thumbW = max(8, r.height * 16.0 / 9.0)
         let visible = max(1, Int(ceil(r.width / thumbW)))
+        let lo = range.lowerBound, span = max(1e-6, range.upperBound - range.lowerBound)
         for i in 0..<visible {
-            let img = all[min(all.count - 1, i * all.count / visible)]   // 采样不同帧
+            let frac = lo + span * (Double(i) + 0.5) / Double(visible)   // 映射到源区间内
+            let img = all[min(all.count - 1, max(0, Int(frac * Double(all.count))))]
             let slice = NSRect(x: r.minX + CGFloat(i) * thumbW, y: r.minY, width: thumbW + 1, height: r.height)
             NSImage(cgImage: img, size: slice.size).draw(in: slice)
         }
     }
 
-    /// 音频波形:把固定 2000 桶峰值重采样到可见宽度,按对称竖条画(异步缓存)。
-    private func drawWaveform(_ asset: Asset, in r: NSRect) {
+    /// 音频波形:只取源区间 range 对应的桶段,重采样到可见宽度(blade 后各段波形不同)。
+    private func drawWaveform(_ asset: Asset, in r: NSRect, range: ClosedRange<Double>) {
         guard r.height > 2, r.width > 1 else { return }
         TimelineColors.elevated.withAlphaComponent(0.5).setFill()
         NSRect(x: r.minX, y: r.minY, width: r.width, height: r.height).fill()
@@ -312,13 +318,26 @@ final class TimelineContentView: NSView {
         let mid = r.minY + r.height / 2
         let path = NSBezierPath(); path.lineWidth = 1
         let cols = max(1, Int(r.width))
+        let lo = Int(range.lowerBound * Double(peaks.count))
+        let hi = max(lo + 1, Int(range.upperBound * Double(peaks.count)))
         for c in 0..<cols {
-            let idx = min(peaks.count - 1, c * peaks.count / cols)   // 重采样
+            let idx = min(peaks.count - 1, lo + c * (hi - lo) / cols)   // 只在源区间内重采样
             let h = CGFloat(peaks[idx]) * (r.height / 2)
             let x = r.minX + CGFloat(c)
             path.move(to: NSPoint(x: x, y: mid - h)); path.line(to: NSPoint(x: x, y: mid + h))
         }
         path.stroke()
+    }
+
+    /// 取某 clip(主轴或连接子项)。
+    private func clipByID(_ id: ClipID) -> Clip? {
+        for el in sequence.spine {
+            if case .clip(let c) = el {
+                if c.id == id { return c }
+                for ch in c.connected where ch.id == id { return ch }
+            }
+        }
+        return nil
     }
 
     /// 取某 clip(主轴或连接子项)的 assetID。
