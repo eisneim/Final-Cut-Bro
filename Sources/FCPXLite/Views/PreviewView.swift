@@ -111,16 +111,32 @@ final class PlayerHostView: NSView {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
+        layer?.backgroundColor = NSColor.black.cgColor
         playerLayer.videoGravity = .resizeAspect
         playerLayer.backgroundColor = NSColor.black.cgColor
+        // 自动跟随父层尺寸(inspector 开关/缩放容器时,不靠 layout() 也能跟上)
+        playerLayer.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
+        playerLayer.frame = bounds
         layer?.addSublayer(playerLayer)
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
 
+    // 覆盖所有 resize 路径(layout 不一定每次都触发,但 setFrameSize 一定)。
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        syncLayer()
+    }
     override func layout() {
         super.layout()
+        syncLayer()
+    }
+    /// 关隐式动画地把 playerLayer 贴满 bounds(消除开关 inspector 时的位移/偏移)。
+    private func syncLayer() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         playerLayer.frame = bounds
+        CATransaction.commit()
     }
 }
 

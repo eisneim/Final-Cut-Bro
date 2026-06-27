@@ -10,17 +10,17 @@ struct InspectorView: View {
             if let clip = store.selectedClip() {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        section("复合") {
+                        section("复合", reset: { store.updateSelectedAdjust { $0.opacity = 1 } }) {
                             sliderRow("不透明度", value: bind(\.opacity, scale: 100), range: 0...100, suffix: "%", display: clip.adjust.opacity * 100)
                         }
-                        section("变换") {
+                        section("变换", reset: { store.updateSelectedAdjust { $0.transform = Transform() } }) {
                             xyRow("位置",
                                   x: bindCG(\.transform.position.x), y: bindCG(\.transform.position.y),
                                   dx: clip.adjust.transform.position.x, dy: clip.adjust.transform.position.y, suffix: "px")
                             sliderRow("旋转", value: bind(\.transform.rotation), range: -180...180, suffix: "°", display: clip.adjust.transform.rotation)
                             sliderRow("缩放(全部)", value: scaleAllBinding(clip), range: 1...400, suffix: "%", display: clip.adjust.transform.scale.width * 100)
                         }
-                        section("裁剪") {
+                        section("裁剪", reset: { store.updateSelectedAdjust { $0.crop = Crop() } }) {
                             sliderRow("左", value: bind(\.crop.left), range: 0...1000, suffix: "px", display: clip.adjust.crop.left)
                             sliderRow("右", value: bind(\.crop.right), range: 0...1000, suffix: "px", display: clip.adjust.crop.right)
                             sliderRow("上", value: bind(\.crop.top), range: 0...1000, suffix: "px", display: clip.adjust.crop.top)
@@ -67,10 +67,20 @@ struct InspectorView: View {
 
     // MARK: - UI 构件
 
-    private func section<C: View>(_ title: String, @ViewBuilder _ content: () -> C) -> some View {
+    private func section<C: View>(_ title: String, reset: (() -> Void)? = nil, @ViewBuilder _ content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(title).font(Tokens.Typeface.body).foregroundStyle(Tokens.Palette.textPrimary)
-                .padding(.horizontal, 10).padding(.vertical, 6)
+            HStack {
+                Text(title).font(Tokens.Typeface.body).foregroundStyle(Tokens.Palette.textPrimary)
+                Spacer()
+                if let reset {
+                    Button(action: reset) {
+                        Image(systemName: "arrow.counterclockwise")
+                            .font(.system(size: 11)).foregroundStyle(Tokens.Palette.textMuted)
+                    }
+                    .buttonStyle(.plain).help("重置该组参数")
+                }
+            }
+            .padding(.horizontal, 10).padding(.vertical, 6)
             content()
             Divider().overlay(Tokens.Palette.divider)
         }
