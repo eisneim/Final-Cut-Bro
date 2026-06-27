@@ -29,6 +29,9 @@ enum TimelineColors {
     static let textMuted    = NSColor(hex: "#696969")
     static let divider      = NSColor(hex: "#000000")
     static let playheadRed   = NSColor(hex: "#FF3B30")
+    /// 位置工具留下的灰色占位间隙(gap):比 clip 灰、可见但不抢眼。
+    static let gapFill       = NSColor(hex: "#3A3A3A")
+    static let gapBorder     = NSColor(hex: "#555555")
 }
 
 extension NSColor {

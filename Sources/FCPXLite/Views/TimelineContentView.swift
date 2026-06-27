@@ -61,12 +61,22 @@ final class TimelineContentView: NSView {
         let lane0 = TimelineGeometry.laneTopY(lane: 0, rulerHeight: Self.rulerHeight,
                                               laneHeight: Self.laneHeight, laneGap: Self.laneGap,
                                               contentHeight: bounds.height)
+        var gaps: [[String: Any]] = []
+        var acc = Time.zero
+        for el in sequence.spine {
+            if case .gap(let d) = el {
+                let x = TimelineGeometry.x(forSeconds: acc.seconds, pxPerSecond: pxPerSecond)
+                let w = TimelineGeometry.x(forSeconds: d.seconds, pxPerSecond: pxPerSecond)
+                gaps.append(["x": Double(x), "y": Double(lane0), "w": Double(w), "durationSec": d.seconds])
+            }
+            acc = acc + el.duration
+        }
         return [
             "frameH": Double(frame.height), "boundsH": Double(bounds.height),
             "clipViewH": Double(enclosingScrollView?.contentView.bounds.height ?? -1),
             "scrollViewH": Double(enclosingScrollView?.bounds.height ?? -1),
             "rulerHeight": Double(Self.rulerHeight), "laneHeight": Double(Self.laneHeight),
-            "lane0TopY": Double(lane0), "clips": clips
+            "lane0TopY": Double(lane0), "clips": clips, "gaps": gaps
         ]
     }
     #endif
@@ -102,6 +112,7 @@ final class TimelineContentView: NSView {
 
         drawMainLaneBand()
         drawRuler()
+        drawGaps()
 
         let ps = placed
         if ps.isEmpty {
@@ -112,6 +123,28 @@ final class TimelineContentView: NSView {
 
         drawDragGhost()
         drawPlayhead()
+    }
+
+    /// 画主轴上的 .gap(位置工具留下的灰色占位):lane 0 上的灰条,可被修剪工具调长。
+    func drawGaps() {
+        let y = TimelineGeometry.laneTopY(lane: 0, rulerHeight: Self.rulerHeight,
+                                          laneHeight: Self.laneHeight, laneGap: Self.laneGap,
+                                          contentHeight: bounds.height)
+        var acc = Time.zero
+        for el in sequence.spine {
+            if case .gap(let d) = el {
+                let x = TimelineGeometry.x(forSeconds: acc.seconds, pxPerSecond: pxPerSecond)
+                let w = max(2, TimelineGeometry.x(forSeconds: d.seconds, pxPerSecond: pxPerSecond))
+                let rect = NSRect(x: x, y: y, width: w, height: Self.laneHeight)
+                let path = NSBezierPath(roundedRect: rect, xRadius: 3, yRadius: 3)
+                TimelineColors.gapFill.setFill(); path.fill()
+                TimelineColors.gapBorder.setStroke(); path.lineWidth = 1; path.stroke()
+                ("间隙" as NSString).draw(at: NSPoint(x: rect.minX + 4, y: rect.minY + 3),
+                    withAttributes: [.font: NSFont.systemFont(ofSize: 9),
+                                     .foregroundColor: TimelineColors.textMuted])
+            }
+            acc = acc + el.duration
+        }
     }
 
     /// lane 0 行底色:略深的全宽横条,让主时间线读起来稍暗。

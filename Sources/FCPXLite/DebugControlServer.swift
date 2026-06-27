@@ -172,6 +172,12 @@ final class DebugControlServer {
             if let id = spineClipID(at: cmd.index ?? 0) {
                 store.dispatch(.relocateClip(id, lane: cmd.lane ?? 0, time: .seconds(cmd.seconds ?? 0)))
             }
+        case "positionMove":
+            if let id = spineClipID(at: cmd.index ?? 0) {
+                store.dispatch(.positionMove(id, time: .seconds(cmd.seconds ?? 0)))
+            }
+        case "setGapDuration":
+            store.dispatch(.setGapDuration(at: cmd.index ?? 0, duration: .seconds(cmd.seconds ?? 1)))
         default: NSLog("[DebugControlServer] unknown op \(cmd.op)")
         }
     }
