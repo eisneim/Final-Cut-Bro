@@ -12,6 +12,27 @@ enum EditorAction: Codable, Equatable {
     case trimLeft(at: Int, deltaIn: Time)
     case blade(at: Int, localTime: Time)
     case connect(Clip, host: Int, lane: Int, offset: Time)
+    case relocateClip(ClipID, lane: Int, time: Time)
+    case positionMove(ClipID, time: Time)
+    case setGapDuration(at: Int, duration: Time)
     case setInspector(Bool)
     case setEffects(Bool)
+    case importAsset(Asset)
+    case selectClip(ClipID?)
+    case setTool(EditTool)
+    case setZoom(Double)
+    case setPlayhead(Time)
+    case setTimelineHeight(Double)
+    case selectAsset(AssetID?)
+    case setPlaying(Bool)
+    case togglePlay
+    case toggleSnapping
+    case setPanelWidth(PanelKind, Double)
+    case setClipHeight(Double)
+    case setVideoAudioRatio(Double)
+}
+
+/// 可调宽度的面板。
+enum PanelKind: String, Codable {
+    case sidebar, browser, inspector, chat
 }

@@ -3,6 +3,9 @@ import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     var window: NSWindow!
+    private var keyMonitor: Any?
+    private var keyUpMonitor: Any?
+    private var spring = SpringTool()
     private let store = DocumentStore(document: Document(
         formatWidth: 1920, formatHeight: 1080, frameRate: 25,
         assetLibrary: [], sequence: Sequence(spine: [])))
@@ -17,5 +20,97 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.center()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        installKeyboardShortcuts()
+        #if DEBUG
+        debugServer = DebugControlServer(store: store, window: window)
+        debugServer?.start()
+        #endif
+    }
+
+    #if DEBUG
+    private var debugServer: DebugControlServer?
+    #endif
+
+    /// 全局快捷键(对照 FCP 官方键位):
+    /// 空格=播放/暂停;QWED=连接/插入/追加/覆盖;ATPRBZH=工具;
+    /// ←/→=播放头±1帧(⇧±10帧);Home/End=头/尾;Delete=删除选中(ripple);
+    /// ⌘+/⌘−=缩放;⌘B=在播放头切割。文本输入聚焦时不拦截。
+    private func installKeyboardShortcuts() {
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self else { return event }
+            if self.window?.firstResponder is NSText { return event }
+            let store = self.store
+            let mods = event.modifierFlags
+            let hasCmd = mods.contains(.command)
+            let hasOptCtrl = !mods.intersection([.option, .control]).isEmpty
+
+            // ⌘ 组合
+            if hasCmd && !hasOptCtrl {
+                switch event.charactersIgnoringModifiers?.lowercased() {
+                case "=", "+": store.dispatch(.setZoom(store.ui.pxPerSecond * 1.5)); return nil
+                case "-":      store.dispatch(.setZoom(store.ui.pxPerSecond / 1.5)); return nil
+                case "b":      store.bladeAtPlayhead(); return nil
+                case "i":      ImportPanel.present(into: store); return nil
+                default:       return event
+                }
+            }
+            if hasCmd || hasOptCtrl { return event }   // 其它带修饰键放行
+
+            // 方向键 / Home / End / 空格 / Delete(允许 Shift)
+            switch event.keyCode {
+            case 123: store.nudgePlayhead(frames: mods.contains(.shift) ? -10 : -1); return nil  // ←
+            case 124: store.nudgePlayhead(frames: mods.contains(.shift) ?  10 :  1); return nil  // →
+            case 115: store.playheadToStart(); return nil   // Home
+            case 119: store.playheadToEnd(); return nil      // End
+            case 49:  store.dispatch(.togglePlay); return nil // 空格
+            case 51:  store.deleteSelected(); return nil      // Delete
+            default:  break
+            }
+
+            if mods.contains(.shift) { return event }   // 大写字母放行,工具键用无修饰小写
+            let char = event.charactersIgnoringModifiers?.lowercased()
+            // 编辑动作 / 吸附
+            switch char {
+            case "q": store.connectAtPlayhead(); return nil
+            case "w": store.insertAtPlayhead(); return nil
+            case "e": store.appendSelected(); return nil
+            case "d": store.overwriteAtPlayhead(); return nil
+            case "n": store.dispatch(.toggleSnapping); return nil
+            default: break
+            }
+            // 工具键 → 弹簧:按下临时切;短按=永久,长按=松开还原
+            if let tool = Self.toolForKey(char) {
+                if let t = self.spring.keyDown(tool: tool, current: store.ui.currentTool,
+                                               time: event.timestamp, isRepeat: event.isARepeat) {
+                    store.dispatch(.setTool(t))
+                }
+                return nil
+            }
+            return event
+        }
+
+        keyUpMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyUp) { [weak self] event in
+            guard let self else { return event }
+            let char = event.charactersIgnoringModifiers?.lowercased()
+            // 只在松开的是当前持有的工具键时处理
+            guard let held = self.spring.heldShortcut, held == char else { return event }
+            if let revert = self.spring.keyUp(time: event.timestamp) {
+                self.store.dispatch(.setTool(revert))   // 长按 → 还原
+            }
+            return event
+        }
+    }
+
+    private static func toolForKey(_ char: String?) -> EditTool? {
+        switch char {
+        case "a": return .select
+        case "t": return .trim
+        case "p": return .position
+        case "r": return .range
+        case "b": return .blade
+        case "z": return .zoom
+        case "h": return .hand
+        default:  return nil
+        }
     }
 }
