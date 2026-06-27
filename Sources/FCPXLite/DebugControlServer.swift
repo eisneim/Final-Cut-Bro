@@ -118,6 +118,23 @@ final class DebugControlServer {
                 let data = (try? JSONSerialization.data(withJSONObject: info, options: [.sortedKeys])) ?? Data("{}".utf8)
                 sendJSON(conn, data)
             }
+        case ("GET", "/previewFrame"):
+            DispatchQueue.main.sync {
+                guard let item = CompositionBuilder.build(document: store.document) else {
+                    sendText(conn, status: "500", "no item"); return
+                }
+                let gen = AVAssetImageGenerator(asset: item.asset)
+                gen.appliesPreferredTrackTransform = true
+                if let vc = item.videoComposition { gen.videoComposition = vc }
+                gen.requestedTimeToleranceBefore = .zero
+                gen.requestedTimeToleranceAfter = .zero
+                let t = CMTime(seconds: max(0, store.ui.playhead.seconds), preferredTimescale: 600)
+                if let cg = try? gen.copyCGImage(at: t, actualTime: nil) {
+                    let rep = NSBitmapImageRep(cgImage: cg)
+                    if let png = rep.representation(using: .png, properties: [:]) { sendPNG(conn, png); return }
+                }
+                sendText(conn, status: "500", "no frame")
+            }
         default:
             sendText(conn, status: "404 Not Found", "unknown route \(pathOnly)")
         }
@@ -161,6 +178,18 @@ final class DebugControlServer {
         case "setTool":     if let t = cmd.tool, let tool = EditTool(rawValue: t) { store.dispatch(.setTool(tool)) }
         case "togglePlay":  store.dispatch(.togglePlay)
         case "toggleSnapping": store.dispatch(.toggleSnapping)
+        case "scaleFirstConnected":
+            // DEBUG 自测用:把第一个连接片段缩放,验证层级(缩小后能看见下层)
+            let sc = CGFloat(cmd.width ?? 0.5)
+            var seq = store.document.sequence
+            for (i, el) in seq.spine.enumerated() {
+                if case .clip(var host) = el, !host.connected.isEmpty {
+                    host.connected[0].adjust.transform.scale = CGSize(width: sc, height: sc)
+                    seq.spine[i] = .clip(host)
+                    store.document.sequence = seq
+                    break
+                }
+            }
         case "mouseDrag":
             // 合成鼠标拖拽(画布坐标 px):down(from)→drag(to)→up(to),驱动真实工具交互
             if let tc = findTimelineContentView() {
