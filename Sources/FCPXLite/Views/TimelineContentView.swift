@@ -48,6 +48,29 @@ final class TimelineContentView: NSView {
 
     required init?(coder: NSCoder) { fatalError("not used") }
 
+    #if DEBUG
+    /// 几何自省(供 DebugControlServer /layout 用):暴露画布真实尺寸与各 clip rect,便于自动化诊断渲染。
+    func debugGeometryJSON() -> [String: Any] {
+        var clips: [[String: Any]] = []
+        for p in placed {
+            let r = clipRect(p)
+            clips.append(["lane": p.lane, "connected": p.isConnected,
+                          "x": Double(r.minX), "y": Double(r.minY),
+                          "w": Double(r.width), "h": Double(r.height)])
+        }
+        let lane0 = TimelineGeometry.laneTopY(lane: 0, rulerHeight: Self.rulerHeight,
+                                              laneHeight: Self.laneHeight, laneGap: Self.laneGap,
+                                              contentHeight: bounds.height)
+        return [
+            "frameH": Double(frame.height), "boundsH": Double(bounds.height),
+            "clipViewH": Double(enclosingScrollView?.contentView.bounds.height ?? -1),
+            "scrollViewH": Double(enclosingScrollView?.bounds.height ?? -1),
+            "rulerHeight": Double(Self.rulerHeight), "laneHeight": Double(Self.laneHeight),
+            "lane0TopY": Double(lane0), "clips": clips
+        ]
+    }
+    #endif
+
     // MARK: - 状态推入
 
     struct State {

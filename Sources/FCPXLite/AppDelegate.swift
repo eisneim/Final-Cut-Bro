@@ -19,7 +19,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         installKeyboardShortcuts()
+        #if DEBUG
+        debugServer = DebugControlServer(store: store, window: window)
+        debugServer?.start()
+        #endif
     }
+
+    #if DEBUG
+    private var debugServer: DebugControlServer?
+    #endif
 
     /// 全局快捷键(对照 FCP 官方键位):
     /// 空格=播放/暂停;QWED=连接/插入/追加/覆盖;ATPRBZH=工具;
