@@ -59,15 +59,17 @@ final class TimelineMediaCache {
         return out
     }
 
-    // MARK: - 音频波形峰值(0..1,buckets 个)
+    // MARK: - 音频波形峰值(每资源固定 N 桶,按 presentation time 分桶;绘制时重采样)
 
-    func waveform(for asset: Asset, buckets: Int) -> [Float]? {
+    static let waveBuckets = 2000
+
+    func waveform(for asset: Asset) -> [Float]? {
         let key = asset.id.raw
         if let w = waves[key] { return w }
         guard asset.hasAudio, !wavesLoading.contains(key) else { return nil }
         wavesLoading.insert(key)
         q.async { [weak self] in
-            let peaks = Self.genWaveform(asset, buckets: max(8, buckets))
+            let peaks = Self.genWaveform(asset, buckets: Self.waveBuckets)
             DispatchQueue.main.async {
                 self?.waves[key] = peaks
                 self?.wavesLoading.remove(key)
@@ -93,12 +95,12 @@ final class TimelineMediaCache {
         reader.add(output)
         reader.startReading()
 
-        var peaks = [Float](repeating: 0, count: buckets)
         let totalDur = CMTimeGetSeconds(av.duration)
-        let sampleRate = (track.naturalTimeScale > 0) ? Double(track.naturalTimeScale) : 44100.0
-        let totalSamples = max(1, Int(totalDur * sampleRate))
-        var idx = 0
+        guard totalDur > 0 else { return [] }
+        var peaks = [Float](repeating: 0, count: buckets)
         while reader.status == .reading, let sb = output.copyNextSampleBuffer() {
+            let pts = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sb))
+            var bufPeak: Float = 0
             if let bb = CMSampleBufferGetDataBuffer(sb) {
                 var length = 0
                 var dataPtr: UnsafeMutablePointer<Int8>?
@@ -108,15 +110,13 @@ final class TimelineMediaCache {
                     let n = length / 2
                     dp.withMemoryRebound(to: Int16.self, capacity: n) { p in
                         var i = 0
-                        while i < n {
-                            let v = abs(Float(p[i])) / Float(Int16.max)
-                            let b = min(buckets - 1, idx * buckets / totalSamples)
-                            if v > peaks[b] { peaks[b] = v }
-                            idx += 1
-                            i += 8   // 抽样(每 8 个采样取一,够画波形,省时)
-                        }
+                        while i < n { let v = abs(Float(p[i])) / Float(Int16.max); if v > bufPeak { bufPeak = v }; i += 16 }
                     }
                 }
+            }
+            if pts.isFinite {
+                let b = min(buckets - 1, max(0, Int(pts / totalDur * Double(buckets))))
+                if bufPeak > peaks[b] { peaks[b] = bufPeak }
             }
             CMSampleBufferInvalidate(sb)
         }

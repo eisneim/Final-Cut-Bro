@@ -132,7 +132,6 @@ final class TimelineContentView: NSView {
         bounds.fill()
 
         drawMainLaneBand()
-        drawRuler()
         drawGaps()
 
         let ps = placed
@@ -143,7 +142,8 @@ final class TimelineContentView: NSView {
         }
 
         drawDragGhost()
-        drawPlayhead()
+        drawRuler()      // 刻度尺最后画 → 永远在 clip 之上(拖高的 clip 不会盖住刻度)
+        drawPlayhead()   // 播放头红线再压在刻度尺之上
     }
 
     /// 画主轴上的 .gap(位置工具留下的灰色占位):lane 0 上的灰条,可被修剪工具调长。
@@ -209,12 +209,14 @@ final class TimelineContentView: NSView {
 
     private func drawRuler() {
         let h = Self.rulerHeight
+        // 钉在视口顶部:用可视区起点 y(竖滚后跟随),保证 ruler 永远在最上层、不被高 lane 的 clip 遮、也不滚走。
+        let top = enclosingScrollView?.documentVisibleRect.minY ?? 0
         TimelineColors.chrome.setFill()
-        NSRect(x: 0, y: 0, width: bounds.width, height: h).fill()
+        NSRect(x: 0, y: top, width: bounds.width, height: h).fill()
 
         // 底部分隔线
         TimelineColors.divider.setFill()
-        NSRect(x: 0, y: h - 1, width: bounds.width, height: 1).fill()
+        NSRect(x: 0, y: top + h - 1, width: bounds.width, height: 1).fill()
 
         let interval = TimelineGeometry.tickIntervalSeconds(pxPerSecond: pxPerSecond)
         guard interval > 0, pxPerSecond > 0 else { return }
@@ -228,15 +230,24 @@ final class TimelineContentView: NSView {
         let maxSeconds = Double(bounds.width / pxPerSecond)
         while t <= maxSeconds {
             let x = TimelineGeometry.x(forSeconds: t, pxPerSecond: pxPerSecond)
-            // 刻度线
             TimelineColors.textMuted.setFill()
-            NSRect(x: x, y: h - 6, width: 1, height: 6).fill()
-            // 标签
+            NSRect(x: x, y: top + h - 6, width: 1, height: 6).fill()
             let label = Self.timecode(seconds: t) as NSString
-            label.draw(at: NSPoint(x: x + 3, y: 4), withAttributes: attrs)
+            label.draw(at: NSPoint(x: x + 3, y: top + 4), withAttributes: attrs)
             t += interval
         }
     }
+
+    /// 加入滚动视图后:监听滚动,让钉顶 ruler 跟随重绘。
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if let clip = enclosingScrollView?.contentView {
+            clip.postsBoundsChangedNotifications = true
+            NotificationCenter.default.addObserver(self, selector: #selector(scrolled),
+                                                   name: NSView.boundsDidChangeNotification, object: clip)
+        }
+    }
+    @objc private func scrolled() { needsDisplay = true }
 
     private func drawClip(_ p: Placed) {
         let rect = clipRect(p)
@@ -291,23 +302,21 @@ final class TimelineContentView: NSView {
         }
     }
 
-    /// 音频波形:跨宽度按峰值画对称竖条(异步缓存)。
+    /// 音频波形:把固定 2000 桶峰值重采样到可见宽度,按对称竖条画(异步缓存)。
     private func drawWaveform(_ asset: Asset, in r: NSRect) {
-        guard r.height > 2 else { return }
-        TimelineColors.elevated.withAlphaComponent(0.5).setFill(); NSRect(x: r.minX, y: r.minY, width: r.width, height: r.height).fill()
-        let buckets = max(8, Int(r.width))
-        guard let peaks = TimelineMediaCache.shared.waveform(for: asset, buckets: buckets), !peaks.isEmpty else { return }
+        guard r.height > 2, r.width > 1 else { return }
+        TimelineColors.elevated.withAlphaComponent(0.5).setFill()
+        NSRect(x: r.minX, y: r.minY, width: r.width, height: r.height).fill()
+        guard let peaks = TimelineMediaCache.shared.waveform(for: asset), !peaks.isEmpty else { return }
         TimelineColors.waveform.setStroke()
         let mid = r.minY + r.height / 2
         let path = NSBezierPath(); path.lineWidth = 1
-        let n = peaks.count
-        let step = max(1, n / max(1, Int(r.width)))
-        var x = r.minX
-        var i = 0
-        while i < n && x <= r.maxX {
-            let h = CGFloat(peaks[i]) * (r.height / 2)
+        let cols = max(1, Int(r.width))
+        for c in 0..<cols {
+            let idx = min(peaks.count - 1, c * peaks.count / cols)   // 重采样
+            let h = CGFloat(peaks[idx]) * (r.height / 2)
+            let x = r.minX + CGFloat(c)
             path.move(to: NSPoint(x: x, y: mid - h)); path.line(to: NSPoint(x: x, y: mid + h))
-            x += 1; i += step
         }
         path.stroke()
     }

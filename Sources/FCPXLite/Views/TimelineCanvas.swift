@@ -57,9 +57,13 @@ struct TimelineCanvas: NSViewRepresentable {
         let neededWidth = CGFloat(totalSeconds) * pxPerSecond + 200
         let width = max(visibleWidth, neededWidth)
 
-        // 高度 = 可视高度(让主轴在可视区垂直居中;上下露出 ±lane);拖高时间线即看到更多层级。
+        // 高度 = max(可视, 容纳所有 lane 所需);超过可视即可竖向滚动。lane 0 在内容里居中。
+        let maxAbsLane = Layout.compute(sequence).map { abs($0.lane) }.max() ?? 0
+        let needed = TimelineContentView.rulerHeight
+            + CGFloat(2 * maxAbsLane + 1) * (clipHeight + TimelineContentView.laneGap)
+            + clipHeight   // 上下各留一条余量
         let visibleHeight = scrollView.contentView.bounds.height
-        let frameHeight = max(visibleHeight, 120)
+        let frameHeight = max(visibleHeight, needed)
 
         content.frame = NSRect(x: 0, y: 0, width: width, height: frameHeight)
         content.needsDisplay = true

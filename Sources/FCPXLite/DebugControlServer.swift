@@ -135,6 +135,27 @@ final class DebugControlServer {
                 }
                 sendText(conn, status: "500", "no frame")
             }
+        case ("GET", "/waveformPeaks"):
+            DispatchQueue.main.sync {
+                // 每个有音频的资源:波形是否就绪 + 非零桶占比 + 跨整段的 20 点预览(验证不是只填开头)
+                var out: [[String: Any]] = []
+                for asset in store.document.assetLibrary where asset.hasAudio {
+                    if let peaks = TimelineMediaCache.shared.waveform(for: asset) {
+                        let nz = peaks.filter { $0 > 0.001 }.count
+                        let mx = peaks.max() ?? 0
+                        var preview: [Double] = []
+                        let pts = 20
+                        for i in 0..<pts { preview.append(Double(peaks[min(peaks.count - 1, i * peaks.count / pts)])) }
+                        out.append(["name": asset.url.lastPathComponent, "ready": true,
+                                    "count": peaks.count, "nonZero": nz, "max": Double(mx),
+                                    "preview": preview])
+                    } else {
+                        out.append(["name": asset.url.lastPathComponent, "ready": false])
+                    }
+                }
+                let data = (try? JSONSerialization.data(withJSONObject: out, options: [.sortedKeys])) ?? Data("[]".utf8)
+                sendJSON(conn, data)
+            }
         default:
             sendText(conn, status: "404 Not Found", "unknown route \(pathOnly)")
         }
