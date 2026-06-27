@@ -43,6 +43,27 @@ import Observation
     var canUndo: Bool { !undoStack.isEmpty }
     var canRedo: Bool { !redoStack.isEmpty }
 
+    // MARK: - Inspector
+
+    /// 当前选中的 clip(主轴或连接子项)。
+    func selectedClip() -> Clip? {
+        guard let id = ui.selectedClipID else { return nil }
+        for el in document.sequence.spine {
+            if case .clip(let c) = el {
+                if c.id == id { return c }
+                for ch in c.connected where ch.id == id { return ch }
+            }
+        }
+        return nil
+    }
+
+    /// 修改选中 clip 的 Adjustments(走命令层,可撤销)。
+    func updateSelectedAdjust(_ f: (inout Adjustments) -> Void) {
+        guard let id = ui.selectedClipID, var clip = selectedClip() else { return }
+        f(&clip.adjust)
+        dispatch(.setAdjust(id, clip.adjust))
+    }
+
     /// 唯一的"动作"入口。手动 UI 和未来 Agent 都只发 EditorAction。
     func dispatch(_ action: EditorAction) {
         switch action {
@@ -79,6 +100,7 @@ import Observation
             }
         case let .setClipHeight(h):      ui.clipHeight = max(40, min(160, h))
         case let .setVideoAudioRatio(r): ui.videoAudioRatio = max(0.1, min(0.9, r))
+        case let .setAdjust(id, a):      apply { Mutations.setAdjust(clipID: id, a, in: $0) }
         }
     }
 

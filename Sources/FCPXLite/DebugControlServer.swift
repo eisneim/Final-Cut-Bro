@@ -201,6 +201,15 @@ final class DebugControlServer {
         case "toggleSnapping": store.dispatch(.toggleSnapping)
         case "undo": store.undo()
         case "redo": store.redo()
+        case "setInspector": store.dispatch(.setInspector((cmd.width ?? 1) > 0))
+        case "setSpineAdjust":
+            // 自测inspector→预览: 给spine clip[index]设opacity(width字段)/scale(seconds字段)
+            if let id = spineClipID(at: cmd.index ?? 0) {
+                var adj = Adjustments()
+                if let o = cmd.width { adj.opacity = o }
+                if let sc = cmd.seconds { adj.transform.scale = CGSize(width: sc, height: sc) }
+                store.dispatch(.setAdjust(id, adj))
+            }
         case "scaleFirstConnected":
             // DEBUG 自测用:把第一个连接片段缩放,验证层级(缩小后能看见下层)
             let sc = CGFloat(cmd.width ?? 0.5)
