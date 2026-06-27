@@ -20,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.center()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        installMenu()
         installKeyboardShortcuts()
         #if DEBUG
         debugServer = DebugControlServer(store: store, window: window)
@@ -31,6 +32,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var debugServer: DebugControlServer?
     #endif
 
+    /// 标准菜单栏(裸 NSApplication 默认没有)→ ⌘C/V/X/A/Z 在文本框里才能工作。
+    private func installMenu() {
+        let mainMenu = NSMenu()
+        // App 菜单
+        let appItem = NSMenuItem(); mainMenu.addItem(appItem)
+        let appMenu = NSMenu()
+        appMenu.addItem(NSMenuItem(title: "隐藏 FCPX-lite", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h"))
+        appMenu.addItem(NSMenuItem(title: "退出 FCPX-lite", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        appItem.submenu = appMenu
+        // 编辑菜单(复制/粘贴等走响应链)
+        let editItem = NSMenuItem(); mainMenu.addItem(editItem)
+        let editMenu = NSMenu(title: "编辑")
+        editMenu.addItem(NSMenuItem(title: "撤销", action: Selector(("undo:")), keyEquivalent: "z"))
+        let redo = NSMenuItem(title: "重做", action: Selector(("redo:")), keyEquivalent: "z")
+        redo.keyEquivalentModifierMask = [.command, .shift]; editMenu.addItem(redo)
+        editMenu.addItem(.separator())
+        editMenu.addItem(NSMenuItem(title: "剪切", action: #selector(NSText.cut(_:)), keyEquivalent: "x"))
+        editMenu.addItem(NSMenuItem(title: "复制", action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
+        editMenu.addItem(NSMenuItem(title: "粘贴", action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
+        editMenu.addItem(NSMenuItem(title: "全选", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
+        editItem.submenu = editMenu
+        NSApp.mainMenu = mainMenu
+    }
+
+    /// 是否正在文本框里编辑(此时所有快捷键放行,让打字/复制粘贴正常)。
+    private var isEditingText: Bool {
+        guard let r = window?.firstResponder else { return false }
+        if r is NSText || r is NSTextView { return true }
+        if String(describing: type(of: r)).contains("Text") { return true }
+        if NSTextInputContext.current != nil { return true }
+        return false
+    }
+
     /// 全局快捷键(对照 FCP 官方键位):
     /// 空格=播放/暂停;QWED=连接/插入/追加/覆盖;ATPRBZH=工具;
     /// ←/→=播放头±1帧(⇧±10帧);Home/End=头/尾;Delete=删除选中(ripple);
@@ -38,7 +72,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func installKeyboardShortcuts() {
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
-            if self.window?.firstResponder is NSText { return event }
+            if self.isEditingText { return event }   // 文本编辑中:全部放行(打字/复制粘贴)
             let store = self.store
             let mods = event.modifierFlags
             let hasCmd = mods.contains(.command)
@@ -92,6 +126,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         keyUpMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyUp) { [weak self] event in
             guard let self else { return event }
+            if self.isEditingText { return event }
             let char = event.charactersIgnoringModifiers?.lowercased()
             // 只在松开的是当前持有的工具键时处理
             guard let held = self.spring.heldShortcut, held == char else { return event }

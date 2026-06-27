@@ -94,6 +94,7 @@ struct ChatPanelView: View {
         case .user:
             HStack { Spacer()
                 Text(m.text).font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.onAccent)
+                    .textSelection(.enabled)
                     .padding(8).background(Tokens.Palette.clipBlue).cornerRadius(8)
             }
         case .assistant:
@@ -103,6 +104,7 @@ struct ChatPanelView: View {
                     HStack {
                         Text(m.text + (m.streaming ? " ▌" : "")).font(Tokens.Typeface.label)
                             .foregroundStyle(Tokens.Palette.textPrimary)
+                            .textSelection(.enabled)
                             .padding(8).background(Tokens.Palette.elevated).cornerRadius(8)
                         Spacer()
                     }
@@ -112,6 +114,7 @@ struct ChatPanelView: View {
             HStack {
                 Text("⚙ \(m.toolName ?? "")\(toolArgsBrief(m)) · \(m.text)")
                     .font(.system(size: 10)).foregroundStyle(Tokens.Palette.textMuted).lineLimit(2)
+                    .textSelection(.enabled)
                 Spacer()
             }
         }
