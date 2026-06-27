@@ -59,15 +59,17 @@ final class TimelineMediaCache {
         return out
     }
 
-    // MARK: - 音频波形峰值(0..1,buckets 个)
+    // MARK: - 音频波形峰值(每资源固定 N 桶,按 presentation time 分桶;绘制时重采样)
 
-    func waveform(for asset: Asset, buckets: Int) -> [Float]? {
+    static let waveBuckets = 2000
+
+    func waveform(for asset: Asset) -> [Float]? {
         let key = asset.id.raw
         if let w = waves[key] { return w }
         guard asset.hasAudio, !wavesLoading.contains(key) else { return nil }
         wavesLoading.insert(key)
         q.async { [weak self] in
-            let peaks = Self.genWaveform(asset, buckets: max(8, buckets))
+            let peaks = Self.genWaveform(asset, buckets: Self.waveBuckets)
             DispatchQueue.main.async {
                 self?.waves[key] = peaks
                 self?.wavesLoading.remove(key)
@@ -81,42 +83,50 @@ final class TimelineMediaCache {
         let av = AVURLAsset(url: asset.url)
         guard let track = av.tracks(withMediaType: .audio).first,
               let reader = try? AVAssetReader(asset: av) else { return [] }
+        // Float32 PCM。注:极少数文件(如某些 DAW 导出的 AAC)AVFoundation 会解码成近静音
+        // → 波形偏平,这是 AVFoundation 解码限制(同一文件 ffmpeg 正常),非本读取逻辑问题。
         let settings: [String: Any] = [
             AVFormatIDKey: kAudioFormatLinearPCM,
-            AVLinearPCMBitDepthKey: 16,
+            AVLinearPCMBitDepthKey: 32,
+            AVLinearPCMIsFloatKey: true,
             AVLinearPCMIsBigEndianKey: false,
-            AVLinearPCMIsFloatKey: false,
             AVLinearPCMIsNonInterleaved: false,
         ]
         let output = AVAssetReaderTrackOutput(track: track, outputSettings: settings)
         guard reader.canAdd(output) else { return [] }
         reader.add(output)
-        reader.startReading()
+        guard reader.startReading() else { return [] }
 
-        var peaks = [Float](repeating: 0, count: buckets)
         let totalDur = CMTimeGetSeconds(av.duration)
-        let sampleRate = (track.naturalTimeScale > 0) ? Double(track.naturalTimeScale) : 44100.0
-        let totalSamples = max(1, Int(totalDur * sampleRate))
-        var idx = 0
+        guard totalDur > 0 else { return [] }
+        var peaks = [Float](repeating: 0, count: buckets)
         while reader.status == .reading, let sb = output.copyNextSampleBuffer() {
-            if let bb = CMSampleBufferGetDataBuffer(sb) {
-                var length = 0
-                var dataPtr: UnsafeMutablePointer<Int8>?
-                CMBlockBufferGetDataPointer(bb, atOffset: 0, lengthAtOffsetOut: nil,
-                                            totalLengthOut: &length, dataPointerOut: &dataPtr)
-                if let dp = dataPtr {
-                    let n = length / 2
-                    dp.withMemoryRebound(to: Int16.self, capacity: n) { p in
-                        var i = 0
-                        while i < n {
-                            let v = abs(Float(p[i])) / Float(Int16.max)
-                            let b = min(buckets - 1, idx * buckets / totalSamples)
-                            if v > peaks[b] { peaks[b] = v }
-                            idx += 1
-                            i += 8   // 抽样(每 8 个采样取一,够画波形,省时)
+            let pts = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sb))
+            var bufPeak: Float = 0
+            // 规范读法:AudioBufferList(正确处理交错/声道/对齐),比 GetDataPointer 鲁棒。
+            var blockBuffer: CMBlockBuffer?
+            var abl = AudioBufferList()
+            let status = CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(
+                sb, bufferListSizeNeededOut: nil, bufferListOut: &abl,
+                bufferListSize: MemoryLayout<AudioBufferList>.size,
+                blockBufferAllocator: nil, blockBufferMemoryAllocator: nil,
+                flags: kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment,
+                blockBufferOut: &blockBuffer)
+            if status == noErr {
+                let list = UnsafeMutableAudioBufferListPointer(&abl)
+                for buf in list {
+                    let n = Int(buf.mDataByteSize) / MemoryLayout<Float32>.size
+                    if n > 0, let md = buf.mData {
+                        md.withMemoryRebound(to: Float32.self, capacity: n) { p in
+                            var i = 0
+                            while i < n { let v = abs(p[i]); if v > bufPeak { bufPeak = v }; i += 8 }
                         }
                     }
                 }
+            }
+            if pts.isFinite {
+                let b = min(buckets - 1, max(0, Int(pts / totalDur * Double(buckets))))
+                if bufPeak > peaks[b] { peaks[b] = bufPeak }
             }
             CMSampleBufferInvalidate(sb)
         }

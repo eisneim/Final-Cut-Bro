@@ -132,7 +132,6 @@ final class TimelineContentView: NSView {
         bounds.fill()
 
         drawMainLaneBand()
-        drawRuler()
         drawGaps()
 
         let ps = placed
@@ -142,9 +141,14 @@ final class TimelineContentView: NSView {
             for p in ps { drawClip(p) }
         }
 
-        drawDragGhost()
-        drawPlayhead()
+        drawClipsOrHint()
+        drawRuler()      // 刻度尺最后画 → 永远在 clip 之上(拖高的 clip 不会盖住刻度)
+        drawPlayhead()   // 播放头红线再压在刻度尺之上
     }
+
+    private func drawClipsOrHint() {
+        // bug4: 拖动改为所见即所得实时 relocate,不再画 ghost 分身。
+        }
 
     /// 画主轴上的 .gap(位置工具留下的灰色占位):lane 0 上的灰条,可被修剪工具调长。
     func drawGaps() {
@@ -209,12 +213,14 @@ final class TimelineContentView: NSView {
 
     private func drawRuler() {
         let h = Self.rulerHeight
+        // 钉在视口顶部:用可视区起点 y(竖滚后跟随),保证 ruler 永远在最上层、不被高 lane 的 clip 遮、也不滚走。
+        let top = enclosingScrollView?.documentVisibleRect.minY ?? 0
         TimelineColors.chrome.setFill()
-        NSRect(x: 0, y: 0, width: bounds.width, height: h).fill()
+        NSRect(x: 0, y: top, width: bounds.width, height: h).fill()
 
         // 底部分隔线
         TimelineColors.divider.setFill()
-        NSRect(x: 0, y: h - 1, width: bounds.width, height: 1).fill()
+        NSRect(x: 0, y: top + h - 1, width: bounds.width, height: 1).fill()
 
         let interval = TimelineGeometry.tickIntervalSeconds(pxPerSecond: pxPerSecond)
         guard interval > 0, pxPerSecond > 0 else { return }
@@ -228,15 +234,24 @@ final class TimelineContentView: NSView {
         let maxSeconds = Double(bounds.width / pxPerSecond)
         while t <= maxSeconds {
             let x = TimelineGeometry.x(forSeconds: t, pxPerSecond: pxPerSecond)
-            // 刻度线
             TimelineColors.textMuted.setFill()
-            NSRect(x: x, y: h - 6, width: 1, height: 6).fill()
-            // 标签
+            NSRect(x: x, y: top + h - 6, width: 1, height: 6).fill()
             let label = Self.timecode(seconds: t) as NSString
-            label.draw(at: NSPoint(x: x + 3, y: 4), withAttributes: attrs)
+            label.draw(at: NSPoint(x: x + 3, y: top + 4), withAttributes: attrs)
             t += interval
         }
     }
+
+    /// 加入滚动视图后:监听滚动,让钉顶 ruler 跟随重绘。
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if let clip = enclosingScrollView?.contentView {
+            clip.postsBoundsChangedNotifications = true
+            NotificationCenter.default.addObserver(self, selector: #selector(scrolled),
+                                                   name: NSView.boundsDidChangeNotification, object: clip)
+        }
+    }
+    @objc private func scrolled() { needsDisplay = true }
 
     private func drawClip(_ p: Placed) {
         let rect = clipRect(p)
@@ -247,12 +262,16 @@ final class TimelineContentView: NSView {
         // 裁剪到 clip 区域,画 filmstrip(上)+ 波形(下),按 vaRatio 分。
         NSGraphicsContext.current?.saveGraphicsState()
         path.addClip()
-        if let aid = assetID(of: p.clipID), let asset = assetLibrary.first(where: { $0.id == aid }) {
+        if let clip = clipByID(p.clipID), let asset = assetLibrary.first(where: { $0.id == clip.assetID }) {
+            // 只显示本 clip 的源区间 [sourceIn, sourceIn+duration) 对应的那段缩略图/波形(blade 后各段不同)。
+            let assetDur = max(0.0001, asset.duration.seconds)
+            let f0 = max(0, min(1, clip.sourceIn.seconds / assetDur))
+            let f1 = max(f0, min(1, (clip.sourceIn.seconds + clip.duration.seconds) / assetDur))
             let videoH = asset.hasAudio ? rect.height * vaRatio : rect.height
             let filmRect = NSRect(x: rect.minX, y: rect.minY, width: rect.width, height: videoH)
             let waveRect = NSRect(x: rect.minX, y: rect.minY + videoH, width: rect.width, height: rect.height - videoH)
-            if asset.kind != .audio { drawFilmstrip(asset, in: filmRect) }
-            if asset.hasAudio { drawWaveform(asset, in: asset.kind == .audio ? rect : waveRect) }
+            if asset.kind != .audio { drawFilmstrip(asset, in: filmRect, range: f0...f1) }
+            if asset.hasAudio { drawWaveform(asset, in: asset.kind == .audio ? rect : waveRect, range: f0...f1) }
         }
         NSGraphicsContext.current?.restoreGraphicsState()
 
@@ -278,38 +297,51 @@ final class TimelineContentView: NSView {
         NSGraphicsContext.current?.restoreGraphicsState()
     }
 
-    /// 缩略图条:按缩略图宽度(高度的 16:9)平铺,每格采样不同帧(非单图拉伸)。
-    private func drawFilmstrip(_ asset: Asset, in r: NSRect) {
+    /// 缩略图条:只取源区间 range(0..1)那一段的帧,按缩略图宽度平铺、每格采样不同帧。
+    private func drawFilmstrip(_ asset: Asset, in r: NSRect, range: ClosedRange<Double>) {
         guard r.height > 2, r.width > 1 else { return }
         guard let all = TimelineMediaCache.shared.thumbnails(for: asset), !all.isEmpty else { return }
         let thumbW = max(8, r.height * 16.0 / 9.0)
         let visible = max(1, Int(ceil(r.width / thumbW)))
+        let lo = range.lowerBound, span = max(1e-6, range.upperBound - range.lowerBound)
         for i in 0..<visible {
-            let img = all[min(all.count - 1, i * all.count / visible)]   // 采样不同帧
+            let frac = lo + span * (Double(i) + 0.5) / Double(visible)   // 映射到源区间内
+            let img = all[min(all.count - 1, max(0, Int(frac * Double(all.count))))]
             let slice = NSRect(x: r.minX + CGFloat(i) * thumbW, y: r.minY, width: thumbW + 1, height: r.height)
             NSImage(cgImage: img, size: slice.size).draw(in: slice)
         }
     }
 
-    /// 音频波形:跨宽度按峰值画对称竖条(异步缓存)。
-    private func drawWaveform(_ asset: Asset, in r: NSRect) {
-        guard r.height > 2 else { return }
-        TimelineColors.elevated.withAlphaComponent(0.5).setFill(); NSRect(x: r.minX, y: r.minY, width: r.width, height: r.height).fill()
-        let buckets = max(8, Int(r.width))
-        guard let peaks = TimelineMediaCache.shared.waveform(for: asset, buckets: buckets), !peaks.isEmpty else { return }
+    /// 音频波形:只取源区间 range 对应的桶段,重采样到可见宽度(blade 后各段波形不同)。
+    private func drawWaveform(_ asset: Asset, in r: NSRect, range: ClosedRange<Double>) {
+        guard r.height > 2, r.width > 1 else { return }
+        TimelineColors.elevated.withAlphaComponent(0.5).setFill()
+        NSRect(x: r.minX, y: r.minY, width: r.width, height: r.height).fill()
+        guard let peaks = TimelineMediaCache.shared.waveform(for: asset), !peaks.isEmpty else { return }
         TimelineColors.waveform.setStroke()
         let mid = r.minY + r.height / 2
         let path = NSBezierPath(); path.lineWidth = 1
-        let n = peaks.count
-        let step = max(1, n / max(1, Int(r.width)))
-        var x = r.minX
-        var i = 0
-        while i < n && x <= r.maxX {
-            let h = CGFloat(peaks[i]) * (r.height / 2)
+        let cols = max(1, Int(r.width))
+        let lo = Int(range.lowerBound * Double(peaks.count))
+        let hi = max(lo + 1, Int(range.upperBound * Double(peaks.count)))
+        for c in 0..<cols {
+            let idx = min(peaks.count - 1, lo + c * (hi - lo) / cols)   // 只在源区间内重采样
+            let h = CGFloat(peaks[idx]) * (r.height / 2)
+            let x = r.minX + CGFloat(c)
             path.move(to: NSPoint(x: x, y: mid - h)); path.line(to: NSPoint(x: x, y: mid + h))
-            x += 1; i += step
         }
         path.stroke()
+    }
+
+    /// 取某 clip(主轴或连接子项)。
+    private func clipByID(_ id: ClipID) -> Clip? {
+        for el in sequence.spine {
+            if case .clip(let c) = el {
+                if c.id == id { return c }
+                for ch in c.connected where ch.id == id { return ch }
+            }
+        }
+        return nil
     }
 
     /// 取某 clip(主轴或连接子项)的 assetID。

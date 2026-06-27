@@ -9,9 +9,59 @@ import Observation
         self.ui = ui
     }
 
-    /// 内部 commit 原语:把一个 Sequence→Sequence 命令作用到文档并写回。
+    /// 内部 commit 原语:把一个 Sequence→Sequence 命令作用到文档并写回(并记录撤销快照)。
     func apply(_ transform: (Sequence) -> Sequence) {
+        snapshot()
         document.sequence = transform(document.sequence)
+    }
+
+    // MARK: - 撤销 / 重做
+
+    private var undoStack: [Document] = []
+    private var redoStack: [Document] = []
+    private let undoLimit = 80
+
+    /// 文档变更前快照(供撤销)。清空重做栈。
+    private func snapshot() {
+        undoStack.append(document)
+        if undoStack.count > undoLimit { undoStack.removeFirst() }
+        redoStack.removeAll()
+    }
+
+    func undo() {
+        guard let prev = undoStack.popLast() else { return }
+        redoStack.append(document)
+        document = prev
+    }
+
+    func redo() {
+        guard let next = redoStack.popLast() else { return }
+        undoStack.append(document)
+        document = next
+    }
+
+    var canUndo: Bool { !undoStack.isEmpty }
+    var canRedo: Bool { !redoStack.isEmpty }
+
+    // MARK: - Inspector
+
+    /// 当前选中的 clip(主轴或连接子项)。
+    func selectedClip() -> Clip? {
+        guard let id = ui.selectedClipID else { return nil }
+        for el in document.sequence.spine {
+            if case .clip(let c) = el {
+                if c.id == id { return c }
+                for ch in c.connected where ch.id == id { return ch }
+            }
+        }
+        return nil
+    }
+
+    /// 修改选中 clip 的 Adjustments(走命令层,可撤销)。
+    func updateSelectedAdjust(_ f: (inout Adjustments) -> Void) {
+        guard let id = ui.selectedClipID, var clip = selectedClip() else { return }
+        f(&clip.adjust)
+        dispatch(.setAdjust(id, clip.adjust))
     }
 
     /// 唯一的"动作"入口。手动 UI 和未来 Agent 都只发 EditorAction。
@@ -30,7 +80,7 @@ import Observation
         case let .setGapDuration(i, dur):        apply { Mutations.setGapDuration(at: i, duration: dur, in: $0) }
         case let .setInspector(v):               ui.showInspector = v
         case let .setEffects(v):                 ui.showEffects = v
-        case let .importAsset(a):                document.assetLibrary.append(a)
+        case let .importAsset(a):                snapshot(); document.assetLibrary.append(a)
         case let .selectClip(id):                ui.selectedClipID = id
         case let .setTool(t):                    ui.currentTool = t
         case let .setZoom(z):                    ui.pxPerSecond = max(8, min(400, z))
@@ -50,6 +100,7 @@ import Observation
             }
         case let .setClipHeight(h):      ui.clipHeight = max(40, min(160, h))
         case let .setVideoAudioRatio(r): ui.videoAudioRatio = max(0.1, min(0.9, r))
+        case let .setAdjust(id, a):      apply { Mutations.setAdjust(clipID: id, a, in: $0) }
         }
     }
 

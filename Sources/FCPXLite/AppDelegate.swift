@@ -51,6 +51,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 case "-":      store.dispatch(.setZoom(store.ui.pxPerSecond / 1.5)); return nil
                 case "b":      store.bladeAtPlayhead(); return nil
                 case "i":      ImportPanel.present(into: store); return nil
+                case "z":      mods.contains(.shift) ? store.redo() : store.undo(); return nil
                 default:       return event
                 }
             }

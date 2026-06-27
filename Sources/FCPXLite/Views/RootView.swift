@@ -35,7 +35,7 @@ struct RootView: View {
                     WidthDragHandle(width: store.ui.inspectorWidth, sign: -1) {
                         store.dispatch(.setPanelWidth(.inspector, $0))
                     }
-                    PanelPlaceholder(title: "检查器").frame(width: store.ui.inspectorWidth)
+                    InspectorView(store: store).frame(width: store.ui.inspectorWidth)
                 }
             }
             timelineResizeHandle

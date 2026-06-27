@@ -30,6 +30,7 @@ enum EditorAction: Codable, Equatable {
     case setPanelWidth(PanelKind, Double)
     case setClipHeight(Double)
     case setVideoAudioRatio(Double)
+    case setAdjust(ClipID, Adjustments)
 }
 
 /// 可调宽度的面板。
