@@ -6,6 +6,7 @@ import Observation
     var ui: UIState
     var agentMessages: [AgentMessage] = []
     var agentBusy: Bool = false
+    @ObservationIgnored private var agentTask: Task<Void, Never>?
     init(document: Document, ui: UIState = UIState()) {
         self.document = document
         self.ui = ui
@@ -64,6 +65,34 @@ import Observation
         guard let id = ui.selectedClipID, var clip = selectedClip() else { return }
         f(&clip.adjust)
         dispatch(.setAdjust(id, clip.adjust))
+    }
+
+    // MARK: - Agent 对话(UI 按钮与 harness 共用同一路径)
+
+    /// 发送输入框里的内容给 Agent(读 ui.agentInput,清空,跑流式循环)。
+    func sendAgentMessage() {
+        let text = ui.agentInput.trimmingCharacters(in: .whitespaces)
+        guard !text.isEmpty, !agentBusy else { return }
+        ui.agentInput = ""
+        let provider = LLMProvider.preset(ui.providerId)
+        guard let key = provider.apiKey else {
+            agentMessages.append(AgentMessage(role: .assistant,
+                text: "未配置 \(provider.label) 的 API key(环境变量 \(provider.envKey))。点右上角设置选择已配置的 provider。"))
+            return
+        }
+        let svc = StreamingOpenAIBackend(provider: provider, apiKey: key)
+        let me = self
+        agentTask = Task { @MainActor in
+            let service = AgentService(store: me, backend: svc)
+            await service.send(userText: text)
+        }
+    }
+
+    /// 停止正在输出的 Agent。
+    func stopAgent() {
+        agentTask?.cancel()
+        agentTask = nil
+        agentBusy = false
     }
 
     /// 唯一的"动作"入口。手动 UI 和未来 Agent 都只发 EditorAction。

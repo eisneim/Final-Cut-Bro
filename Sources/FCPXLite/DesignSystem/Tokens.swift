@@ -21,6 +21,7 @@ enum Tokens {
         static let selectClipBorder = Color(hex: "#FFDB86")
         static let waveform      = Color(hex: "#8C9CBD")
         static let playhead      = Color.white
+        static let onAccent      = Color.white   // 彩色气泡/clip 上的文字
 
         static let windowClose    = Color(hex: "#FF5F57")
         static let windowMinimize = Color(hex: "#FEBC2E")

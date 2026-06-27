@@ -20,4 +20,6 @@ struct UIState: Codable, Equatable {
     var clipHeight: Double = 72
     var videoAudioRatio: Double = 0.6
     var agentInput: String = ""
+    var providerId: String = "stepfun"
+    var showSettings: Bool = false
 }

@@ -11,7 +11,7 @@ struct RootView: View {
             WidthDragHandle(width: store.ui.chatWidth, sign: -1) {
                 store.dispatch(.setPanelWidth(.chat, $0))
             }
-            ChatPanelView().frame(width: store.ui.chatWidth)
+            ChatPanelView(store: store).frame(width: store.ui.chatWidth)
         }
         .background(Tokens.Palette.chrome)
         .frame(minWidth: 1100, minHeight: 680)

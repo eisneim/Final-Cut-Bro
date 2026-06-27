@@ -211,17 +211,11 @@ final class DebugControlServer {
         case "undo": store.undo()
         case "redo": store.redo()
         case "agentSend":
-            // 端到端:用真 LLM 后端跑一轮 Agent 对话(path=用户消息)。非阻塞,测试轮询 /agent。
-            if let cfg = AgentConfig.fromEnvironment() {
-                let text = cmd.path ?? ""
-                let st = store
-                Task { @MainActor in
-                    let svc = AgentService(store: st, backend: OpenAILLMBackend(config: cfg))
-                    await svc.send(userText: text)
-                }
-            } else {
-                store.agentMessages.append(AgentMessage(role: .assistant, text: "未配置 LLM(STEP_API_KEY)"))
-            }
+            // 端到端:走【真实输入框路径】—— 注入输入框文字 + 调和 UI 按钮同一个 send。
+            store.ui.agentInput = cmd.path ?? ""
+            store.sendAgentMessage()
+        case "agentStop":
+            store.stopAgent()
         case "setInspector": store.dispatch(.setInspector((cmd.width ?? 1) > 0))
         case "setSpineAdjust":
             // 自测inspector→预览: 给spine clip[index]设opacity(width字段)/scale(seconds字段)
