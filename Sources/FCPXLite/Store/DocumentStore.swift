@@ -9,10 +9,39 @@ import Observation
         self.ui = ui
     }
 
-    /// 内部 commit 原语:把一个 Sequence→Sequence 命令作用到文档并写回。
+    /// 内部 commit 原语:把一个 Sequence→Sequence 命令作用到文档并写回(并记录撤销快照)。
     func apply(_ transform: (Sequence) -> Sequence) {
+        snapshot()
         document.sequence = transform(document.sequence)
     }
+
+    // MARK: - 撤销 / 重做
+
+    private var undoStack: [Document] = []
+    private var redoStack: [Document] = []
+    private let undoLimit = 80
+
+    /// 文档变更前快照(供撤销)。清空重做栈。
+    private func snapshot() {
+        undoStack.append(document)
+        if undoStack.count > undoLimit { undoStack.removeFirst() }
+        redoStack.removeAll()
+    }
+
+    func undo() {
+        guard let prev = undoStack.popLast() else { return }
+        redoStack.append(document)
+        document = prev
+    }
+
+    func redo() {
+        guard let next = redoStack.popLast() else { return }
+        undoStack.append(document)
+        document = next
+    }
+
+    var canUndo: Bool { !undoStack.isEmpty }
+    var canRedo: Bool { !redoStack.isEmpty }
 
     /// 唯一的"动作"入口。手动 UI 和未来 Agent 都只发 EditorAction。
     func dispatch(_ action: EditorAction) {
@@ -30,7 +59,7 @@ import Observation
         case let .setGapDuration(i, dur):        apply { Mutations.setGapDuration(at: i, duration: dur, in: $0) }
         case let .setInspector(v):               ui.showInspector = v
         case let .setEffects(v):                 ui.showEffects = v
-        case let .importAsset(a):                document.assetLibrary.append(a)
+        case let .importAsset(a):                snapshot(); document.assetLibrary.append(a)
         case let .selectClip(id):                ui.selectedClipID = id
         case let .setTool(t):                    ui.currentTool = t
         case let .setZoom(z):                    ui.pxPerSecond = max(8, min(400, z))

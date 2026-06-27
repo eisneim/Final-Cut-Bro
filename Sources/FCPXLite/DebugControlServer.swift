@@ -199,6 +199,8 @@ final class DebugControlServer {
         case "setTool":     if let t = cmd.tool, let tool = EditTool(rawValue: t) { store.dispatch(.setTool(tool)) }
         case "togglePlay":  store.dispatch(.togglePlay)
         case "toggleSnapping": store.dispatch(.toggleSnapping)
+        case "undo": store.undo()
+        case "redo": store.redo()
         case "scaleFirstConnected":
             // DEBUG 自测用:把第一个连接片段缩放,验证层级(缩小后能看见下层)
             let sc = CGFloat(cmd.width ?? 0.5)
