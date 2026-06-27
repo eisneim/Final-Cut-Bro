@@ -2,6 +2,7 @@
 import Foundation
 import Network
 import AppKit
+import AVFoundation
 
 /// DEBUG-only 本地控制服务器(原生版 __dpd):让外部驱动(agent)通过 HTTP
 /// 读状态 / 改状态 / 截图,从而自动化端到端测试 UI 渲染。Release 构建不含此文件。
@@ -104,6 +105,18 @@ final class DebugControlServer {
                                                             options: [.prettyPrinted, .sortedKeys])) ?? Data("{}".utf8)
                     sendJSON(conn, data)
                 } else { sendText(conn, status: "500", "no timeline view") }
+            }
+        case ("GET", "/preview"):
+            DispatchQueue.main.sync {
+                let item = CompositionBuilder.build(document: store.document)
+                let durationSec = item.map { CMTimeGetSeconds($0.asset.duration) } ?? 0
+                let info: [String: Any] = [
+                    "hasItem": item != nil,
+                    "durationSeconds": durationSec.isFinite ? durationSec : 0,
+                    "spineClips": store.document.sequence.spine.filter { if case .clip = $0 { return true }; return false }.count
+                ]
+                let data = (try? JSONSerialization.data(withJSONObject: info, options: [.sortedKeys])) ?? Data("{}".utf8)
+                sendJSON(conn, data)
             }
         default:
             sendText(conn, status: "404 Not Found", "unknown route \(pathOnly)")
