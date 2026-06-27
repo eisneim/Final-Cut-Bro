@@ -8,7 +8,10 @@ struct RootView: View {
     var body: some View {
         HStack(spacing: 0) {
             leftWorkspace
-            ChatPanelView()
+            WidthDragHandle(width: store.ui.chatWidth, sign: -1) {
+                store.dispatch(.setPanelWidth(.chat, $0))
+            }
+            ChatPanelView().frame(width: store.ui.chatWidth)
         }
         .background(Tokens.Palette.chrome)
         .frame(minWidth: 1100, minHeight: 680)
@@ -19,14 +22,20 @@ struct RootView: View {
             formatToolbar
             Divider().overlay(Tokens.Palette.divider)
             HStack(spacing: 0) {
-                PanelPlaceholder(title: "边栏").frame(width: 80)
-                Divider().overlay(Tokens.Palette.divider)
-                BrowserView(store: store).frame(width: Tokens.Metric.browserWidth)
-                Divider().overlay(Tokens.Palette.divider)
+                PanelPlaceholder(title: "边栏").frame(width: store.ui.sidebarWidth)
+                WidthDragHandle(width: store.ui.sidebarWidth, sign: 1) {
+                    store.dispatch(.setPanelWidth(.sidebar, $0))
+                }
+                BrowserView(store: store).frame(width: store.ui.browserWidth)
+                WidthDragHandle(width: store.ui.browserWidth, sign: 1) {
+                    store.dispatch(.setPanelWidth(.browser, $0))
+                }
                 ViewerView(store: store)
                 if store.ui.showInspector {
-                    Divider().overlay(Tokens.Palette.divider)
-                    PanelPlaceholder(title: "检查器").frame(width: Tokens.Metric.inspectorWidth)
+                    WidthDragHandle(width: store.ui.inspectorWidth, sign: -1) {
+                        store.dispatch(.setPanelWidth(.inspector, $0))
+                    }
+                    PanelPlaceholder(title: "检查器").frame(width: store.ui.inspectorWidth)
                 }
             }
             timelineResizeHandle

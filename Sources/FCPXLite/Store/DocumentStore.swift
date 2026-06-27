@@ -38,6 +38,14 @@ import Observation
         case let .setPlaying(v):                 ui.isPlaying = v
         case .togglePlay:                        ui.isPlaying.toggle()
         case .toggleSnapping:                    ui.snappingEnabled.toggle()
+        case let .setPanelWidth(panel, w):
+            let cw = max(80, min(700, w))
+            switch panel {
+            case .sidebar:   ui.sidebarWidth = cw
+            case .browser:   ui.browserWidth = cw
+            case .inspector: ui.inspectorWidth = cw
+            case .chat:      ui.chatWidth = cw
+            }
         }
     }
 

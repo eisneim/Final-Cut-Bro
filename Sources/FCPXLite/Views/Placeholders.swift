@@ -23,7 +23,7 @@ struct ChatPanelView: View {
                        .foregroundStyle(Tokens.Palette.textMuted); Spacer() }
                 .padding(8).background(Tokens.Palette.elevated).cornerRadius(5).padding(8)
         }
-        .frame(width: Tokens.Metric.chatWidth)
+        .frame(maxWidth: .infinity)
         .background(Tokens.Palette.chatPanel)
     }
 }

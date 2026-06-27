@@ -134,6 +134,8 @@ final class DebugControlServer {
         var at: Int?
         var lane: Int?
         var tool: String?
+        var panel: String?
+        var width: Double?
     }
 
     private func execute(body: Data) {
@@ -158,6 +160,10 @@ final class DebugControlServer {
         case "setTool":     if let t = cmd.tool, let tool = EditTool(rawValue: t) { store.dispatch(.setTool(tool)) }
         case "togglePlay":  store.dispatch(.togglePlay)
         case "toggleSnapping": store.dispatch(.toggleSnapping)
+        case "setPanelWidth":
+            if let p = cmd.panel, let kind = PanelKind(rawValue: p) {
+                store.dispatch(.setPanelWidth(kind, cmd.width ?? 300))
+            }
         case "blade":       store.dispatch(.setPlayhead(.seconds(cmd.seconds ?? 0))); store.bladeAtPlayhead()
         case "deleteSelected": store.deleteSelected()
         case "selectSpineClip":

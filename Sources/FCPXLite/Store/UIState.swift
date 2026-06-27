@@ -13,4 +13,8 @@ struct UIState: Codable, Equatable {
     var selectedAssetID: AssetID? = nil
     var isPlaying: Bool = false
     var snappingEnabled: Bool = true
+    var sidebarWidth: Double = 120
+    var browserWidth: Double = 280
+    var inspectorWidth: Double = 320
+    var chatWidth: Double = 320
 }

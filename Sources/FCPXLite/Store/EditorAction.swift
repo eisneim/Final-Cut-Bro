@@ -25,4 +25,10 @@ enum EditorAction: Codable, Equatable {
     case setPlaying(Bool)
     case togglePlay
     case toggleSnapping
+    case setPanelWidth(PanelKind, Double)
+}
+
+/// 可调宽度的面板。
+enum PanelKind: String, Codable {
+    case sidebar, browser, inspector, chat
 }
