@@ -14,6 +14,8 @@ struct TimelineCanvas: NSViewRepresentable {
     let sequence: Sequence            // Equatable,内容变化即触发更新
     let assetLibrary: [Asset]
     let snappingEnabled: Bool
+    let clipHeight: CGFloat
+    let vaRatio: CGFloat
 
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSScrollView()
@@ -42,7 +44,9 @@ struct TimelineCanvas: NSViewRepresentable {
             playheadSeconds: playheadSeconds,
             selectedClipID: selectedClipID,
             currentTool: tool,
-            snappingEnabled: snappingEnabled
+            snappingEnabled: snappingEnabled,
+            clipHeight: clipHeight,
+            vaRatio: vaRatio
         ))
 
         // 内容宽度 = max(可视宽, 总时长*px + 200);高度足够 ~7 条车道。
@@ -77,7 +81,9 @@ struct TimelineView: View {
             tool: store.ui.currentTool,
             sequence: store.document.sequence,
             assetLibrary: store.document.assetLibrary,
-            snappingEnabled: store.ui.snappingEnabled
+            snappingEnabled: store.ui.snappingEnabled,
+            clipHeight: CGFloat(store.ui.clipHeight),
+            vaRatio: CGFloat(store.ui.videoAudioRatio)
         )
         .background(Tokens.Palette.canvas)
     }

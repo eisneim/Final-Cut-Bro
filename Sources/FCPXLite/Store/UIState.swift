@@ -17,4 +17,6 @@ struct UIState: Codable, Equatable {
     var browserWidth: Double = 280
     var inspectorWidth: Double = 320
     var chatWidth: Double = 320
+    var clipHeight: Double = 72
+    var videoAudioRatio: Double = 0.6
 }

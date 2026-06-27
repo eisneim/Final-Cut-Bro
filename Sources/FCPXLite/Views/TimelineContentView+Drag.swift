@@ -147,7 +147,7 @@ extension TimelineContentView {
         }
 
         let lane = TimelineGeometry.lane(forY: pt.y, rulerHeight: Self.rulerHeight,
-                                         laneHeight: Self.laneHeight, laneGap: Self.laneGap,
+                                         laneHeight: laneH, laneGap: Self.laneGap,
                                          contentHeight: bounds.height)
         if currentTool == .position {
             // 位置工具:不吸附 + 原处留 gap(仅当落回主轴 lane 0)。

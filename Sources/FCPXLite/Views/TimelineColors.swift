@@ -32,6 +32,7 @@ enum TimelineColors {
     /// 位置工具留下的灰色占位间隙(gap):比 clip 灰、可见但不抢眼。
     static let gapFill       = NSColor(hex: "#3A3A3A")
     static let gapBorder     = NSColor(hex: "#555555")
+    static let waveform      = NSColor(hex: "#8C9CBD")
 }
 
 extension NSColor {

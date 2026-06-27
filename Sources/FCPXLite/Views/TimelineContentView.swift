@@ -19,6 +19,9 @@ final class TimelineContentView: NSView {
     private(set) var selectedClipID: ClipID? = nil
     private(set) var currentTool: EditTool = .select
     private(set) var snappingEnabled: Bool = true
+    /// clip 条高度(可调)与 画面/波形 占比(filmstrip 占上方比例)。
+    private(set) var laneH: CGFloat = 72
+    private(set) var vaRatio: CGFloat = 0.6
 
     /// dispatch 闭包,避免对 store 的强引用环;由 representable 注入。
     var dispatch: ((EditorAction) -> Void)?
@@ -56,6 +59,7 @@ final class TimelineContentView: NSView {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         registerForDraggedTypes([.string])
+        TimelineMediaCache.shared.onUpdate = { [weak self] in self?.needsDisplay = true }
     }
 
     required init?(coder: NSCoder) { fatalError("not used") }
@@ -71,7 +75,7 @@ final class TimelineContentView: NSView {
                           "w": Double(r.width), "h": Double(r.height)])
         }
         let lane0 = TimelineGeometry.laneTopY(lane: 0, rulerHeight: Self.rulerHeight,
-                                              laneHeight: Self.laneHeight, laneGap: Self.laneGap,
+                                              laneHeight: laneH, laneGap: Self.laneGap,
                                               contentHeight: bounds.height)
         var gaps: [[String: Any]] = []
         var acc = Time.zero
@@ -87,7 +91,7 @@ final class TimelineContentView: NSView {
             "frameH": Double(frame.height), "boundsH": Double(bounds.height),
             "clipViewH": Double(enclosingScrollView?.contentView.bounds.height ?? -1),
             "scrollViewH": Double(enclosingScrollView?.bounds.height ?? -1),
-            "rulerHeight": Double(Self.rulerHeight), "laneHeight": Double(Self.laneHeight),
+            "rulerHeight": Double(Self.rulerHeight), "laneHeight": Double(laneH),
             "lane0TopY": Double(lane0), "clips": clips, "gaps": gaps
         ]
     }
@@ -103,6 +107,8 @@ final class TimelineContentView: NSView {
         let selectedClipID: ClipID?
         let currentTool: EditTool
         let snappingEnabled: Bool
+        let clipHeight: CGFloat
+        let vaRatio: CGFloat
     }
 
     func apply(state: State) {
@@ -113,6 +119,8 @@ final class TimelineContentView: NSView {
         selectedClipID = state.selectedClipID
         currentTool = state.currentTool
         snappingEnabled = state.snappingEnabled
+        laneH = state.clipHeight
+        vaRatio = state.vaRatio
         needsDisplay = true
         window?.invalidateCursorRects(for: self)   // 工具变 → 重建光标
     }
@@ -141,14 +149,14 @@ final class TimelineContentView: NSView {
     /// 画主轴上的 .gap(位置工具留下的灰色占位):lane 0 上的灰条,可被修剪工具调长。
     func drawGaps() {
         let y = TimelineGeometry.laneTopY(lane: 0, rulerHeight: Self.rulerHeight,
-                                          laneHeight: Self.laneHeight, laneGap: Self.laneGap,
+                                          laneHeight: laneH, laneGap: Self.laneGap,
                                           contentHeight: bounds.height)
         var acc = Time.zero
         for el in sequence.spine {
             if case .gap(let d) = el {
                 let x = TimelineGeometry.x(forSeconds: acc.seconds, pxPerSecond: pxPerSecond)
                 let w = max(2, TimelineGeometry.x(forSeconds: d.seconds, pxPerSecond: pxPerSecond))
-                let rect = NSRect(x: x, y: y, width: w, height: Self.laneHeight)
+                let rect = NSRect(x: x, y: y, width: w, height: laneH)
                 let path = NSBezierPath(roundedRect: rect, xRadius: 3, yRadius: 3)
                 TimelineColors.gapFill.setFill(); path.fill()
                 TimelineColors.gapBorder.setStroke(); path.lineWidth = 1; path.stroke()
@@ -164,11 +172,11 @@ final class TimelineContentView: NSView {
     private func drawMainLaneBand() {
         let y = TimelineGeometry.laneTopY(lane: 0,
                                           rulerHeight: Self.rulerHeight,
-                                          laneHeight: Self.laneHeight,
+                                          laneHeight: laneH,
                                           laneGap: Self.laneGap,
                                           contentHeight: bounds.height)
         TimelineColors.mainLaneBg.setFill()
-        NSRect(x: 0, y: y, width: bounds.width, height: Self.laneHeight).fill()
+        NSRect(x: 0, y: y, width: bounds.width, height: laneH).fill()
     }
 
     /// 拖动时画半透明 ghost:x 吸附后位置,lane 由光标 y 决定,蓝底 0.5 alpha + 虚线框。
@@ -178,17 +186,17 @@ final class TimelineContentView: NSView {
         let snappedT = snappedTargetSeconds(forCursorX: cur.x)
         let lane = TimelineGeometry.lane(forY: cur.y,
                                          rulerHeight: Self.rulerHeight,
-                                         laneHeight: Self.laneHeight,
+                                         laneHeight: laneH,
                                          laneGap: Self.laneGap,
                                          contentHeight: bounds.height)
         let x = TimelineGeometry.x(forSeconds: snappedT, pxPerSecond: pxPerSecond)
         let w = max(2, TimelineGeometry.x(forSeconds: dragged.duration.seconds, pxPerSecond: pxPerSecond))
         let y = TimelineGeometry.laneTopY(lane: lane,
                                           rulerHeight: Self.rulerHeight,
-                                          laneHeight: Self.laneHeight,
+                                          laneHeight: laneH,
                                           laneGap: Self.laneGap,
                                           contentHeight: bounds.height)
-        let rect = NSRect(x: x, y: y, width: w, height: Self.laneHeight)
+        let rect = NSRect(x: x, y: y, width: w, height: laneH)
         let path = NSBezierPath(roundedRect: rect, xRadius: 3, yRadius: 3)
         TimelineColors.clipBlue.withAlphaComponent(0.5).setFill()
         path.fill()
@@ -236,20 +244,26 @@ final class TimelineContentView: NSView {
         TimelineColors.clipBlue.setFill()
         path.fill()
 
-        // 顶部 1pt 边线
-        TimelineColors.clipBlueEdge.setStroke()
-        path.lineWidth = 1
-        path.stroke()
+        // 裁剪到 clip 区域,画 filmstrip(上)+ 波形(下),按 vaRatio 分。
+        NSGraphicsContext.current?.saveGraphicsState()
+        path.addClip()
+        if let aid = assetID(of: p.clipID), let asset = assetLibrary.first(where: { $0.id == aid }) {
+            let videoH = asset.hasAudio ? rect.height * vaRatio : rect.height
+            let filmRect = NSRect(x: rect.minX, y: rect.minY, width: rect.width, height: videoH)
+            let waveRect = NSRect(x: rect.minX, y: rect.minY + videoH, width: rect.width, height: rect.height - videoH)
+            if asset.kind != .audio { drawFilmstrip(asset, in: filmRect) }
+            if asset.hasAudio { drawWaveform(asset, in: asset.kind == .audio ? rect : waveRect) }
+        }
+        NSGraphicsContext.current?.restoreGraphicsState()
 
+        // 顶部 1pt 边线
+        TimelineColors.clipBlueEdge.setStroke(); path.lineWidth = 1; path.stroke()
         // 选中:2pt 橙色边框
         if p.clipID == selectedClipID {
             let sel = NSBezierPath(roundedRect: rect.insetBy(dx: 1, dy: 1), xRadius: 3, yRadius: 3)
-            TimelineColors.selectBorder.setStroke()
-            sel.lineWidth = 2
-            sel.stroke()
+            TimelineColors.selectBorder.setStroke(); sel.lineWidth = 2; sel.stroke()
         }
-
-        // 标签
+        // 标签(顶部,半透明底)
         let label = clipLabel(for: p) as NSString
         let attrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 10),
@@ -258,8 +272,55 @@ final class TimelineContentView: NSView {
         let textRect = rect.insetBy(dx: 4, dy: 3)
         NSGraphicsContext.current?.saveGraphicsState()
         NSBezierPath(rect: textRect).addClip()
+        NSColor.black.withAlphaComponent(0.35).setFill()
+        NSRect(x: rect.minX, y: rect.minY, width: rect.width, height: 14).fill()
         label.draw(at: NSPoint(x: textRect.minX, y: textRect.minY), withAttributes: attrs)
         NSGraphicsContext.current?.restoreGraphicsState()
+    }
+
+    /// 缩略图条:按缩略图宽度(高度的 16:9)平铺,每格采样不同帧(非单图拉伸)。
+    private func drawFilmstrip(_ asset: Asset, in r: NSRect) {
+        guard r.height > 2, r.width > 1 else { return }
+        guard let all = TimelineMediaCache.shared.thumbnails(for: asset), !all.isEmpty else { return }
+        let thumbW = max(8, r.height * 16.0 / 9.0)
+        let visible = max(1, Int(ceil(r.width / thumbW)))
+        for i in 0..<visible {
+            let img = all[min(all.count - 1, i * all.count / visible)]   // 采样不同帧
+            let slice = NSRect(x: r.minX + CGFloat(i) * thumbW, y: r.minY, width: thumbW + 1, height: r.height)
+            NSImage(cgImage: img, size: slice.size).draw(in: slice)
+        }
+    }
+
+    /// 音频波形:跨宽度按峰值画对称竖条(异步缓存)。
+    private func drawWaveform(_ asset: Asset, in r: NSRect) {
+        guard r.height > 2 else { return }
+        TimelineColors.elevated.withAlphaComponent(0.5).setFill(); NSRect(x: r.minX, y: r.minY, width: r.width, height: r.height).fill()
+        let buckets = max(8, Int(r.width))
+        guard let peaks = TimelineMediaCache.shared.waveform(for: asset, buckets: buckets), !peaks.isEmpty else { return }
+        TimelineColors.waveform.setStroke()
+        let mid = r.minY + r.height / 2
+        let path = NSBezierPath(); path.lineWidth = 1
+        let n = peaks.count
+        let step = max(1, n / max(1, Int(r.width)))
+        var x = r.minX
+        var i = 0
+        while i < n && x <= r.maxX {
+            let h = CGFloat(peaks[i]) * (r.height / 2)
+            path.move(to: NSPoint(x: x, y: mid - h)); path.line(to: NSPoint(x: x, y: mid + h))
+            x += 1; i += step
+        }
+        path.stroke()
+    }
+
+    /// 取某 clip(主轴或连接子项)的 assetID。
+    private func assetID(of id: ClipID) -> AssetID? {
+        for el in sequence.spine {
+            if case .clip(let c) = el {
+                if c.id == id { return c.assetID }
+                for ch in c.connected where ch.id == id { return ch.assetID }
+            }
+        }
+        return nil
     }
 
     private func drawPlayhead() {
@@ -295,10 +356,10 @@ final class TimelineContentView: NSView {
         let w = max(2, TimelineGeometry.x(forSeconds: p.duration.seconds, pxPerSecond: pxPerSecond))
         let y = TimelineGeometry.laneTopY(lane: p.lane,
                                           rulerHeight: Self.rulerHeight,
-                                          laneHeight: Self.laneHeight,
+                                          laneHeight: laneH,
                                           laneGap: Self.laneGap,
                                           contentHeight: bounds.height)
-        return NSRect(x: x, y: y, width: w, height: Self.laneHeight)
+        return NSRect(x: x, y: y, width: w, height: laneH)
     }
 
     /// 命中测试:返回点中的 Placed(优先靠上的 lane / 先绘制的)。

@@ -10,7 +10,8 @@ struct TimelineToolbar: View {
             editButtons
             toolSelector
             Spacer()
-            // 右:缩放 + 效果开关
+            // 右:clip 高度 + 画面/波形占比 + 缩放 + 效果开关
+            clipControls
             zoomControls
             effectsToggle
         }
@@ -91,6 +92,24 @@ struct TimelineToolbar: View {
                 Text("+").font(Tokens.Typeface.body).foregroundStyle(Tokens.Palette.textIcon)
             }
             .buttonStyle(.plain).frame(width: 22, height: 22).help("放大 (⌘+)")
+        }
+    }
+
+    // MARK: - Clip 高度 + 画面/波形占比
+
+    private var clipControls: some View {
+        HStack(spacing: 4) {
+            Button { store.dispatch(.setClipHeight(store.ui.clipHeight - 12)) } label: {
+                Text("▭−").font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textIcon)
+            }.buttonStyle(.plain).frame(width: 22, height: 20).help("减小素材条高度")
+            Button { store.dispatch(.setClipHeight(store.ui.clipHeight + 12)) } label: {
+                Text("▭+").font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textIcon)
+            }.buttonStyle(.plain).frame(width: 22, height: 20).help("增大素材条高度")
+            Slider(value: Binding(
+                get: { store.ui.videoAudioRatio },
+                set: { store.dispatch(.setVideoAudioRatio($0)) }
+            ), in: 0.1...0.9)
+            .frame(width: 70).help("画面/波形 占比")
         }
     }
 

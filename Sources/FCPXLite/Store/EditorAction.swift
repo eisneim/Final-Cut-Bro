@@ -28,6 +28,8 @@ enum EditorAction: Codable, Equatable {
     case togglePlay
     case toggleSnapping
     case setPanelWidth(PanelKind, Double)
+    case setClipHeight(Double)
+    case setVideoAudioRatio(Double)
 }
 
 /// 可调宽度的面板。
