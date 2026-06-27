@@ -35,6 +35,18 @@ final class TimelineContentView: NSView {
     /// 超过此像素位移才算真拖动,避免误把"点选"当成微移。
     static let dragThresholdPx: CGFloat = 3
 
+    // MARK: - 工具拖拽状态(D)
+    enum TrimEdge { case head, tail }
+    /// 修剪工具:正在拖的 clip 边缘。
+    var trimDrag: (clipID: ClipID, index: Int, edge: TrimEdge)?
+    /// 手工具:上一次拖动 x(用于滚动增量)。
+    var handLastX: CGFloat?
+    /// 缩放工具:拖动起点 x + 起始 pxPerSecond。
+    var zoomStartX: CGFloat?
+    var zoomStartPx: CGFloat = 60
+    /// 边缘命中阈值(像素)。
+    static let edgeHitPx: CGFloat = 6
+
     /// 派生:当前布局
     var placed: [Placed] { Layout.compute(sequence) }
 
@@ -102,6 +114,7 @@ final class TimelineContentView: NSView {
         currentTool = state.currentTool
         snappingEnabled = state.snappingEnabled
         needsDisplay = true
+        window?.invalidateCursorRects(for: self)   // 工具变 → 重建光标
     }
 
     // MARK: - 绘制

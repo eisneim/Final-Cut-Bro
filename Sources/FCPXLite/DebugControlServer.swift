@@ -178,6 +178,18 @@ final class DebugControlServer {
             }
         case "setGapDuration":
             store.dispatch(.setGapDuration(at: cmd.index ?? 0, duration: .seconds(cmd.seconds ?? 1)))
+        case "trimClip":
+            // edge 用 tool 字段传 "head"/"tail";seconds=tail新时长 或 head deltaIn;index=spine下标
+            let i = cmd.index ?? -1
+            if store.document.sequence.spine.indices.contains(i),
+               case .clip(let c) = store.document.sequence.spine[i] {
+                let assetDur = store.document.assetLibrary.first { $0.id == c.assetID }?.duration ?? c.duration
+                if cmd.tool == "head" {
+                    store.dispatch(.trimLeft(at: i, deltaIn: .seconds(cmd.seconds ?? 0)))
+                } else {
+                    store.dispatch(.trimRight(at: i, newDuration: .seconds(cmd.seconds ?? 1), assetDuration: assetDur))
+                }
+            }
         default: NSLog("[DebugControlServer] unknown op \(cmd.op)")
         }
     }
