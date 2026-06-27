@@ -4,6 +4,8 @@ import Observation
 @Observable final class DocumentStore {
     var document: Document
     var ui: UIState
+    var agentMessages: [AgentMessage] = []
+    var agentBusy: Bool = false
     init(document: Document, ui: UIState = UIState()) {
         self.document = document
         self.ui = ui
