@@ -319,6 +319,54 @@ enum Mutations {
         return s
     }
 
+    /// Position-move: lift a spine clip, replace its slot with .gap(duration:),
+    /// insert the clip at target time in lane 0 (no magnetic snap).
+    /// If clipID refers to a connected child, falls back to relocate(lane:0) since there's
+    /// no spine slot to leave a gap in.
+    /// Returns seq unchanged if clipID not found.
+    static func positionMove(clipID: ClipID, atTime t: Time, in seq: Sequence) -> Sequence {
+        var s = seq
+        // Check if it's a spine-direct element first
+        guard let spineIdx = s.spine.firstIndex(where: {
+            if case .clip(let c) = $0 { return c.id == clipID }
+            return false
+        }) else {
+            // Not a spine clip — try connected child fallback via relocate lane 0
+            let isConnectedChild = s.spine.contains { el in
+                guard case .clip(let c) = el else { return false }
+                return c.connected.contains { $0.id == clipID }
+            }
+            guard isConnectedChild else { return seq } // truly unknown id → no-op
+            return relocate(clipID: clipID, toLane: 0, atTime: t, in: seq)
+        }
+        // Extract clip value, replace with gap of same duration
+        guard case .clip(let extracted) = s.spine[spineIdx] else { return seq }
+        let gapDuration = extracted.duration
+        s.spine[spineIdx] = .gap(duration: gapDuration)
+        // Insert at target time in the now-gap-containing sequence
+        let idx = spineInsertionIndex(forTime: t, in: s)
+        var placed = extracted
+        placed.lane = 0
+        placed.offset = .zero
+        s.spine.insert(.clip(placed), at: idx)
+        assertInvariants(s)
+        return s
+    }
+
+    /// Resize a .gap at spine[index] to new duration.
+    /// Clamps to minimum 1 tick. No-op if spine[index] is a clip or index is out of bounds.
+    static func setGapDuration(at index: Int, duration: Time, in seq: Sequence) -> Sequence {
+        var s = seq
+        guard s.spine.indices.contains(index) else { return s }
+        guard case .gap = s.spine[index] else { return s }
+        let ts = duration.timescale > 0 ? duration.timescale : 600
+        let minDur = Time(value: 1, timescale: ts)
+        let clamped = duration < minDur ? minDur : duration
+        s.spine[index] = .gap(duration: clamped)
+        assertInvariants(s)
+        return s
+    }
+
     private static func assertInvariants(_ seq: Sequence) {
         #if DEBUG
         do { try Invariants.check(seq) }

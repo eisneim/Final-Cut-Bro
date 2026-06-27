@@ -13,6 +13,8 @@ enum EditorAction: Codable, Equatable {
     case blade(at: Int, localTime: Time)
     case connect(Clip, host: Int, lane: Int, offset: Time)
     case relocateClip(ClipID, lane: Int, time: Time)
+    case positionMove(ClipID, time: Time)
+    case setGapDuration(at: Int, duration: Time)
     case setInspector(Bool)
     case setEffects(Bool)
     case importAsset(Asset)

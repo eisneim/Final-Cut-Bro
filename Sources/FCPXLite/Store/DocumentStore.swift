@@ -26,6 +26,8 @@ import Observation
         case let .blade(i, localTime):           apply { Mutations.blade(at: i, localTime: localTime, in: $0) }
         case let .connect(c, host, lane, off):   apply { Mutations.connectClip(c, toHostIndex: host, lane: lane, offset: off, in: $0) }
         case let .relocateClip(id, lane, t):     apply { Mutations.relocate(clipID: id, toLane: lane, atTime: t, in: $0) }
+        case let .positionMove(id, t):           apply { Mutations.positionMove(clipID: id, atTime: t, in: $0) }
+        case let .setGapDuration(i, dur):        apply { Mutations.setGapDuration(at: i, duration: dur, in: $0) }
         case let .setInspector(v):               ui.showInspector = v
         case let .setEffects(v):                 ui.showEffects = v
         case let .importAsset(a):                document.assetLibrary.append(a)
