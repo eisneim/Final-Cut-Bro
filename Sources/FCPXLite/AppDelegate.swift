@@ -21,30 +21,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         installKeyboardShortcuts()
     }
 
-    /// 全局快捷键(无修饰键时):空格=播放/暂停;QWED=编辑动作;ATPRBZH=工具。
-    /// 在文本编辑(如聊天输入框)聚焦时不拦截。
+    /// 全局快捷键(对照 FCP 官方键位):
+    /// 空格=播放/暂停;QWED=连接/插入/追加/覆盖;ATPRBZH=工具;
+    /// ←/→=播放头±1帧(⇧±10帧);Home/End=头/尾;Delete=删除选中(ripple);
+    /// ⌘+/⌘−=缩放;⌘B=在播放头切割。文本输入聚焦时不拦截。
     private func installKeyboardShortcuts() {
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self else { return event }
-            if self.window?.firstResponder is NSText { return event }            // 文本输入中,放行
-            if !event.modifierFlags.intersection([.command, .option, .control]).isEmpty {
-                return event                                                       // 带修饰键的留给系统/其它处理
+            if self.window?.firstResponder is NSText { return event }
+            let store = self.store
+            let mods = event.modifierFlags
+            let hasCmd = mods.contains(.command)
+            let hasOptCtrl = !mods.intersection([.option, .control]).isEmpty
+
+            // ⌘ 组合
+            if hasCmd && !hasOptCtrl {
+                switch event.charactersIgnoringModifiers?.lowercased() {
+                case "=", "+": store.dispatch(.setZoom(store.ui.pxPerSecond * 1.5)); return nil
+                case "-":      store.dispatch(.setZoom(store.ui.pxPerSecond / 1.5)); return nil
+                case "b":      store.bladeAtPlayhead(); return nil
+                default:       return event
+                }
             }
-            if event.keyCode == 49 {                                              // 空格
-                self.store.dispatch(.togglePlay); return nil
+            if hasCmd || hasOptCtrl { return event }   // 其它带修饰键放行
+
+            // 方向键 / Home / End / 空格 / Delete(允许 Shift)
+            switch event.keyCode {
+            case 123: store.nudgePlayhead(frames: mods.contains(.shift) ? -10 : -1); return nil  // ←
+            case 124: store.nudgePlayhead(frames: mods.contains(.shift) ?  10 :  1); return nil  // →
+            case 115: store.playheadToStart(); return nil   // Home
+            case 119: store.playheadToEnd(); return nil      // End
+            case 49:  store.dispatch(.togglePlay); return nil // 空格
+            case 51:  store.deleteSelected(); return nil      // Delete
+            default:  break
             }
+
+            if mods.contains(.shift) { return event }   // 大写字母放行,工具键用无修饰小写
             switch event.charactersIgnoringModifiers?.lowercased() {
-            case "q": self.store.connectAtPlayhead(); return nil
-            case "w": self.store.insertAtPlayhead(); return nil
-            case "e": self.store.appendSelected(); return nil
-            case "d": self.store.overwriteAtPlayhead(); return nil
-            case "a": self.store.dispatch(.setTool(.select)); return nil
-            case "t": self.store.dispatch(.setTool(.trim)); return nil
-            case "p": self.store.dispatch(.setTool(.position)); return nil
-            case "r": self.store.dispatch(.setTool(.range)); return nil
-            case "b": self.store.dispatch(.setTool(.blade)); return nil
-            case "z": self.store.dispatch(.setTool(.zoom)); return nil
-            case "h": self.store.dispatch(.setTool(.hand)); return nil
+            case "q": store.connectAtPlayhead(); return nil
+            case "w": store.insertAtPlayhead(); return nil
+            case "e": store.appendSelected(); return nil
+            case "d": store.overwriteAtPlayhead(); return nil
+            case "a": store.dispatch(.setTool(.select)); return nil
+            case "t": store.dispatch(.setTool(.trim)); return nil
+            case "p": store.dispatch(.setTool(.position)); return nil
+            case "r": store.dispatch(.setTool(.range)); return nil
+            case "b": store.dispatch(.setTool(.blade)); return nil
+            case "z": store.dispatch(.setTool(.zoom)); return nil
+            case "h": store.dispatch(.setTool(.hand)); return nil
             default:  return event
             }
         }

@@ -82,7 +82,7 @@ struct TimelineToolbar: View {
             Button { store.dispatch(.setZoom(store.ui.pxPerSecond / 1.5)) } label: {
                 Text("−").font(Tokens.Typeface.body).foregroundStyle(Tokens.Palette.textIcon)
             }
-            .buttonStyle(.plain).frame(width: 22, height: 22).help("缩小 (⌥−)")
+            .buttonStyle(.plain).frame(width: 22, height: 22).help("缩小 (⌘−)")
 
             Text("\(Int(store.ui.pxPerSecond)) px/s")
                 .font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted).frame(width: 52)
@@ -90,7 +90,7 @@ struct TimelineToolbar: View {
             Button { store.dispatch(.setZoom(store.ui.pxPerSecond * 1.5)) } label: {
                 Text("+").font(Tokens.Typeface.body).foregroundStyle(Tokens.Palette.textIcon)
             }
-            .buttonStyle(.plain).frame(width: 22, height: 22).help("放大 (⌥+)")
+            .buttonStyle(.plain).frame(width: 22, height: 22).help("放大 (⌘+)")
         }
     }
 
