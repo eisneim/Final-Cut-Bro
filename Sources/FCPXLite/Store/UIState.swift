@@ -19,4 +19,5 @@ struct UIState: Codable, Equatable {
     var chatWidth: Double = 320
     var clipHeight: Double = 72
     var videoAudioRatio: Double = 0.6
+    var agentInput: String = ""
 }

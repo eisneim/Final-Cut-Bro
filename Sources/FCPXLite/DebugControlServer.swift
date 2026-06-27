@@ -118,6 +118,15 @@ final class DebugControlServer {
                 let data = (try? JSONSerialization.data(withJSONObject: info, options: [.sortedKeys])) ?? Data("{}".utf8)
                 sendJSON(conn, data)
             }
+        case ("GET", "/agent"):
+            DispatchQueue.main.sync {
+                let msgs = store.agentMessages.map { m -> [String: Any] in
+                    ["role": m.role.rawValue, "text": m.text, "tool": m.toolName ?? ""]
+                }
+                let info: [String: Any] = ["busy": store.agentBusy, "messages": msgs]
+                let data = (try? JSONSerialization.data(withJSONObject: info)) ?? Data("{}".utf8)
+                sendJSON(conn, data)
+            }
         case ("GET", "/previewFrame"):
             DispatchQueue.main.sync {
                 guard let item = CompositionBuilder.build(document: store.document) else {
@@ -201,6 +210,18 @@ final class DebugControlServer {
         case "toggleSnapping": store.dispatch(.toggleSnapping)
         case "undo": store.undo()
         case "redo": store.redo()
+        case "agentSend":
+            // 端到端:用真 LLM 后端跑一轮 Agent 对话(path=用户消息)。非阻塞,测试轮询 /agent。
+            if let cfg = AgentConfig.fromEnvironment() {
+                let text = cmd.path ?? ""
+                let st = store
+                Task { @MainActor in
+                    let svc = AgentService(store: st, backend: OpenAILLMBackend(config: cfg))
+                    await svc.send(userText: text)
+                }
+            } else {
+                store.agentMessages.append(AgentMessage(role: .assistant, text: "未配置 LLM(STEP_API_KEY)"))
+            }
         case "setInspector": store.dispatch(.setInspector((cmd.width ?? 1) > 0))
         case "setSpineAdjust":
             // 自测inspector→预览: 给spine clip[index]设opacity(width字段)/scale(seconds字段)
