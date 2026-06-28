@@ -4,8 +4,13 @@ import CoreImage
 
 /// 自研视频合成器:逐帧用 Core Image 把多轨按 z-order 合成,每层套几何矩阵+不透明度(+后续滤镜)。
 /// 替换 AVMutableVideoCompositionLayerInstruction 路径,以便挂 per-clip CIFilter 特效。
+///
+/// 坐标系:`CIImage(cvPixelBuffer:)` 是 y-up(picture-top 在高 y),而 `fullTransform` 的矩阵按
+/// 左上原点 y-down 作图(crop.top 减低 y 行、position.y 向下为正)。直接套矩阵会让垂直语义反转
+/// (crop.top 裁掉底边、position.y 反向)。故:先把源翻成左上原点 → 套矩阵 → 合成 → 整体翻回 y-up 再渲染。
 final class CoreImageCompositor: NSObject, AVVideoCompositing {
-    private var ciContext = CIContext(options: [.useSoftwareRenderer: false])
+    // 不可变:CIContext 与渲染尺寸无关,创建一次即可,避免跨线程重建引发的数据竞争。
+    private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
     private let renderQueue = DispatchQueue(label: "fcpxlite.compositor")
 
     var sourcePixelBufferAttributes: [String: Any]? =
@@ -14,7 +19,7 @@ final class CoreImageCompositor: NSObject, AVVideoCompositing {
         [kCVPixelBufferPixelFormatTypeKey as String: [kCVPixelFormatType_32BGRA]]
 
     func renderContextChanged(_ newRenderContext: AVVideoCompositionRenderContext) {
-        ciContext = CIContext(options: [.useSoftwareRenderer: false])
+        // CIContext 与尺寸无关,无需重建(重建还会与 startRequest 的读取形成数据竞争)。
     }
 
     func startRequest(_ request: AVAsynchronousVideoCompositionRequest) {
@@ -23,12 +28,16 @@ final class CoreImageCompositor: NSObject, AVVideoCompositing {
                   let dest = request.renderContext.newPixelBuffer() else {
                 request.finish(with: NSError(domain: "compositor", code: -1)); return
             }
-            // 底→顶叠加。空层 → 透明黑底。
+            let renderSize = request.renderContext.size
+            // 累加器在【左上原点 y-down】空间合成(与 fullTransform 的作图约定一致)。底→顶叠加。
             var acc: CIImage = CIImage(color: .clear).cropped(
-                to: CGRect(origin: .zero, size: request.renderContext.size))
+                to: CGRect(origin: .zero, size: renderSize))
             for layer in instruction.layers {
                 guard let pb = request.sourceFrame(byTrackID: layer.trackID) else { continue }
-                var img = CIImage(cvPixelBuffer: pb).transformed(by: layer.transform)
+                let src = CIImage(cvPixelBuffer: pb)
+                // 源 y-up → 左上原点 y-down,使 layer.transform 的垂直语义(crop.top/position.y)正确。
+                let flipSrc = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: src.extent.height)
+                var img = src.transformed(by: flipSrc).transformed(by: layer.transform)
                 // 不透明度:乘 alpha
                 if layer.opacity < 1 {
                     if let f = CIFilter(name: "CIColorMatrix") {
@@ -40,6 +49,9 @@ final class CoreImageCompositor: NSObject, AVVideoCompositing {
                 // (Task 4 在此插入 effects 滤镜链)
                 acc = img.composited(over: acc)
             }
+            // 整体从左上原点 y-down 翻回 CI 的 y-up 再渲染,保证上下不颠倒。
+            let flipBack = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: renderSize.height)
+            acc = acc.transformed(by: flipBack)
             self.ciContext.render(acc, to: dest)
             request.finish(withComposedVideoFrame: dest)
         }
