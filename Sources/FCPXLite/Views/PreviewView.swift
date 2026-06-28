@@ -58,6 +58,13 @@ struct PreviewView: NSViewRepresentable {
                 if !isPlaying { seek(playheadSeconds) }
             } else if !isPlaying {
                 seek(playheadSeconds)
+            } else {
+                // 播放中:若外部 playhead 与播放器当前时间差距明显(>0.3s),说明是用户主动拖动/跳转
+                // (而非 time observer 的自然推进)→ 立即 seek 到新位置继续播,不再被弹回旧位置。
+                let cur = player.currentTime().seconds
+                if cur.isFinite, abs(cur - playheadSeconds) > 0.3 {
+                    seek(playheadSeconds)
+                }
             }
             if isPlaying { player.play() } else { player.pause() }
             ensureObserver(store: store)

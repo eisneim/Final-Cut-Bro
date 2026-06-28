@@ -318,19 +318,37 @@ final class TimelineContentView: NSView {
         TimelineColors.elevated.withAlphaComponent(0.5).setFill()
         NSRect(x: r.minX, y: r.minY, width: r.width, height: r.height).fill()
         guard let peaks = TimelineMediaCache.shared.waveform(for: asset), !peaks.isEmpty else { return }
-        TimelineColors.waveform.setStroke()
         let mid = r.minY + r.height / 2
-        let path = NSBezierPath(); path.lineWidth = 1
-        let cols = max(1, Int(r.width))
         let lo = Int(range.lowerBound * Double(peaks.count))
         let hi = max(lo + 1, Int(range.upperBound * Double(peaks.count)))
-        for c in 0..<cols {
-            let idx = min(peaks.count - 1, lo + c * (hi - lo) / cols)   // 只在源区间内重采样
-            let h = CGFloat(peaks[idx]) * (r.height / 2)
-            let x = r.minX + CGFloat(c)
-            path.move(to: NSPoint(x: x, y: mid - h)); path.line(to: NSPoint(x: x, y: mid + h))
+
+        // FCP 式实心填充波形:按设备像素步进采样,每步取该子区间的峰值,
+        // 连成上包络(左→右)再下包络(右→左)闭合后 fill(),而非逐列描边(Retina 下会留缝=条形码)。
+        let scale = max(1, window?.backingScaleFactor ?? 2)
+        let step = 1.0 / scale                 // 每个设备像素一根采样
+        let cols = max(1, Int(r.width * scale))
+        let up = NSBezierPath()
+        up.move(to: NSPoint(x: r.minX, y: mid))
+        var topPoints: [NSPoint] = []
+        for c in 0...cols {
+            let frac = Double(c) / Double(cols)
+            // 该屏列覆盖的源桶子区间 [a,b),取区间内最大峰值(包络),避免抽样漏掉瞬时峰。
+            let a = lo + Int(frac * Double(hi - lo))
+            let b = min(hi, max(a + 1, lo + Int((Double(c + 1) / Double(cols)) * Double(hi - lo))))
+            var pk: Float = 0
+            var i = min(peaks.count - 1, a)
+            let end = min(peaks.count, b)
+            while i < end { if peaks[i] > pk { pk = peaks[i] }; i += 1 }
+            let h = CGFloat(pk) * (r.height / 2)
+            let x = r.minX + CGFloat(c) * step
+            up.line(to: NSPoint(x: x, y: mid + h))
+            topPoints.append(NSPoint(x: x, y: mid - h))
         }
-        path.stroke()
+        // 下包络:从右往左闭合,形成实心区域。
+        for p in topPoints.reversed() { up.line(to: p) }
+        up.close()
+        TimelineColors.waveform.setFill()
+        up.fill()
     }
 
     /// 取某 clip(主轴或连接子项)。

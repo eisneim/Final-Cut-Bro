@@ -108,7 +108,8 @@ final class TimelineMediaCache {
         var peaks = [Float](repeating: 0, count: buckets)
         while reader.status == .reading, let sb = output.copyNextSampleBuffer() {
             let pts = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sb))
-            var bufPeak: Float = 0
+            let bufDur = CMTimeGetSeconds(CMSampleBufferGetDuration(sb))
+            let nSamples = CMSampleBufferGetNumSamples(sb)
             // 规范读法:AudioBufferList(正确处理交错/声道/对齐),比 GetDataPointer 鲁棒。
             var blockBuffer: CMBlockBuffer?
             var abl = AudioBufferList()
@@ -118,21 +119,30 @@ final class TimelineMediaCache {
                 blockBufferAllocator: nil, blockBufferMemoryAllocator: nil,
                 flags: kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment,
                 blockBufferOut: &blockBuffer)
-            if status == noErr {
+            // 一个 sample buffer 通常覆盖几千采样 = 跨多个桶。必须把每个采样按它在 buffer 内的
+            // 时间位置分到对应的桶(否则只写一个桶 → 大量桶留 0 → 波形稀疏成条形码)。
+            // 已知 buffer 的 [pts, pts+bufDur) 与采样数,可线性映射每个采样到全局桶。
+            if status == noErr, nSamples > 0, bufDur.isFinite, bufDur > 0 {
                 let list = UnsafeMutableAudioBufferListPointer(&abl)
                 for buf in list {
-                    let n = Int(buf.mDataByteSize) / MemoryLayout<Float32>.size
-                    if n > 0, let md = buf.mData {
-                        md.withMemoryRebound(to: Float32.self, capacity: n) { p in
-                            var i = 0
-                            while i < n { let v = abs(p[i]); if v > bufPeak { bufPeak = v }; i += 8 }
+                    let channels = max(1, Int(buf.mNumberChannels))
+                    let total = Int(buf.mDataByteSize) / MemoryLayout<Float32>.size
+                    let frames = total / channels   // 交错:每帧 channels 个 Float
+                    guard frames > 0, let md = buf.mData else { continue }
+                    md.withMemoryRebound(to: Float32.self, capacity: total) { p in
+                        var f = 0
+                        while f < frames {
+                            // 该帧的全局时间 → 全局桶
+                            let frameTime = pts + (Double(f) / Double(frames)) * bufDur
+                            let b = min(buckets - 1, max(0, Int(frameTime / totalDur * Double(buckets))))
+                            // 取该帧各声道绝对值最大
+                            var v: Float = 0
+                            for c in 0..<channels { let s = abs(p[f * channels + c]); if s > v { v = s } }
+                            if v > peaks[b] { peaks[b] = v }
+                            f += 1
                         }
                     }
                 }
-            }
-            if pts.isFinite {
-                let b = min(buckets - 1, max(0, Int(pts / totalDur * Double(buckets))))
-                if bufPeak > peaks[b] { peaks[b] = bufPeak }
             }
             CMSampleBufferInvalidate(sb)
         }
