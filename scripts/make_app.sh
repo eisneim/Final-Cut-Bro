@@ -21,7 +21,17 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleVersion</key><string>1</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
+  <key>NSHighResolutionCapable</key><true/>
+  <key>NSPrincipalClass</key><string>NSApplication</string>
 </dict></plist>
 PLIST
 xattr -cr "$APP"
+
+# Ad-hoc 代码签名:让别人的 Mac 能打开(否则 Gatekeeper 直接拦)。
+# 系统框架(AVFoundation/SwiftUI/AppKit/CoreImage)与 Swift 运行时都在 macOS 内,不需打包。
+codesign --force --deep --sign - "$APP" 2>/dev/null && echo "ad-hoc 已签名" || echo "签名失败(非致命)"
+
 echo "built $APP"
+echo ""
+echo "分享给别人:把 $APP 压成 zip 发出去。接收方首次打开:"
+echo "  右键 → 打开(绕过 Gatekeeper),或终端跑:xattr -dr com.apple.quarantine /path/to/FCPXLite.app"
