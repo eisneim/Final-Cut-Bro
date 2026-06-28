@@ -43,8 +43,14 @@ final class TimelineStateTests: XCTestCase {
 
     func testDispatchSetZoomClampsMin() {
         let store = emptyStore()
+        store.dispatch(.setZoom(0.1))
+        XCTAssertEqual(store.ui.pxPerSecond, 1)   // 下限1px/秒(1小时电影整屏)
+    }
+
+    func testDispatchSetZoomAllowsOnePxPerSecond() {
+        let store = emptyStore()
         store.dispatch(.setZoom(1))
-        XCTAssertEqual(store.ui.pxPerSecond, 8)
+        XCTAssertEqual(store.ui.pxPerSecond, 1)
     }
 
     func testDispatchSetZoomInRange() {

@@ -6,11 +6,37 @@ import Observation
     var ui: UIState
     var agentMessages: [AgentMessage] = []
     var agentBusy: Bool = false
+    /// 用户配置的 LLM provider 列表(磁盘持久化,非文档/非撤销范围)。
+    var providers: [ProviderConfig] = ProviderPersistence.load()
     @ObservationIgnored private var agentTask: Task<Void, Never>?
     init(document: Document, ui: UIState = UIState()) {
         self.document = document
         self.ui = ui
+        if !providers.contains(where: { $0.id == self.ui.providerId }) {
+            self.ui.providerId = providers.first?.id ?? ""
+        }
     }
+
+    // MARK: - LLM Provider 管理(设置里增删改,持久化)
+
+    /// 当前选中的 provider(选中失效时回退到第一个)。
+    func currentProvider() -> ProviderConfig? {
+        providers.first { $0.id == ui.providerId } ?? providers.first
+    }
+    func addProvider(_ p: ProviderConfig) {
+        providers.append(p); ProviderPersistence.save(providers)
+        if currentProvider() == nil || ui.providerId.isEmpty { ui.providerId = p.id }
+    }
+    func updateProvider(_ p: ProviderConfig) {
+        guard let i = providers.firstIndex(where: { $0.id == p.id }) else { return }
+        providers[i] = p; ProviderPersistence.save(providers)
+    }
+    func deleteProvider(_ id: String) {
+        providers.removeAll { $0.id == id }
+        if ui.providerId == id { ui.providerId = providers.first?.id ?? "" }
+        ProviderPersistence.save(providers)
+    }
+    func selectProvider(_ id: String) { ui.providerId = id }
 
     /// 内部 commit 原语:把一个 Sequence→Sequence 命令作用到文档并写回(并记录撤销快照)。
     func apply(_ transform: (Sequence) -> Sequence) {
@@ -74,13 +100,12 @@ import Observation
         let text = ui.agentInput.trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty, !agentBusy else { return }
         ui.agentInput = ""
-        let provider = LLMProvider.preset(ui.providerId)
-        guard let key = provider.apiKey else {
+        guard let provider = currentProvider(), provider.hasKey else {
             agentMessages.append(AgentMessage(role: .assistant,
-                text: "未配置 \(provider.label) 的 API key(环境变量 \(provider.envKey))。点右上角设置选择已配置的 provider。"))
+                text: "未配置可用的 AI provider(缺 API key)。点右上角 ⚙ 在设置里添加 provider 并填入 key。"))
             return
         }
-        let svc = StreamingOpenAIBackend(provider: provider, apiKey: key)
+        let svc = StreamingOpenAIBackend(provider: provider)
         let me = self
         agentTask = Task { @MainActor in
             let service = AgentService(store: me, backend: svc)
@@ -114,7 +139,7 @@ import Observation
         case let .importAsset(a):                snapshot(); document.assetLibrary.append(a)
         case let .selectClip(id):                ui.selectedClipID = id
         case let .setTool(t):                    ui.currentTool = t
-        case let .setZoom(z):                    ui.pxPerSecond = max(8, min(400, z))
+        case let .setZoom(z):                    ui.pxPerSecond = max(1, min(400, z))   // 下限1px/秒:1小时电影可整屏展现
         case let .setPlayhead(t):                ui.playhead = t
         case let .setTimelineHeight(h):          ui.timelineHeight = max(120, min(640, h))
         case let .selectAsset(id):               ui.selectedAssetID = id
