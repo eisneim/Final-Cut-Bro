@@ -48,6 +48,7 @@ final class CoreImageCompositor: NSObject, AVVideoCompositing {
                     img = img.cropped(to: kept)
                 }
                 img = img.transformed(by: layer.transform)
+                img = VideoEffectFilters.apply(layer.effects, to: img)
                 // 不透明度:乘 alpha
                 if layer.opacity < 1 {
                     if let f = CIFilter(name: "CIColorMatrix") {
@@ -56,7 +57,6 @@ final class CoreImageCompositor: NSObject, AVVideoCompositing {
                         img = f.outputImage ?? img
                     }
                 }
-                // (Task 4 在此插入 effects 滤镜链)
                 acc = img.composited(over: acc)
             }
             // 整体从左上原点 y-down 翻回 CI 的 y-up 再渲染,保证上下不颠倒。
