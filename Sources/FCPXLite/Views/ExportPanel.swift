@@ -134,16 +134,18 @@ struct ExportPanel: View {
 
     private func exportVideo() {
         let ext = settings.codec == .prores ? "mov" : "mp4"
+        let base = store.document.currentProject?.name ?? "导出"
         let panel = NSSavePanel()
-        panel.nameFieldStringValue = "导出.\(ext)"
+        panel.nameFieldStringValue = "\(base).\(ext)"
         if panel.runModal() == .OK, let url = panel.url {
             store.exportMovie(to: url, settings: settings)
         }
     }
 
     private func exportFCPXML() {
+        let base = store.document.currentProject?.name ?? "导出"
         let panel = NSSavePanel()
-        panel.nameFieldStringValue = "导出.fcpxml"
+        panel.nameFieldStringValue = "\(base).fcpxml"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             try store.exportFCPXML(to: url)
