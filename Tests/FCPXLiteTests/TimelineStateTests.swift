@@ -59,24 +59,24 @@ final class TimelineStateTests: XCTestCase {
         XCTAssertEqual(store.ui.pxPerSecond, 60)
     }
 
-    // MARK: - setTimelineHeight clamping
+    // MARK: - setTimelineFraction clamping
 
-    func testDispatchSetTimelineHeightClampsMin() {
+    func testDispatchSetTimelineFractionClampsMin() {
         let store = emptyStore()
-        store.dispatch(.setTimelineHeight(50))
-        XCTAssertEqual(store.ui.timelineHeight, 120)
+        store.dispatch(.setTimelineFraction(0.01))
+        XCTAssertEqual(store.ui.timelineFraction, 0.15)
     }
 
-    func testDispatchSetTimelineHeightClampsMax() {
+    func testDispatchSetTimelineFractionClampsMax() {
         let store = emptyStore()
-        store.dispatch(.setTimelineHeight(5000))
-        XCTAssertEqual(store.ui.timelineHeight, 640)
+        store.dispatch(.setTimelineFraction(0.99))
+        XCTAssertEqual(store.ui.timelineFraction, 0.85)
     }
 
-    func testDispatchSetTimelineHeightInRange() {
+    func testDispatchSetTimelineFractionInRange() {
         let store = emptyStore()
-        store.dispatch(.setTimelineHeight(300))
-        XCTAssertEqual(store.ui.timelineHeight, 300)
+        store.dispatch(.setTimelineFraction(0.4))
+        XCTAssertEqual(store.ui.timelineFraction, 0.4)
     }
 
     // MARK: - setPlayhead
@@ -94,7 +94,7 @@ final class TimelineStateTests: XCTestCase {
         state.currentTool = .blade
         state.pxPerSecond = 120
         state.playhead = .seconds(5.5)
-        state.timelineHeight = 300
+        state.timelineFraction = 0.4
 
         let data = try JSONEncoder().encode(state)
         let decoded = try JSONDecoder().decode(UIState.self, from: data)

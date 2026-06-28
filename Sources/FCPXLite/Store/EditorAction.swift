@@ -22,7 +22,7 @@ enum EditorAction: Codable, Equatable {
     case setTool(EditTool)
     case setZoom(Double)
     case setPlayhead(Time)
-    case setTimelineHeight(Double)
+    case setTimelineFraction(Double)
     case selectAsset(AssetID?)
     case setPlaying(Bool)
     case togglePlay

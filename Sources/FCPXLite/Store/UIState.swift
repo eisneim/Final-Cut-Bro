@@ -9,7 +9,7 @@ struct UIState: Codable, Equatable {
     var currentTool: EditTool = .select
     var pxPerSecond: Double = 60
     var playhead: Time = .zero
-    var timelineHeight: Double = 220
+    var timelineFraction: Double = 0.5   // 时间轴占【预览+时间轴】可用高度的比例(窗口缩放时两者联动)
     var selectedAssetID: AssetID? = nil
     var isPlaying: Bool = false
     var snappingEnabled: Bool = true

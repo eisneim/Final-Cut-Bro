@@ -147,7 +147,7 @@ import Observation
         case let .setTool(t):                    ui.currentTool = t
         case let .setZoom(z):                    ui.pxPerSecond = max(1, min(400, z))   // 下限1px/秒:1小时电影可整屏展现
         case let .setPlayhead(t):                ui.playhead = t
-        case let .setTimelineHeight(h):          ui.timelineHeight = max(120, min(640, h))
+        case let .setTimelineFraction(f):        ui.timelineFraction = max(0.15, min(0.85, f))
         case let .selectAsset(id):               ui.selectedAssetID = id
         case let .setPlaying(v):                 ui.isPlaying = v
         case .togglePlay:                        ui.isPlaying.toggle()
