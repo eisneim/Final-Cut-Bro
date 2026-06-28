@@ -93,6 +93,12 @@ import Observation
         dispatch(.setAdjust(id, clip.adjust))
     }
 
+    /// V 键:停用/启用选中片段(停用→不参与预览/导出,时间线变暗)。
+    func toggleSelectedEnabled() {
+        guard let id = ui.selectedClipID, let clip = selectedClip() else { return }
+        dispatch(.setEnabled(id, !clip.enabled))
+    }
+
     // MARK: - Agent 对话(UI 按钮与 harness 共用同一路径)
 
     /// 发送输入框里的内容给 Agent(读 ui.agentInput,清空,跑流式循环)。
@@ -158,6 +164,7 @@ import Observation
         case let .setVideoAudioRatio(r): ui.videoAudioRatio = max(0.1, min(0.9, r))
         case let .setAdjust(id, a):      apply { Mutations.setAdjust(clipID: id, a, in: $0) }
         case let .setEffects(id, fx):    apply { Mutations.setEffects(clipID: id, fx, in: $0) }
+        case let .setEnabled(id, on):    apply { Mutations.setEnabled(clipID: id, on, in: $0) }
         }
     }
 

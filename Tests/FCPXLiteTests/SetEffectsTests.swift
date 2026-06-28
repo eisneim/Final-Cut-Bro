@@ -27,4 +27,16 @@ final class SetEffectsTests: XCTestCase {
         guard case .clip(let c) = store.document.sequence.spine[0] else { return XCTFail() }
         XCTAssertEqual(c.effects.count, 0)
     }
+
+    func testToggleEnabledFlipsAndUndoes() {
+        let (store, id) = store1Clip()
+        store.dispatch(.selectClip(id))
+        XCTAssertTrue(store.selectedClip()?.enabled ?? false)
+        store.toggleSelectedEnabled()
+        XCTAssertEqual(store.selectedClip()?.enabled, false)
+        store.toggleSelectedEnabled()
+        XCTAssertEqual(store.selectedClip()?.enabled, true)
+        store.undo()
+        XCTAssertEqual(store.selectedClip()?.enabled, false)
+    }
 }

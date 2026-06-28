@@ -275,6 +275,12 @@ final class TimelineContentView: NSView {
         }
         NSGraphicsContext.current?.restoreGraphicsState()
 
+        // 停用片段:盖一层暗色半透明遮罩(视觉变淡,表示不参与预览/导出)。
+        if let clip = clipByID(p.clipID), !clip.enabled {
+            NSColor.black.withAlphaComponent(0.55).setFill()
+            path.fill()
+        }
+
         // 顶部 1pt 边线
         TimelineColors.clipBlueEdge.setStroke(); path.lineWidth = 1; path.stroke()
         // 选中:2pt 橙色边框

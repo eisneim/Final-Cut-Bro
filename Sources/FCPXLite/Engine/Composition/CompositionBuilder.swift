@@ -19,6 +19,7 @@ enum CompositionBuilder {
         var audioParams: [AVMutableAudioMixInputParameters] = []
 
         func place(_ clip: Clip, at start: CMTime, lane: Int) {
+            guard clip.enabled else { return }   // 停用片段不参与预览/导出(时间线仍显示,只是变暗)
             guard let asset = library[clip.assetID], asset.kind != .image else { return }
             let av = AVURLAsset(url: asset.url)
             let range = CMTimeRange(start: cm(clip.sourceIn), duration: cm(clip.duration))

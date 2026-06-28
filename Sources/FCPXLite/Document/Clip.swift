@@ -12,18 +12,19 @@ struct Clip: Identifiable, Codable, Equatable {
     var offset: Time          // 相对【宿主 clip 起点】
     var adjust: Adjustments
     var effects: [Effect]
+    var enabled: Bool          // 停用(V 键)→ 不参与预览/导出,时间线上变暗
 
     init(id: ClipID = ClipID(), assetID: AssetID, sourceIn: Time, duration: Time,
          connected: [Clip] = [], lane: Int = 0, offset: Time = .zero,
-         adjust: Adjustments = Adjustments(), effects: [Effect] = []) {
+         adjust: Adjustments = Adjustments(), effects: [Effect] = [], enabled: Bool = true) {
         self.id = id; self.assetID = assetID
         self.sourceIn = sourceIn; self.duration = duration
         self.connected = connected; self.lane = lane
-        self.offset = offset; self.adjust = adjust; self.effects = effects
+        self.offset = offset; self.adjust = adjust; self.effects = effects; self.enabled = enabled
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, assetID, sourceIn, duration, connected, lane, offset, adjust, effects
+        case id, assetID, sourceIn, duration, connected, lane, offset, adjust, effects, enabled
     }
 
     init(from decoder: Decoder) throws {
@@ -37,6 +38,7 @@ struct Clip: Identifiable, Codable, Equatable {
         offset = try c.decode(Time.self, forKey: .offset)
         adjust = try c.decode(Adjustments.self, forKey: .adjust)
         effects = try c.decodeIfPresent([Effect].self, forKey: .effects) ?? []   // 旧 JSON 缺字段 → []
+        enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? true      // 旧 JSON 缺字段 → 启用
     }
 
     func encode(to encoder: Encoder) throws {
@@ -50,5 +52,6 @@ struct Clip: Identifiable, Codable, Equatable {
         try c.encode(offset, forKey: .offset)
         try c.encode(adjust, forKey: .adjust)
         try c.encode(effects, forKey: .effects)
+        try c.encode(enabled, forKey: .enabled)
     }
 }

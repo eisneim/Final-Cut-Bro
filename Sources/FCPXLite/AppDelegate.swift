@@ -111,6 +111,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case "e": store.appendSelected(); return nil
             case "d": store.overwriteAtPlayhead(); return nil
             case "n": store.dispatch(.toggleSnapping); return nil
+            case "v": store.toggleSelectedEnabled(); return nil
             default: break
             }
             // 工具键 → 弹簧:按下临时切;短按=永久,长按=松开还原
