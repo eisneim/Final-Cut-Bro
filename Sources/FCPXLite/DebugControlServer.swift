@@ -269,6 +269,16 @@ final class DebugControlServer {
             if let id = spineClipID(at: cmd.index ?? 0) {
                 store.dispatch(.positionMove(id, time: .seconds(cmd.seconds ?? 0)))
             }
+        case "dispatchAction":
+            // 自测:直接执行一个 catalog 动作,不经 LLM。type 走 path 字段,参数从通用字段组装。
+            if let type = cmd.path {
+                var args: [String: Any] = ["type": type]
+                if let i = cmd.index { args["clipIndex"] = i; args["assetIndex"] = i; args["spineIndex"] = i; args["fromClipIndex"] = i }
+                if let s = cmd.seconds { args["atSeconds"] = s; args["seconds"] = s; args["value"] = s }
+                if let l = cmd.lane { args["lane"] = l }
+                if let w = cmd.width { args["value"] = w; args["pxPerSecond"] = w }
+                if let action = AgentActionCatalog.find(type) { MainActor.assumeIsolated { _ = action.apply(store, args) } }
+            }
         case "setGapDuration":
             store.dispatch(.setGapDuration(at: cmd.index ?? 0, duration: .seconds(cmd.seconds ?? 1)))
         case "trimClip":
