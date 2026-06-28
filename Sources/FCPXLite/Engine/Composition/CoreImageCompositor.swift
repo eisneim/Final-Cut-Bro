@@ -13,7 +13,9 @@ final class CoreImageCompositor: NSObject, AVVideoCompositing {
     var requiredPixelBufferAttributesForRenderContext: [String: Any] =
         [kCVPixelBufferPixelFormatTypeKey as String: [kCVPixelFormatType_32BGRA]]
 
-    func renderContextChanged(_ newRenderContext: AVVideoCompositionRenderContext) {}
+    func renderContextChanged(_ newRenderContext: AVVideoCompositionRenderContext) {
+        ciContext = CIContext(options: [.useSoftwareRenderer: false])
+    }
 
     func startRequest(_ request: AVAsynchronousVideoCompositionRequest) {
         renderQueue.async {
@@ -29,10 +31,11 @@ final class CoreImageCompositor: NSObject, AVVideoCompositing {
                 var img = CIImage(cvPixelBuffer: pb).transformed(by: layer.transform)
                 // 不透明度:乘 alpha
                 if layer.opacity < 1 {
-                    let f = CIFilter(name: "CIColorMatrix")!
-                    f.setValue(img, forKey: kCIInputImageKey)
-                    f.setValue(CIVector(x: 0, y: 0, z: 0, w: CGFloat(layer.opacity)), forKey: "inputAVector")
-                    img = f.outputImage ?? img
+                    if let f = CIFilter(name: "CIColorMatrix") {
+                        f.setValue(img, forKey: kCIInputImageKey)
+                        f.setValue(CIVector(x: 0, y: 0, z: 0, w: CGFloat(layer.opacity)), forKey: "inputAVector")
+                        img = f.outputImage ?? img
+                    }
                 }
                 // (Task 4 在此插入 effects 滤镜链)
                 acc = img.composited(over: acc)
