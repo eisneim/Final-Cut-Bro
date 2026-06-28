@@ -299,7 +299,7 @@ enum AgentActionCatalog {
         AgentAction(type: "export_movie", domain: .navigate, doc: "把当前剪辑渲染导出为成片(有视频→mp4,纯音频→m4a)到磁盘绝对路径。异步,返回已开始。",
                     params: [ParamSpec(name: "path", kind: .string, required: true, doc: "目标文件绝对路径")]) { store, a in
             guard let p = strArg(a, "path") else { return "错误:缺 path" }
-            store.exportMovie(to: URL(fileURLWithPath: p)); return "已开始导出成片到 \(p)(渲染中)"
+            store.exportMovie(to: URL(fileURLWithPath: p), settings: ExportSettings()); return "已开始导出成片到 \(p)(渲染中)"
         },
     ]
 }

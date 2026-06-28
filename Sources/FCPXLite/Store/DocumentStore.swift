@@ -338,10 +338,10 @@ import Observation
     }
 
     /// 导出成片(异步,更新 ui.exportProgress)。成功关闭面板;失败把原因写进 ui.exportError。
-    func exportMovie(to url: URL) {
+    func exportMovie(to url: URL, settings: ExportSettings = ExportSettings()) {
         ui.exportError = nil
         ui.exportProgress = 0
-        MovieExporter.export(document: document, to: url,
+        MovieExporter.export(document: document, to: url, settings: settings,
                              progress: { [weak self] p in self?.ui.exportProgress = Double(p) },
                              completion: { [weak self] result in
             guard let self else { return }
