@@ -76,6 +76,7 @@ enum CompositionBuilder {
                 return CompositorLayer(trackID: seg.track.trackID,
                                        transform: xf,
                                        opacity: Float(seg.adjust.opacity),
+                                       crop: seg.adjust.crop,
                                        effects: seg.effects)
             }
             instructions.append(CompositorInstruction(
@@ -99,33 +100,22 @@ enum CompositionBuilder {
         return item
     }
 
-    /// 完整层变换:源像素 → 渲染坐标,链式 = preferred(方向) → 裁剪+居中 aspect-fit(归一化到 renderSize) → 用户变换。
-    /// 这是关键修复:不同分辨率/方向的素材都先按比例填满画布并居中,叠加层不再因原生尺寸小而显小;裁剪在此真实生效。
+    /// 完整层变换:源像素 → 渲染坐标,链式 = preferred(方向) → 居中 aspect-fit → 用户变换。
+    /// 裁剪不在此处理(改为合成器里对源做矩形修剪 = trim,不缩放),避免"裁一点就跳满全屏"。
     static func fullTransform(adjust: Adjustments, natural: CGSize,
                               pref: CGAffineTransform, renderSize: CGSize) -> CGAffineTransform {
-        // 1) 应用 preferredTransform 后内容的显示尺寸(竖屏视频会旋成 H×W)。
+        // 应用 preferredTransform 后内容的显示尺寸(竖屏视频会旋成 H×W)。
         let oriented = CGRect(origin: .zero, size: natural).applying(pref)
         let dispW = abs(oriented.width), dispH = abs(oriented.height)
         guard dispW > 0, dispH > 0 else { return transform(for: adjust, renderSize: renderSize) }
 
-        // 2) 裁剪(显示坐标,px):保留区域 = 去掉 上/下/左/右 后的子矩形。
-        let cl = CGFloat(max(0, adjust.crop.left)),  cr = CGFloat(max(0, adjust.crop.right))
-        let ct = CGFloat(max(0, adjust.crop.top)),   cb = CGFloat(max(0, adjust.crop.bottom))
-        let cropW = max(1, dispW - cl - cr)
-        let cropH = max(1, dispH - ct - cb)
-
-        // 3) 缩放因子:
-        //    - 无裁剪 → aspect-fit(min):整帧等比放进画布并居中(保持比例,不裁画面,修复"没占满/叠加层显小")。
-        //    - 有裁剪 → aspect-fill(max):保留区铺满画布,被裁掉的边缘必然溢出 renderSize,由合成自然裁掉(真实裁剪)。
-        let cropping = cl > 0 || cr > 0 || ct > 0 || cb > 0
-        let f = cropping
-            ? max(renderSize.width / cropW, renderSize.height / cropH)
-            : min(renderSize.width / dispW, renderSize.height / dispH)
+        // 居中 aspect-fit:整帧等比放进画布并居中(保持比例,不裁画面,修复"没占满/叠加层显小")。
+        let f = min(renderSize.width / dispW, renderSize.height / dispH)
         let fit = CGAffineTransform(a: f, b: 0, c: 0, d: f,
-                                    tx: (renderSize.width - f * cropW) / 2 - f * cl,
-                                    ty: (renderSize.height - f * cropH) / 2 - f * ct)
+                                    tx: (renderSize.width - f * dispW) / 2,
+                                    ty: (renderSize.height - f * dispH) / 2)
 
-        // 4) 用户变换(inspector 的缩放/位移,绕渲染中心)。
+        // 用户变换(inspector 的缩放/旋转/位移,绕渲染中心)。
         let user = transform(for: adjust, renderSize: renderSize)
         return pref.concatenating(fit).concatenating(user)
     }

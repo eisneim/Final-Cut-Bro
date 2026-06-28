@@ -2,14 +2,16 @@
 import AVFoundation
 import CoreImage
 
-/// 一层的合成数据:源轨 ID + 完整几何矩阵(源像素→renderSize)+ 不透明度 + 特效链。
+/// 一层的合成数据:源轨 ID + 完整几何矩阵(源像素→renderSize)+ 不透明度 + 裁剪(修剪边缘)+ 特效链。
 final class CompositorLayer: NSObject {
     let trackID: CMPersistentTrackID
     let transform: CGAffineTransform
     let opacity: Float
+    let crop: Crop
     let effects: [Effect]
-    init(trackID: CMPersistentTrackID, transform: CGAffineTransform, opacity: Float, effects: [Effect]) {
-        self.trackID = trackID; self.transform = transform; self.opacity = opacity; self.effects = effects
+    init(trackID: CMPersistentTrackID, transform: CGAffineTransform, opacity: Float, crop: Crop, effects: [Effect]) {
+        self.trackID = trackID; self.transform = transform; self.opacity = opacity
+        self.crop = crop; self.effects = effects
     }
 }
 

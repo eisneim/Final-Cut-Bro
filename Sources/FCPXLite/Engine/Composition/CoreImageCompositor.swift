@@ -35,9 +35,19 @@ final class CoreImageCompositor: NSObject, AVVideoCompositing {
             for layer in instruction.layers {
                 guard let pb = request.sourceFrame(byTrackID: layer.trackID) else { continue }
                 let src = CIImage(cvPixelBuffer: pb)
-                // 源 y-up → 左上原点 y-down,使 layer.transform 的垂直语义(crop.top/position.y)正确。
+                // 源 y-up → 左上原点 y-down,使 layer.transform 的垂直语义(position.y)与裁剪正确。
                 let flipSrc = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: src.extent.height)
-                var img = src.transformed(by: flipSrc).transformed(by: layer.transform)
+                var img = src.transformed(by: flipSrc)
+                // 裁剪 = 矩形修剪(trim):保留 [left, W-right] × [top, H-bottom],被裁边缘变透明,不缩放。
+                let c = layer.crop
+                if c.left > 0 || c.right > 0 || c.top > 0 || c.bottom > 0 {
+                    let w = src.extent.width, h = src.extent.height
+                    let kept = CGRect(x: CGFloat(c.left), y: CGFloat(c.top),
+                                      width: max(1, w - CGFloat(c.left) - CGFloat(c.right)),
+                                      height: max(1, h - CGFloat(c.top) - CGFloat(c.bottom)))
+                    img = img.cropped(to: kept)
+                }
+                img = img.transformed(by: layer.transform)
                 // 不透明度:乘 alpha
                 if layer.opacity < 1 {
                     if let f = CIFilter(name: "CIColorMatrix") {
