@@ -1,3 +1,4 @@
+import Foundation
 import Observation
 
 /// 顶层单一数据源。命令层通过 apply 作用于 sequence,统一 commit。
@@ -149,6 +150,7 @@ import Observation
         case let .setGapDuration(i, dur):        apply { Mutations.setGapDuration(at: i, duration: dur, in: $0) }
         case let .setInspector(v):               ui.showInspector = v
         case let .setShowEffects(v):             ui.showEffects = v
+        case let .setShowExport(v):              ui.showExport = v
         case let .importAsset(a):                snapshot(); document.assetLibrary.append(a)
         case let .selectClip(id):                ui.selectedClipID = id
         case let .setTool(t):                    ui.currentTool = t
@@ -262,5 +264,21 @@ import Observation
             }
         }
         return document.sequence.spine.count
+    }
+
+    // MARK: - 导出
+
+    /// 导出 fcpxml 工程文件(同步写字符串)。
+    func exportFCPXML(to url: URL) throws {
+        let xml = FCPXMLExporter.export(document)
+        try xml.write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    /// 导出成片(异步,更新 ui.exportProgress)。
+    func exportMovie(to url: URL) {
+        ui.exportProgress = 0
+        MovieExporter.export(document: document, to: url,
+                             progress: { [weak self] p in self?.ui.exportProgress = Double(p) },
+                             completion: { [weak self] _ in self?.ui.exportProgress = nil })
     }
 }

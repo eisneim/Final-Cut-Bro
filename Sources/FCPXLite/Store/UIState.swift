@@ -22,4 +22,6 @@ struct UIState: Codable, Equatable {
     var agentInput: String = ""
     var providerId: String = "stepfun"
     var showSettings: Bool = false
+    var showExport: Bool = false
+    var exportProgress: Double? = nil    // nil=未导出;0–1=进行中
 }

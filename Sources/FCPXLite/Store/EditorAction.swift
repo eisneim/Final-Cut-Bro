@@ -17,6 +17,7 @@ enum EditorAction: Codable, Equatable {
     case setGapDuration(at: Int, duration: Time)
     case setInspector(Bool)
     case setShowEffects(Bool)
+    case setShowExport(Bool)
     case importAsset(Asset)
     case selectClip(ClipID?)
     case setTool(EditTool)

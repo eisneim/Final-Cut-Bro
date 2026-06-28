@@ -40,6 +40,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let appMenu = NSMenu()
         appMenu.addItem(NSMenuItem(title: "隐藏 FCPX-lite", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h"))
         appMenu.addItem(NSMenuItem(title: "退出 FCPX-lite", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        let exportItem = NSMenuItem(title: "导出…", action: #selector(showExportMenu), keyEquivalent: "e")
+        exportItem.target = self
+        appMenu.addItem(exportItem)
         appItem.submenu = appMenu
         // 编辑菜单(复制/粘贴等走响应链)
         let editItem = NSMenuItem(); mainMenu.addItem(editItem)
@@ -150,4 +153,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         default:  return nil
         }
     }
+
+    @objc private func showExportMenu() { store.dispatch(.setShowExport(true)) }
 }

@@ -15,6 +15,9 @@ struct RootView: View {
         }
         .background(Tokens.Palette.chrome)
         .frame(minWidth: 1100, minHeight: 680)
+        .sheet(isPresented: Binding(get: { store.ui.showExport }, set: { store.ui.showExport = $0 })) {
+            ExportPanel(store: store)
+        }
     }
 
     private var leftWorkspace: some View {
