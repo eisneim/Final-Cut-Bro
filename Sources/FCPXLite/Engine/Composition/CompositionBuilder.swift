@@ -2,9 +2,8 @@ import AVFoundation
 import CoreGraphics
 
 /// 文档 → 可播放合成。每个 clip(主轴或连接)各自一条视频轨 + 音频轨:
-/// - AVMutableVideoComposition 按 lane 由低到高排 layerInstruction(高 lane 在上),
-///   每层套用该 clip 的 transform(缩放/位移,绕中心)+ opacity → inspector 调任意 clip 都生效,
-///   缩小/降透明度上层即可看见下层(真层级)。
+/// - AVMutableVideoComposition 挂 CoreImageCompositor,按 lane 升序叠加(低 lane 在底,高 lane 在顶),
+///   每层套用该 clip 的 transform(缩放/位移,绕中心)+ opacity + effects → inspector 调任意 clip 都生效。
 /// - AVAudioMix 逐 clip 音量,所有轨混音播放。
 /// 静止图片暂跳过;空内容返回 nil。AVPlayer 实时解码合成,不重新编码。
 enum CompositionBuilder {
@@ -15,8 +14,8 @@ enum CompositionBuilder {
         let composition = AVMutableComposition()
         let library = Dictionary(uniqueKeysWithValues: document.assetLibrary.map { ($0.id, $0) })
         var inserted = false
-        // 每段:轨 + lane + adjust + 在合成时间轴上的 [start,end) + 源视频原生尺寸/方向
-        var segments: [(track: AVMutableCompositionTrack, lane: Int, adjust: Adjustments, start: CMTime, end: CMTime, natural: CGSize, pref: CGAffineTransform)] = []
+        // 每段:轨 + lane + adjust + 在合成时间轴上的 [start,end) + 源视频原生尺寸/方向 + clip effects
+        var segments: [(track: AVMutableCompositionTrack, lane: Int, adjust: Adjustments, start: CMTime, end: CMTime, natural: CGSize, pref: CGAffineTransform, effects: [Effect])] = []
         var audioParams: [AVMutableAudioMixInputParameters] = []
 
         func place(_ clip: Clip, at start: CMTime, lane: Int) {
@@ -28,7 +27,7 @@ enum CompositionBuilder {
                 do { try track.insertTimeRange(range, of: v, at: start)
                      inserted = true
                      segments.append((track, lane, clip.adjust, start, start + cm(clip.duration),
-                                      v.naturalSize, v.preferredTransform))
+                                      v.naturalSize, v.preferredTransform, clip.effects))
                 } catch { print("[CompositionBuilder] video: \(error)") }
             }
             if asset.hasAudio, let a = av.tracks(withMediaType: .audio).first,
@@ -62,29 +61,30 @@ enum CompositionBuilder {
         var bounds = Set<CMTime>()
         for s in segments { bounds.insert(s.start); bounds.insert(s.end) }
         let sorted = bounds.sorted { $0 < $1 }
-        var instructions: [AVMutableVideoCompositionInstruction] = []
+        var instructions: [CompositorInstruction] = []
         for i in 0..<max(0, sorted.count - 1) {
             let t0 = sorted[i], t1 = sorted[i + 1]
             guard t1 > t0 else { continue }
-            // 该区间活跃的段(start<=t0 且 end>=t1)。注意:AVFoundation 的 layerInstructions
-            // 数组中【靠前的画在更上层】,故按 lane 降序(高 lane 在前=最上层)。
-            let active = segments.filter { $0.start <= t0 && $0.end >= t1 }.sorted { $0.lane > $1.lane }
+            // 该区间活跃的段(start<=t0 且 end>=t1)。CoreImageCompositor 底→顶叠加:
+            // 按 lane 升序(低 lane 在前=底层, 高 lane 在后=顶层)。
+            let active = segments.filter { $0.start <= t0 && $0.end >= t1 }.sorted { $0.lane < $1.lane }
             guard !active.isEmpty else { continue }
-            let inst = AVMutableVideoCompositionInstruction()
-            inst.timeRange = CMTimeRange(start: t0, end: t1)
-            inst.layerInstructions = active.map { seg in
-                let li = AVMutableVideoCompositionLayerInstruction(assetTrack: seg.track)
-                li.setTransform(fullTransform(adjust: seg.adjust, natural: seg.natural,
-                                              pref: seg.pref, renderSize: renderSize), at: .zero)
-                li.setOpacity(Float(seg.adjust.opacity), at: .zero)
-                return li
+            let layers = active.map { seg -> CompositorLayer in
+                let xf = fullTransform(adjust: seg.adjust, natural: seg.natural,
+                                       pref: seg.pref, renderSize: renderSize)
+                return CompositorLayer(trackID: seg.track.trackID,
+                                       transform: xf,
+                                       opacity: Float(seg.adjust.opacity),
+                                       effects: seg.effects)
             }
-            instructions.append(inst)
+            instructions.append(CompositorInstruction(
+                timeRange: CMTimeRange(start: t0, end: t1), layers: layers))
         }
 
         // 仅当有视频段时才建 videoComposition(纯音频轨没有视频,建空 instructions 会让 AVPlayer 报错/黑屏)。
         if !segments.isEmpty {
             let vc = AVMutableVideoComposition()
+            vc.customVideoCompositorClass = CoreImageCompositor.self
             vc.instructions = instructions
             vc.renderSize = renderSize
             let fps = document.frameRate > 0 ? document.frameRate : 25
