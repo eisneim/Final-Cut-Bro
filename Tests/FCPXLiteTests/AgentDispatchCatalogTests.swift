@@ -154,4 +154,26 @@ final class AgentDispatchCatalogTests: XCTestCase {
         XCTAssertEqual(currentAdjust(store, clipIndex: 0)?.transform.position.x, 100)
         XCTAssertEqual(currentAdjust(store, clipIndex: 0)?.transform.position.y, -50)
     }
+
+    func testNavigatePlayheadZoomToolUndo() {
+        let store = storeWith2Assets()
+        _ = AgentActionCatalog.find("playhead")!.apply(store, ["atSeconds": 3.0])
+        XCTAssertEqual(store.ui.playhead.seconds, 3.0, accuracy: 0.001)
+        _ = AgentActionCatalog.find("zoom")!.apply(store, ["pxPerSecond": 120])
+        XCTAssertEqual(store.ui.pxPerSecond, 120)
+        _ = AgentActionCatalog.find("tool")!.apply(store, ["name": "blade"])
+        XCTAssertEqual(store.ui.currentTool, .blade)
+        // undo 还原 tool 之前? tool 不进撤销栈;改测一次结构编辑的 undo
+        _ = AgentActionCatalog.find("append")!.apply(store, ["assetIndex": 0])
+        XCTAssertEqual(clipCount(store), 1)
+        _ = AgentActionCatalog.find("undo")!.apply(store, [:])
+        XCTAssertEqual(clipCount(store), 0)
+    }
+
+    func testNavigateSelect() {
+        let store = storeWith2Assets()
+        _ = AgentActionCatalog.find("append")!.apply(store, ["assetIndex": 0])
+        _ = AgentActionCatalog.find("select")!.apply(store, ["clipIndex": 0])
+        XCTAssertNotNil(store.ui.selectedClipID)
+    }
 }

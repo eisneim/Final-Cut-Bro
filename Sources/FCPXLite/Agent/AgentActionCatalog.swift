@@ -214,6 +214,37 @@ enum AgentActionCatalog {
         },
     ]
     static let navigate: [AgentAction] = [
-        AgentAction(type: "playhead", domain: .navigate, doc: "占位", params: []) { _, _ in "未实现" }
+        AgentAction(type: "playhead", domain: .navigate, doc: "把播放头移到 atSeconds 秒。",
+                    params: [ParamSpec(name: "atSeconds", kind: .number, required: true, doc: "时间(秒)")]) { store, a in
+            store.dispatch(.setPlayhead(.seconds(numArg(a, "atSeconds") ?? 0))); return "播放头到 \(numArg(a, "atSeconds") ?? 0)s"
+        },
+        AgentAction(type: "zoom", domain: .navigate, doc: "设置时间线缩放 pxPerSecond(像素/秒)。",
+                    params: [ParamSpec(name: "pxPerSecond", kind: .number, required: true, doc: "每秒像素数")]) { store, a in
+            store.dispatch(.setZoom(numArg(a, "pxPerSecond") ?? 60)); return "缩放设为 \(numArg(a, "pxPerSecond") ?? 60)"
+        },
+        AgentAction(type: "tool", domain: .navigate, doc: "切换编辑工具:select/trim/position/range/blade/zoom/hand。",
+                    params: [ParamSpec(name: "name", kind: .enumString(["select","trim","position","range","blade","zoom","hand"]), required: true, doc: "工具名")]) { store, a in
+            guard let t = strArg(a, "name").flatMap({ EditTool(rawValue: $0) }) else { return "错误:未知工具" }
+            store.dispatch(.setTool(t)); return "工具切到 \(t.rawValue)"
+        },
+        AgentAction(type: "select", domain: .navigate, doc: "选中主轴第 clipIndex 个片段(供 inspector 编辑)。",
+                    params: [ParamSpec(name: "clipIndex", kind: .int, required: true, doc: "片段索引")]) { store, a in
+            guard let id = clipID(store, intArg(a, "clipIndex") ?? -1) else { return "错误:clipIndex 无效" }
+            store.dispatch(.selectClip(id)); return "已选中片段 \(intArg(a, "clipIndex")!)"
+        },
+        AgentAction(type: "select_asset", domain: .navigate, doc: "选中素材库第 assetIndex 个素材。",
+                    params: [ParamSpec(name: "assetIndex", kind: .int, required: true, doc: "素材库索引")]) { store, a in
+            let i = intArg(a, "assetIndex") ?? -1
+            guard store.document.assetLibrary.indices.contains(i) else { return "错误:assetIndex 无效" }
+            store.dispatch(.selectAsset(store.document.assetLibrary[i].id)); return "已选中素材 \(i)"
+        },
+        AgentAction(type: "undo", domain: .navigate, doc: "撤销上一次编辑。", params: []) { store, _ in store.undo(); return "已撤销" },
+        AgentAction(type: "redo", domain: .navigate, doc: "重做。", params: []) { store, _ in store.redo(); return "已重做" },
+        AgentAction(type: "import", domain: .navigate, doc: "从磁盘绝对路径导入媒体(视频/音乐)到素材库。",
+                    params: [ParamSpec(name: "path", kind: .string, required: true, doc: "媒体文件绝对路径")]) { store, a in
+            guard let p = strArg(a, "path") else { return "错误:缺 path" }
+            do { let asset = try MediaImporter.importAsset(from: URL(fileURLWithPath: p)); store.dispatch(.importAsset(asset)); return "已导入 \(URL(fileURLWithPath: p).lastPathComponent)" }
+            catch { return "错误:导入失败 \(error)" }
+        },
     ]
 }
