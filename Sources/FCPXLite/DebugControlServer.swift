@@ -210,6 +210,11 @@ final class DebugControlServer {
         case "toggleSnapping": store.dispatch(.toggleSnapping)
         case "undo": store.undo()
         case "redo": store.redo()
+        case "createProject":
+            // 自测:建项目(width/height/seconds=fps)。
+            let w = Int(cmd.width ?? 1920), h = Int(cmd.seconds ?? 1080)
+            store.dispatch(.createProject(Project(name: cmd.path ?? "测试项目",
+                formatWidth: w, formatHeight: h, frameRate: 25)))
         case "agentSend":
             // 端到端:走【真实输入框路径】—— 注入输入框文字 + 调和 UI 按钮同一个 send。
             store.ui.agentInput = cmd.path ?? ""

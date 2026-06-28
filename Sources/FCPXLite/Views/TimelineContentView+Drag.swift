@@ -260,17 +260,19 @@ extension TimelineContentView {
                 addCursorRect(headRect, cursor: .resizeLeftRight)
             }
             // roll 切点:两相邻片段交界处单独设一次(与首/尾重叠也没关系,覆盖即可)
-            for i in 0..<(lane0.count - 1) {
-                let left  = lane0[i]
-                let right = lane0[i + 1]
-                let leftR  = clipRect(left)
-                let rightR = clipRect(right)
-                // 仅当两片段紧邻(无 gap)
-                guard abs(leftR.maxX - rightR.minX) < 2 else { continue }
-                let cutX = leftR.maxX
-                let rollRect = NSRect(x: cutX - Self.edgeHitPx, y: leftR.minY,
-                                     width: Self.edgeHitPx * 2, height: leftR.height)
-                addCursorRect(rollRect, cursor: .resizeLeftRight)
+            if lane0.count >= 2 {
+                for i in 0..<(lane0.count - 1) {
+                    let left  = lane0[i]
+                    let right = lane0[i + 1]
+                    let leftR  = clipRect(left)
+                    let rightR = clipRect(right)
+                    // 仅当两片段紧邻(无 gap)
+                    guard abs(leftR.maxX - rightR.minX) < 2 else { continue }
+                    let cutX = leftR.maxX
+                    let rollRect = NSRect(x: cutX - Self.edgeHitPx, y: leftR.minY,
+                                         width: Self.edgeHitPx * 2, height: leftR.height)
+                    addCursorRect(rollRect, cursor: .resizeLeftRight)
+                }
             }
         default:
             addCursorRect(bounds, cursor: .arrow)
