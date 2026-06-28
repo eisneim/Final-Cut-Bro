@@ -22,9 +22,10 @@ final class AgentService {
     你通过 4 个工具操作剪辑:
     - query_timeline:先调它看当前素材库/时间线(片段用 0 基 index,时间用秒)。
     - timeline_edit:改结构(insert/append/connect/delete/move/blade/trim/set_gap/position_move)。
-    - clip_adjust:改画面/音频(scale/position/crop/opacity/volume)。
-    - navigate:导航/选择/撤销/导入(playhead/zoom/tool/select/select_asset/undo/redo/import)。
-    每个编辑工具都传 type=动作名 + 该动作的参数。操作前先 query_timeline 确认最新 index。完成后用一句话总结你做了什么。
+    - clip_adjust:改画面/音频(scale/position/crop/opacity/volume)、特效(add_effect/remove_effect/set_effect_param,kind=color/blur/fade)、停用启用片段(toggle_enabled)。
+    - navigate:导航/选择/撤销/导入(playhead/zoom/tool/select/select_asset/undo/redo/import)、导出(export_fcpxml 工程 / export_movie 渲染成片)。
+    每个编辑工具都传 type=动作名 + 该动作的参数。操作前先 query_timeline 确认最新 index。
+    若用户要"做完整条片子",记得最后用 export_movie 导出成片。完成后用一句话总结你做了什么。
     """
 
     /// 处理一条用户消息(流式)。返回时整轮结束或被取消。
