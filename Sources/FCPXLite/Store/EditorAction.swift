@@ -30,6 +30,10 @@ enum EditorAction: Codable, Equatable {
     case setPlayhead(Time)
     case setTimelineFraction(Double)
     case selectAsset(AssetID?)
+    case toggleAssetSelected(AssetID)   // ⌘-click:加入/移出多选集
+    case selectAssetRange(AssetID)       // ⇧-click:从 anchor 到此 inclusive 区间选中
+    case selectAllAssets                 // ⌘A:选中素材库全部
+    case clearAssetSelection             // 清除多选
     case setPlaying(Bool)
     case togglePlay
     case toggleSnapping

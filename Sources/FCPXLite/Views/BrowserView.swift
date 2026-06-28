@@ -72,14 +72,23 @@ struct BrowserView: View {
                         .overlay(
                             RoundedRectangle(cornerRadius: 6)
                                 .strokeBorder(
-                                    store.ui.selectedAssetID == asset.id
+                                    // 多选集或 anchor 选中时高亮
+                                    store.ui.selectedAssetIDs.contains(asset.id)
                                         ? Tokens.Palette.selectYellow
                                         : Color.clear,
                                     lineWidth: 1.5
                                 )
                         )
                         .onTapGesture {
-                            store.dispatch(.selectAsset(asset.id))
+                            // 读当前 NSEvent 修饰键:⌘=多选切换,⇧=区间,否则单选
+                            let mods = NSEvent.modifierFlags
+                            if mods.contains(.command) {
+                                store.dispatch(.toggleAssetSelected(asset.id))
+                            } else if mods.contains(.shift) {
+                                store.dispatch(.selectAssetRange(asset.id))
+                            } else {
+                                store.dispatch(.selectAsset(asset.id))
+                            }
                         }
                 }
             }

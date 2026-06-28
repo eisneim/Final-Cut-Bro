@@ -164,7 +164,34 @@ import Observation
         case let .setZoom(z):                    ui.pxPerSecond = max(1, min(400, z))   // 下限1px/秒:1小时电影可整屏展现
         case let .setPlayhead(t):                ui.playhead = t
         case let .setTimelineFraction(f):        ui.timelineFraction = max(0.15, min(0.85, f))
-        case let .selectAsset(id):               ui.selectedAssetID = id
+        case let .selectAsset(id):
+            // 单选:清除多选集,只保留这一个(同时更新 anchor)
+            ui.selectedAssetID = id
+            ui.selectedAssetIDs = id.map { [$0] } ?? []
+        case let .toggleAssetSelected(id):
+            // ⌘-click:切换单个素材的选中状态;anchor 更新到该素材
+            if ui.selectedAssetIDs.contains(id) {
+                ui.selectedAssetIDs.remove(id)
+            } else {
+                ui.selectedAssetIDs.insert(id)
+                ui.selectedAssetID = id   // 更新 anchor
+            }
+        case let .selectAssetRange(id):
+            // ⇧-click:从 anchor 到 id 在 assetLibrary 顺序中选中区间
+            let ids = document.assetLibrary.map(\.id)
+            guard let toIdx = ids.firstIndex(of: id) else { break }
+            let fromIdx = ui.selectedAssetID.flatMap { ids.firstIndex(of: $0) } ?? toIdx
+            let lo = min(fromIdx, toIdx)
+            let hi = max(fromIdx, toIdx)
+            for i in lo...hi { ui.selectedAssetIDs.insert(ids[i]) }
+            // anchor 不变(FCP 行为:Shift 不移动 anchor)
+        case .selectAllAssets:
+            // ⌘A:选中全部素材(不影响时间轴选中)
+            ui.selectedAssetIDs = Set(document.assetLibrary.map(\.id))
+            ui.selectedAssetID = document.assetLibrary.last?.id   // anchor 设为最后一个
+        case .clearAssetSelection:
+            ui.selectedAssetIDs = []
+            ui.selectedAssetID = nil
         case let .setPlaying(v):                 ui.isPlaying = v
         case .togglePlay:                        ui.isPlaying.toggle()
         case .toggleSnapping:                    ui.snappingEnabled.toggle()
@@ -190,6 +217,17 @@ import Observation
     func appendSelected() {
         guard let clip = clipFromSelection() else { return }
         dispatch(.insertClip(clip, at: document.sequence.spine.count))
+    }
+
+    /// 批量追加多选素材到主轴末尾(按 assetLibrary 顺序)。
+    func appendAllSelected() {
+        let ordered = document.assetLibrary.filter { ui.selectedAssetIDs.contains($0.id) }
+        for asset in ordered {
+            dispatch(.insertClip(
+                Clip(assetID: asset.id, sourceIn: .zero, duration: asset.duration),
+                at: document.sequence.spine.count
+            ))
+        }
     }
 
     /// 在播放头处插入所选素材。

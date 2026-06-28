@@ -11,6 +11,7 @@ struct UIState: Codable, Equatable {
     var playhead: Time = .zero
     var timelineFraction: Double = 0.5   // 时间轴占【预览+时间轴】可用高度的比例(窗口缩放时两者联动)
     var selectedAssetID: AssetID? = nil
+    var selectedAssetIDs: Set<AssetID> = []   // 多选集合;selectedAssetID 作为 anchor
     var isPlaying: Bool = false
     var snappingEnabled: Bool = true
     var sidebarWidth: Double = 120

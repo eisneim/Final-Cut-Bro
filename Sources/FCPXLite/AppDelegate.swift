@@ -88,6 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 case "b":      store.bladeAtPlayhead(); return nil
                 case "i":      ImportPanel.present(into: store); return nil
                 case "z":      mods.contains(.shift) ? store.redo() : store.undo(); return nil
+                case "a":      store.dispatch(.selectAllAssets); return nil
                 default:       return event
                 }
             }
@@ -118,7 +119,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             switch char {
             case "q": store.connectAtPlayhead(); return nil
             case "w": store.insertAtPlayhead(); return nil
-            case "e": store.appendSelected(); return nil
+            case "e":
+                // 多选时批量追加;单/零选时走原路径
+                if store.ui.selectedAssetIDs.count > 1 {
+                    store.appendAllSelected()
+                } else {
+                    store.appendSelected()
+                }
+                return nil
             case "d": store.overwriteAtPlayhead(); return nil
             case "n": store.dispatch(.toggleSnapping); return nil
             case "v": store.toggleSelectedEnabled(); return nil
