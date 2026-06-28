@@ -76,6 +76,17 @@ struct RootView: View {
                 .help("检查器开关 ⌘4")
                 .buttonStyle(.plain)
                 .foregroundStyle(store.ui.showInspector ? Tokens.Palette.selectYellow : Tokens.Palette.textMuted)
+            Spacer().frame(width: 18)   // 导出按钮与检查器开关之间留空隙
+            Button { store.dispatch(.setShowExport(true)) } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "square.and.arrow.up")
+                    Text("导出").font(Tokens.Typeface.label)
+                }
+                .foregroundStyle(Tokens.Palette.onAccent)
+                .padding(.horizontal, 10).padding(.vertical, 4)
+                .background(Tokens.Palette.clipBlue).cornerRadius(6)
+            }
+            .buttonStyle(.plain).help("导出(⌘E)")
         }
         .padding(.horizontal, 12).frame(height: Tokens.Metric.toolbarHeight)
         .background(Tokens.Palette.chrome)
