@@ -24,18 +24,54 @@ struct ChatPanelView: View {
     // MARK: - Header(标题 + 设置按钮)
 
     private var header: some View {
-        HStack {
-            Text("🤖 Agent").font(Tokens.Typeface.body).foregroundStyle(Tokens.Palette.textCool)
+        HStack(spacing: 6) {
+            providerPicker
             Spacer()
             if store.agentBusy { ProgressView().controlSize(.small).padding(.trailing, 4) }
             Button { store.ui.showSettings = true } label: {
                 Image(systemName: "gearshape").foregroundStyle(Tokens.Palette.textMuted)
             }
             .buttonStyle(.plain)
-            .help("设置(选择 AI provider)")
+            .help("设置(配置 AI provider)")
         }
         .padding(8)
         .background(Tokens.Palette.elevated)
+    }
+
+    /// chat 左上角:下拉菜单选择 provider,按钮上显示当前模型名。
+    private var providerPicker: some View {
+        Menu {
+            if store.providers.isEmpty {
+                Text("未配置 provider")
+            } else {
+                ForEach(store.providers) { p in
+                    Button {
+                        store.selectProvider(p.id)
+                    } label: {
+                        if store.ui.providerId == p.id {
+                            Label("\(p.label) · \(p.model)", systemImage: "checkmark")
+                        } else {
+                            Text("\(p.label) · \(p.model)")
+                        }
+                    }
+                }
+            }
+            Divider()
+            Button("配置 Provider…") { store.ui.showSettings = true }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "cpu").font(.system(size: 10)).foregroundStyle(Tokens.Palette.textMuted)
+                Text(currentModelLabel).font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textCool).lineLimit(1)
+                Image(systemName: "chevron.down").font(.system(size: 8)).foregroundStyle(Tokens.Palette.textMuted)
+            }
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+    }
+
+    private var currentModelLabel: String {
+        store.currentProvider()?.model ?? "选择模型"
     }
 
     // MARK: - 消息列表
@@ -50,13 +86,21 @@ struct ChatPanelView: View {
                 .padding(8)
             }
             .onChange(of: store.agentMessages.count) { _, _ in scrollToEnd(proxy) }
-            .onChange(of: store.agentMessages.last?.text) { _, _ in scrollToEnd(proxy) }
+            .onChange(of: streamTail) { _, _ in scrollToEnd(proxy) }
+            .onChange(of: store.agentBusy) { _, _ in scrollToEnd(proxy) }
         }
         .frame(maxHeight: .infinity)
     }
 
+    /// 流式内容的"尾部指纹":text + think + tool 都在增长时变化 → 任何流式更新都触发自动滚动到底。
+    private var streamTail: Int {
+        guard let last = store.agentMessages.last else { return 0 }
+        return last.text.count &+ last.think.count &+ (last.toolName?.count ?? 0)
+    }
+
     private func scrollToEnd(_ proxy: ScrollViewProxy) {
-        if let last = store.agentMessages.last { withAnimation(.easeOut(duration: 0.15)) { proxy.scrollTo(last.id, anchor: .bottom) } }
+        guard let last = store.agentMessages.last else { return }
+        withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo(last.id, anchor: .bottom) }
     }
 
     private var emptyHint: some View {
