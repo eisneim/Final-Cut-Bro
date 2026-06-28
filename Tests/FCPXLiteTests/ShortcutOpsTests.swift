@@ -56,27 +56,29 @@ final class ShortcutOpsTests: XCTestCase {
     }
 
     @MainActor
-    func testTrimRightOfPlayheadRemovesRightClips() {
+    func testTrimRightOnlyTrimsCurrentClip() {
         let a = Clip(assetID: AssetID(), sourceIn: .zero, duration: .seconds(4))
         let b = Clip(assetID: AssetID(), sourceIn: .zero, duration: .seconds(4))
         let s = storeWith(spine: [.clip(a), .clip(b)])  // 0..4, 4..8
-        s.dispatch(.setPlayhead(.seconds(2)))           // 切在第一段里
+        s.dispatch(.setPlayhead(.seconds(2)))           // 光标在第一段里
         s.trimRightOfPlayhead()
-        // 第一段被切成 0..2,右边全删 → 总时长 ~2s,只剩 1 个 clip
-        let clips = s.document.sequence.spine.filter { if case .clip = $0 { return true }; return false }
-        XCTAssertEqual(clips.count, 1)
+        let clips = s.document.sequence.spine.compactMap { e -> Clip? in if case .clip(let c) = e { return c }; return nil }
+        XCTAssertEqual(clips.count, 2, "只裁当前片段,不删其它")
+        XCTAssertEqual(clips[0].duration.seconds, 2, accuracy: 1e-6, "第一段尾被裁到光标")
+        XCTAssertEqual(clips[1].duration.seconds, 4, accuracy: 1e-6, "第二段不变")
     }
 
     @MainActor
-    func testTrimLeftOfPlayheadRemovesLeftClips() {
+    func testTrimLeftOnlyTrimsCurrentClip() {
         let a = Clip(assetID: AssetID(), sourceIn: .zero, duration: .seconds(4))
         let b = Clip(assetID: AssetID(), sourceIn: .zero, duration: .seconds(4))
         let s = storeWith(spine: [.clip(a), .clip(b)])  // 0..4, 4..8
-        s.dispatch(.setPlayhead(.seconds(6)))           // 切在第二段里
+        s.dispatch(.setPlayhead(.seconds(6)))           // 光标在第二段里(4..8 的 6)
         s.trimLeftOfPlayhead()
-        let clips = s.document.sequence.spine.filter { if case .clip = $0 { return true }; return false }
-        XCTAssertEqual(clips.count, 1)
-        XCTAssertEqual(s.ui.playhead.seconds, 0, accuracy: 1e-6)
+        let clips = s.document.sequence.spine.compactMap { e -> Clip? in if case .clip(let c) = e { return c }; return nil }
+        XCTAssertEqual(clips.count, 2, "只裁当前片段,不删其它")
+        XCTAssertEqual(clips[0].duration.seconds, 4, accuracy: 1e-6, "第一段不变")
+        XCTAssertEqual(clips[1].duration.seconds, 2, accuracy: 1e-6, "第二段头被裁(6-4=2 去掉,剩 2)")
     }
 
 }

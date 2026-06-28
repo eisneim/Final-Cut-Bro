@@ -316,48 +316,37 @@ import Observation
         return Clip(assetID: asset.id, sourceIn: .zero, duration: asset.duration)
     }
 
-    // MARK: - 快速 trim 到播放头(⌥[ 删左 / ⌥] 删右)
+    // MARK: - 快速 trim 到播放头(⌥[ 裁当前片段头 / ⌥] 裁当前片段尾)
 
-    /// ⌥[ : 删掉播放头左边的内容(在播放头切一刀,移除左侧所有主轴片段,右侧合拢到 0)。
+    /// ⌥[ : 只裁【光标所在片段】的头 —— 去掉该片段在光标左侧的部分(入点前移到光标),其它片段不动。
     func trimLeftOfPlayhead() {
-        bladeMainAtPlayhead()
-        let playhead = ui.playhead
-        var elapsed = Time.zero
-        var remove: [Int] = []
-        for (i, el) in document.sequence.spine.enumerated() {
-            let end = elapsed + el.duration
-            if end <= playhead + .seconds(0.0005) { remove.append(i) }   // 整段在播放头左侧
-            elapsed = end
-        }
-        for i in remove.reversed() { dispatch(.rippleDelete(at: i)) }
-        dispatch(.setPlayhead(.zero))
+        guard let (i, clipStart, _) = clipAtPlayhead() else { return }
+        let deltaIn = ui.playhead - clipStart    // 头部要去掉的时长 = 光标 − 片段起点
+        guard deltaIn > .zero else { return }
+        dispatch(.trimLeft(at: i, deltaIn: deltaIn))
     }
 
-    /// ⌥] : 删掉播放头右边的内容(在播放头切一刀,移除右侧所有主轴片段)。
+    /// ⌥] : 只裁【光标所在片段】的尾 —— 去掉该片段在光标右侧的部分(时长缩到光标处),其它片段不动。
     func trimRightOfPlayhead() {
-        bladeMainAtPlayhead()
-        let playhead = ui.playhead
-        var elapsed = Time.zero
-        var remove: [Int] = []
-        for (i, el) in document.sequence.spine.enumerated() {
-            let start = elapsed
-            elapsed = elapsed + el.duration
-            if start >= playhead - .seconds(0.0005) { remove.append(i) }  // 整段在播放头右侧
-        }
-        for i in remove.reversed() { dispatch(.rippleDelete(at: i)) }
+        guard let (i, clipStart, clip) = clipAtPlayhead() else { return }
+        let newDur = ui.playhead - clipStart     // 新时长 = 光标 − 片段起点
+        guard newDur > .zero else { return }
+        let assetDur = document.assetLibrary.first { $0.id == clip.assetID }?.duration ?? clip.duration
+        dispatch(.trimRight(at: i, newDuration: newDur, assetDuration: assetDur))
     }
 
-    /// 仅在主轴的播放头处切一刀(不碰连接片段),供 ⌥[ / ⌥] 用。
-    private func bladeMainAtPlayhead() {
+    /// 找到光标所在的主轴片段(spine 下标、绝对起点、clip)。光标不在任何片段内返回 nil。
+    private func clipAtPlayhead() -> (index: Int, start: Time, clip: Clip)? {
         let playhead = ui.playhead
         var elapsed = Time.zero
         for (i, el) in document.sequence.spine.enumerated() {
             let start = elapsed
             elapsed = elapsed + el.duration
-            if case .clip = el, playhead > start, playhead < elapsed {
-                dispatch(.blade(at: i, localTime: playhead - start)); return
+            if case .clip(let c) = el, playhead > start, playhead < elapsed {
+                return (i, start, c)
             }
         }
+        return nil
     }
 
     private func spineIndexAtPlayhead() -> Int {
