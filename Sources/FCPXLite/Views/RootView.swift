@@ -18,6 +18,9 @@ struct RootView: View {
         .sheet(isPresented: Binding(get: { store.ui.showExport }, set: { store.dispatch(.setShowExport($0)) })) {
             ExportPanel(store: store)
         }
+        .sheet(isPresented: Binding(get: { store.ui.showProjectModal }, set: { store.dispatch(.setShowProjectModal($0)) })) {
+            ProjectCreationModal(store: store)
+        }
     }
 
     private var leftWorkspace: some View {
@@ -30,11 +33,13 @@ struct RootView: View {
                 let timelineH = max(140, min(avail - 140, avail * store.ui.timelineFraction))
                 VStack(spacing: 0) {
                     HStack(spacing: 0) {
-                        PanelPlaceholder(title: "边栏").frame(width: store.ui.sidebarWidth)
-                        WidthDragHandle(width: store.ui.sidebarWidth, sign: 1) {
-                            store.dispatch(.setPanelWidth(.sidebar, $0))
+                        // 左侧只保留素材池(去掉原最左竖列);顶部含项目栏 + 创建。
+                        VStack(spacing: 0) {
+                            ProjectBar(store: store)
+                            Divider().overlay(Tokens.Palette.divider)
+                            BrowserView(store: store)
                         }
-                        BrowserView(store: store).frame(width: store.ui.browserWidth)
+                        .frame(width: store.ui.browserWidth)
                         WidthDragHandle(width: store.ui.browserWidth, sign: 1) {
                             store.dispatch(.setPanelWidth(.browser, $0))
                         }
@@ -50,12 +55,19 @@ struct RootView: View {
                     timelineResizeHandle(availableHeight: avail)
                     TimelineToolbar(store: store)
                     Divider().overlay(Tokens.Palette.divider)
-                    HStack(spacing: 0) {
-                        TimelineView(store: store)
-                        if store.ui.showEffects {
-                            Divider().overlay(Tokens.Palette.divider)
-                            PanelPlaceholder(title: "效果/转场", background: Tokens.Palette.effectsPanel)
-                                .frame(width: Tokens.Metric.effectsWidth)
+                    // 无项目 → 时间轴门控:灰色"先创建项目"。有项目 → 真时间轴。
+                    Group {
+                        if store.document.hasProject {
+                            HStack(spacing: 0) {
+                                TimelineView(store: store)
+                                if store.ui.showEffects {
+                                    Divider().overlay(Tokens.Palette.divider)
+                                    PanelPlaceholder(title: "效果/转场", background: Tokens.Palette.effectsPanel)
+                                        .frame(width: Tokens.Metric.effectsWidth)
+                                }
+                            }
+                        } else {
+                            noProjectGate
                         }
                     }
                     .frame(height: timelineH)
@@ -63,6 +75,24 @@ struct RootView: View {
             }
         }
     }
+
+    /// 无项目时的时间轴占位:灰底 + 创建项目按钮(没有刻度尺)。
+    private var noProjectGate: some View {
+        ZStack {
+            Tokens.Palette.canvas
+            Button { store.dispatch(.setShowProjectModal(true)) } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "plus.rectangle.on.rectangle")
+                    Text("先创建一个项目")
+                }
+                .font(Tokens.Typeface.body).foregroundStyle(Tokens.Palette.textMuted)
+                .padding(.horizontal, 16).padding(.vertical, 10)
+                .background(Tokens.Palette.elevated).cornerRadius(8)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
 
     // MARK: - Format Toolbar
 

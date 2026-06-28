@@ -7,8 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var keyUpMonitor: Any?
     private var spring = SpringTool()
     private let store = DocumentStore(document: Document(
-        formatWidth: 1920, formatHeight: 1080, frameRate: 25,
-        assetLibrary: [], sequence: Sequence(spine: [])))
+        assetLibrary: [], projects: [], currentProjectID: nil))   // 启动无项目 → 时间轴门控
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         window = NSWindow(

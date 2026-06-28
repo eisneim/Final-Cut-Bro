@@ -153,6 +153,11 @@ import Observation
         case let .setInspector(v):               ui.showInspector = v
         case let .setShowEffects(v):             ui.showEffects = v
         case let .setShowExport(v):              ui.showExport = v
+        case let .createProject(p):
+            snapshot(); document.projects.append(p); document.currentProjectID = p.id
+        case let .selectProject(id):
+            snapshot(); document.currentProjectID = id; ui.selectedClipID = nil; ui.playhead = .zero
+        case let .setShowProjectModal(v):        ui.showProjectModal = v
         case let .importAsset(a):                snapshot(); document.assetLibrary.append(a)
         case let .selectClip(id):                ui.selectedClipID = id
         case let .setTool(t):                    ui.currentTool = t

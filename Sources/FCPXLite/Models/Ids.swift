@@ -11,3 +11,9 @@ struct ClipID: Hashable, Codable {
     init() { raw = UUID().uuidString }
     init(raw: String) { self.raw = raw }
 }
+
+struct ProjectID: Hashable, Codable {
+    let raw: String
+    init() { raw = UUID().uuidString }
+    init(raw: String) { self.raw = raw }
+}

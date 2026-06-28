@@ -23,6 +23,7 @@ struct UIState: Codable, Equatable {
     var providerId: String = "stepfun"
     var showSettings: Bool = false
     var showExport: Bool = false
+    var showProjectModal: Bool = false   // 创建项目弹窗
     var exportProgress: Double? = nil    // nil=未导出;0–1=进行中
     var exportError: String? = nil       // 最近一次导出失败的原因(nil=无错)
 }
