@@ -43,7 +43,10 @@ extension TimelineContentView {
         window?.makeFirstResponder(self)
         let pt = convert(event.locationInWindow, from: nil)
         let t = TimelineGeometry.seconds(forX: pt.x, pxPerSecond: pxPerSecond)
-        let inRuler = pt.y < Self.rulerHeight
+        // ruler 钉在视口顶部(随竖滚移动),命中判定必须用同一钉顶坐标,否则竖滚后
+        // 可视 ruler 在 viewport 顶、而 pt.y<rulerHeight 仍指内容顶 → 点 ruler 会落到上层 clip 上(无反应)。
+        let visibleTop = enclosingScrollView?.documentVisibleRect.minY ?? 0
+        let inRuler = pt.y >= visibleTop && pt.y < visibleTop + Self.rulerHeight
 
         switch currentTool {
         case .hand:
