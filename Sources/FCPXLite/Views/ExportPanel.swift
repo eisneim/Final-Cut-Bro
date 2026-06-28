@@ -2,12 +2,15 @@
 import SwiftUI
 import AppKit
 
-/// 导出对话框:选格式(成片 mp4/m4a 或 fcpxml 工程)→ 选路径 → 导出(成片显示进度)。
+/// 导出对话框(双 Tab):导出视频(分辨率/编码/质量/音频) / 导出工程(FCPXML)。
 struct ExportPanel: View {
     let store: DocumentStore
+    @State private var tab: Int = 0
+    @State private var settings = ExportSettings()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
+            // Header
             HStack {
                 Text("导出").font(Tokens.Typeface.title).foregroundStyle(Tokens.Palette.textPrimary)
                 Spacer()
@@ -15,33 +18,127 @@ struct ExportPanel: View {
                     Image(systemName: "xmark").foregroundStyle(Tokens.Palette.textMuted)
                 }.buttonStyle(.plain)
             }
-            if let p = store.ui.exportProgress {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("导出中… \(Int(p * 100))%").font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textPrimary)
-                    ProgressView(value: p)
-                }
+
+            // Tab selector
+            Picker("", selection: $tab) {
+                Text("导出视频").tag(0)
+                Text("导出工程").tag(1)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+
+            if tab == 0 {
+                videoExportTab
             } else {
-                Text("选择导出格式:").font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
-                Button("导出成片(mp4 / m4a)…") { exportMovie() }
-                    .buttonStyle(.plain).padding(8).background(Tokens.Palette.clipBlue).cornerRadius(6)
+                projectExportTab
+            }
+        }
+        .padding(18).frame(width: 380).background(Tokens.Palette.chrome)
+    }
+
+    // MARK: - Tab 0: Video Export
+
+    @ViewBuilder private var videoExportTab: some View {
+        if let p = store.ui.exportProgress {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("导出中… \(Int(p * 100))%")
+                    .font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textPrimary)
+                ProgressView(value: p)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 10) {
+                // Resolution
+                HStack {
+                    Text("分辨率").font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
+                        .frame(width: 60, alignment: .leading)
+                    Picker("", selection: $settings.resolution) {
+                        ForEach(ExportResolution.allCases, id: \.self) { r in
+                            Text(r.label).tag(r)
+                        }
+                    }.labelsHidden().frame(maxWidth: .infinity)
+                }
+
+                // Codec
+                HStack {
+                    Text("编码").font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
+                        .frame(width: 60, alignment: .leading)
+                    Picker("", selection: $settings.codec) {
+                        ForEach(ExportCodec.allCases, id: \.self) { c in
+                            Text(c.label).tag(c)
+                        }
+                    }.labelsHidden().frame(maxWidth: .infinity)
+                }
+
+                // Quality (disabled for ProRes)
+                HStack {
+                    Text("质量").font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
+                        .frame(width: 60, alignment: .leading)
+                    Picker("", selection: $settings.quality) {
+                        ForEach(ExportQuality.allCases, id: \.self) { q in
+                            Text(q.label).tag(q)
+                        }
+                    }
+                    .labelsHidden().frame(maxWidth: .infinity)
+                    .disabled(settings.codec == .prores)
+                    .opacity(settings.codec == .prores ? 0.4 : 1.0)
+                }
+
+                // Audio toggle
+                HStack {
+                    Text("包含音频").font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
+                        .frame(width: 60, alignment: .leading)
+                    Toggle("", isOn: $settings.includeAudio).labelsHidden()
+                    Spacer()
+                }
+
+                // Export button
+                Button("导出…") { exportVideo() }
+                    .buttonStyle(.plain).padding(8)
+                    .frame(maxWidth: .infinity)
+                    .background(Tokens.Palette.clipBlue).cornerRadius(6)
                     .foregroundStyle(Tokens.Palette.onAccent)
-                Button("导出 FCPXML 工程…") { exportFCPXML() }
-                    .buttonStyle(.plain).padding(8).background(Tokens.Palette.elevated).cornerRadius(6)
-                    .foregroundStyle(Tokens.Palette.textPrimary)
+                    .font(Tokens.Typeface.body)
+
+                // Error
                 if let err = store.ui.exportError {
-                    Text(err).font(.system(size: 11)).foregroundStyle(Tokens.Palette.windowClose)
+                    Text(err).font(.system(size: 11))
+                        .foregroundStyle(Tokens.Palette.windowClose)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
-        .padding(18).frame(width: 360).background(Tokens.Palette.chrome)
     }
 
-    private func exportMovie() {
-        let hasVideo = store.document.assetLibrary.contains { $0.kind != .audio }
+    // MARK: - Tab 1: Project Export
+
+    @ViewBuilder private var projectExportTab: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("导出 FCPXML 工程文件,可在 Final Cut Pro 中继续编辑。")
+                .font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+            Button("导出 FCPXML 工程…") { exportFCPXML() }
+                .buttonStyle(.plain).padding(8)
+                .frame(maxWidth: .infinity)
+                .background(Tokens.Palette.elevated).cornerRadius(6)
+                .foregroundStyle(Tokens.Palette.textPrimary)
+                .font(Tokens.Typeface.body)
+            if let err = store.ui.exportError {
+                Text(err).font(.system(size: 11))
+                    .foregroundStyle(Tokens.Palette.windowClose)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    // MARK: - Actions
+
+    private func exportVideo() {
+        let ext = settings.codec == .prores ? "mov" : "mp4"
         let panel = NSSavePanel()
-        panel.nameFieldStringValue = hasVideo ? "导出.mp4" : "导出.m4a"
-        if panel.runModal() == .OK, let url = panel.url { store.exportMovie(to: url) }
+        panel.nameFieldStringValue = "导出.\(ext)"
+        if panel.runModal() == .OK, let url = panel.url {
+            store.exportMovie(to: url, settings: settings)
+        }
     }
 
     private func exportFCPXML() {
@@ -53,7 +150,7 @@ struct ExportPanel: View {
             store.ui.exportError = nil
             store.dispatch(.setShowExport(false))
         } catch {
-            store.ui.exportError = "导出失败:\(error)"   // fail-fast:暴露而非静默
+            store.ui.exportError = "导出失败:\(error)"   // fail-fast: 暴露而非静默
         }
     }
 }
