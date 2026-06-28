@@ -45,7 +45,110 @@ enum AgentActionCatalog {
 
     // 各 domain 在后续 Task 填充;先放占位让骨架可编译+测试通过。
     static let timeline: [AgentAction] = [
-        AgentAction(type: "insert", domain: .timeline, doc: "占位", params: []) { _, _ in "未实现" }
+        AgentAction(type: "insert", domain: .timeline,
+                    doc: "把素材库第 assetIndex 个素材插入主轴 atSeconds 处(省略则末尾)。后续片段右移。",
+                    params: [ParamSpec(name: "assetIndex", kind: .int, required: true, doc: "素材库索引,0基"),
+                             ParamSpec(name: "atSeconds", kind: .number, required: false, doc: "插入时间(秒),省略=末尾")]) { store, a in
+            guard let clip = clipFromAsset(store, intArg(a, "assetIndex") ?? -1) else { return "错误:assetIndex 无效" }
+            let count = store.document.sequence.spine.count
+            if let at = numArg(a, "atSeconds") {
+                var idx = 0, acc = 0.0
+                for (i, el) in store.document.sequence.spine.enumerated() { if acc >= at { idx = i; break }; acc += el.duration.seconds; idx = i + 1 }
+                store.dispatch(.insertClip(clip, at: idx))
+            } else {
+                store.dispatch(.insertClip(clip, at: count))
+            }
+            return "已插入素材 \(intArg(a, "assetIndex")!)"
+        },
+        AgentAction(type: "append", domain: .timeline,
+                    doc: "把素材库第 assetIndex 个素材追加到主轴末尾。",
+                    params: [ParamSpec(name: "assetIndex", kind: .int, required: true, doc: "素材库索引,0基")]) { store, a in
+            guard let clip = clipFromAsset(store, intArg(a, "assetIndex") ?? -1) else { return "错误:assetIndex 无效" }
+            store.dispatch(.insertClip(clip, at: store.document.sequence.spine.count))
+            return "已追加素材 \(intArg(a, "assetIndex")!)"
+        },
+        AgentAction(type: "connect", domain: .timeline,
+                    doc: "把素材库第 assetIndex 个素材作为连接片段叠加到 atSeconds、第 lane 层(>0在上,<0在下)。用于画中画/多轨。",
+                    params: [ParamSpec(name: "assetIndex", kind: .int, required: true, doc: "素材库索引"),
+                             ParamSpec(name: "atSeconds", kind: .number, required: true, doc: "时间位置(秒)"),
+                             ParamSpec(name: "lane", kind: .int, required: false, doc: "层级,默认1")]) { store, a in
+            guard let clip = clipFromAsset(store, intArg(a, "assetIndex") ?? -1) else { return "错误:assetIndex 无效" }
+            let at = numArg(a, "atSeconds") ?? 0
+            // host = 覆盖 at 的主轴片段;offset = at - host起点
+            var hostIdx = 0, acc = 0.0, hostStart = 0.0
+            var found = false
+            for (i, el) in store.document.sequence.spine.enumerated() {
+                if case .clip = el { if at >= acc && at < acc + el.duration.seconds { hostIdx = i; hostStart = acc; found = true; break } }
+                acc += el.duration.seconds
+            }
+            guard found else { return "错误:atSeconds 处主轴无片段可挂载" }
+            let lane = intArg(a, "lane") ?? 1
+            store.dispatch(.connect(clip, host: hostIdx, lane: lane == 0 ? 1 : lane, offset: .seconds(at - hostStart)))
+            return "已连接素材 \(intArg(a, "assetIndex")!) 到 lane\(lane)"
+        },
+        AgentAction(type: "delete", domain: .timeline,
+                    doc: "删除主轴第 clipIndex 个片段。ripple=true 磁性合拢,false 留 gap。",
+                    params: [ParamSpec(name: "clipIndex", kind: .int, required: true, doc: "主轴片段索引,0基"),
+                             ParamSpec(name: "ripple", kind: .string, required: false, doc: "true/false,默认true")]) { store, a in
+            guard let ei = spineElementIndex(store, clipIndex: intArg(a, "clipIndex") ?? -1) else { return "错误:clipIndex 无效" }
+            let ripple = (strArg(a, "ripple") ?? "true") != "false"
+            store.dispatch(ripple ? .rippleDelete(at: ei) : .liftDelete(at: ei))
+            return "已删除片段 \(intArg(a, "clipIndex")!)"
+        },
+        AgentAction(type: "move", domain: .timeline,
+                    doc: "把主轴第 fromClipIndex 个片段移到第 toClipIndex 个位置(调整顺序)。",
+                    params: [ParamSpec(name: "fromClipIndex", kind: .int, required: true, doc: "源片段索引"),
+                             ParamSpec(name: "toClipIndex", kind: .int, required: true, doc: "目标位置索引")]) { store, a in
+            guard let from = spineElementIndex(store, clipIndex: intArg(a, "fromClipIndex") ?? -1),
+                  let to = spineElementIndex(store, clipIndex: intArg(a, "toClipIndex") ?? -1) else { return "错误:索引无效" }
+            store.dispatch(.moveClip(from: from, to: to))
+            return "已移动片段"
+        },
+        AgentAction(type: "blade", domain: .timeline,
+                    doc: "在 atSeconds 处把主轴第 clipIndex 个片段切成两段。",
+                    params: [ParamSpec(name: "clipIndex", kind: .int, required: true, doc: "片段索引"),
+                             ParamSpec(name: "atSeconds", kind: .number, required: true, doc: "切割时间(秒)")]) { store, a in
+            guard let ei = spineElementIndex(store, clipIndex: intArg(a, "clipIndex") ?? -1),
+                  case .clip = store.document.sequence.spine[ei] else { return "错误:clipIndex 无效" }
+            // localTime = at - 片段起点
+            var acc = 0.0
+            for (i, el) in store.document.sequence.spine.enumerated() { if i == ei { break }; acc += el.duration.seconds }
+            let at = numArg(a, "atSeconds") ?? 0
+            store.dispatch(.blade(at: ei, localTime: .seconds(at - acc)))
+            return "已在 \(at)s 切割片段 \(intArg(a, "clipIndex")!)"
+        },
+        AgentAction(type: "trim", domain: .timeline,
+                    doc: "修剪主轴第 clipIndex 个片段。edge=head 改入点(seconds=入点偏移),edge=tail 改时长(seconds=新时长)。",
+                    params: [ParamSpec(name: "clipIndex", kind: .int, required: true, doc: "片段索引"),
+                             ParamSpec(name: "edge", kind: .enumString(["head", "tail"]), required: true, doc: "修剪哪端"),
+                             ParamSpec(name: "seconds", kind: .number, required: true, doc: "head:入点偏移; tail:新时长")]) { store, a in
+            guard let ei = spineElementIndex(store, clipIndex: intArg(a, "clipIndex") ?? -1),
+                  case .clip(let c) = store.document.sequence.spine[ei] else { return "错误:clipIndex 无效" }
+            let sec = numArg(a, "seconds") ?? 0
+            if strArg(a, "edge") == "head" { store.dispatch(.trimLeft(at: ei, deltaIn: .seconds(sec))) }
+            else {
+                let assetDur = store.document.assetLibrary.first { $0.id == c.assetID }?.duration ?? c.duration
+                store.dispatch(.trimRight(at: ei, newDuration: .seconds(sec), assetDuration: assetDur))
+            }
+            return "已修剪片段 \(intArg(a, "clipIndex")!) \(strArg(a, "edge") ?? "")"
+        },
+        AgentAction(type: "set_gap", domain: .timeline,
+                    doc: "把主轴第 spineIndex 个元素(须为间隙)的时长设为 seconds。",
+                    params: [ParamSpec(name: "spineIndex", kind: .int, required: true, doc: "spine 元素索引(含间隙)"),
+                             ParamSpec(name: "seconds", kind: .number, required: true, doc: "新间隙时长(秒)")]) { store, a in
+            let i = intArg(a, "spineIndex") ?? -1
+            guard store.document.sequence.spine.indices.contains(i) else { return "错误:spineIndex 无效" }
+            store.dispatch(.setGapDuration(at: i, duration: .seconds(numArg(a, "seconds") ?? 1)))
+            return "已设置间隙时长"
+        },
+        AgentAction(type: "position_move", domain: .timeline,
+                    doc: "位置工具:把主轴第 clipIndex 个片段移到 atSeconds,源处留下占位间隙(不磁性合拢)。",
+                    params: [ParamSpec(name: "clipIndex", kind: .int, required: true, doc: "片段索引"),
+                             ParamSpec(name: "atSeconds", kind: .number, required: true, doc: "目标时间(秒)")]) { store, a in
+            guard let id = clipID(store, intArg(a, "clipIndex") ?? -1) else { return "错误:clipIndex 无效" }
+            store.dispatch(.positionMove(id, time: .seconds(numArg(a, "atSeconds") ?? 0)))
+            return "已位置移动片段 \(intArg(a, "clipIndex")!)"
+        },
     ]
     static let adjust: [AgentAction] = [
         AgentAction(type: "volume", domain: .adjust, doc: "占位", params: []) { _, _ in "未实现" }
