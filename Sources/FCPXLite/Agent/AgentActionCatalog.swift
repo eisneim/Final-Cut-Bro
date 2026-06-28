@@ -161,6 +161,13 @@ enum AgentActionCatalog {
         },
     ]
 
+    /// 改某 clip 的 effects(走命令层,可撤销)。返回 false=clipIndex 无效。
+    @MainActor static func mutateEffects(_ store: DocumentStore, clipIndex: Int, _ f: (inout [Effect]) -> Void) -> Bool {
+        guard let id = clipID(store, clipIndex), let ei = spineElementIndex(store, clipIndex: clipIndex),
+              case .clip(let c) = store.document.sequence.spine[ei] else { return false }
+        var fx = c.effects; f(&fx); store.dispatch(.setEffects(id, fx)); return true
+    }
+
     static func mutateAdjust(_ store: DocumentStore, clipIndex: Int, _ f: (inout Adjustments) -> Void) -> Bool {
         guard let id = clipID(store, clipIndex), let ei = spineElementIndex(store, clipIndex: clipIndex),
               case .clip(let c) = store.document.sequence.spine[ei] else { return false }
@@ -212,6 +219,38 @@ enum AgentActionCatalog {
             let v = numArg(a, "value") ?? 1
             return mutateAdjust(store, clipIndex: intArg(a, "clipIndex") ?? -1) { $0.volume = v }
                 ? "已设音量 \(v)" : "错误:clipIndex 无效"
+        },
+        AgentAction(type: "add_effect", domain: .adjust, doc: "给主轴第 clipIndex 个片段加特效。kind: color(调色) / blur(模糊) / fade(音频淡入淡出)。",
+                    params: [ParamSpec(name: "clipIndex", kind: .int, required: true, doc: "片段索引"),
+                             ParamSpec(name: "kind", kind: .enumString(["color","blur","fade"]), required: true, doc: "特效种类")]) { store, a in
+            guard let k = strArg(a, "kind").flatMap({ EffectKind(rawValue: $0) }) else { return "错误:未知特效 kind" }
+            return mutateEffects(store, clipIndex: intArg(a, "clipIndex") ?? -1) { $0.append(Effect.make(k)) }
+                ? "已加特效 \(k.rawValue)" : "错误:clipIndex 无效"
+        },
+        AgentAction(type: "remove_effect", domain: .adjust, doc: "删除主轴第 clipIndex 个片段的第 effectIndex 个特效。",
+                    params: [ParamSpec(name: "clipIndex", kind: .int, required: true, doc: "片段索引"),
+                             ParamSpec(name: "effectIndex", kind: .int, required: true, doc: "特效索引,0基")]) { store, a in
+            let ei = intArg(a, "effectIndex") ?? -1
+            return mutateEffects(store, clipIndex: intArg(a, "clipIndex") ?? -1) { if $0.indices.contains(ei) { $0.remove(at: ei) } }
+                ? "已删特效 \(ei)" : "错误:clipIndex 无效"
+        },
+        AgentAction(type: "set_effect_param", domain: .adjust, doc: "调主轴第 clipIndex 个片段第 effectIndex 个特效的参数 key=value。color: brightness/contrast/saturation; blur: radius; fade: inSeconds/outSeconds。",
+                    params: [ParamSpec(name: "clipIndex", kind: .int, required: true, doc: "片段索引"),
+                             ParamSpec(name: "effectIndex", kind: .int, required: true, doc: "特效索引"),
+                             ParamSpec(name: "key", kind: .string, required: true, doc: "参数名"),
+                             ParamSpec(name: "value", kind: .number, required: true, doc: "参数值")]) { store, a in
+            let ei = intArg(a, "effectIndex") ?? -1
+            guard let key = strArg(a, "key") else { return "错误:缺 key" }
+            let v = numArg(a, "value") ?? 0
+            return mutateEffects(store, clipIndex: intArg(a, "clipIndex") ?? -1) { if $0.indices.contains(ei) { $0[ei].params[key] = v } }
+                ? "已设特效参数 \(key)=\(v)" : "错误:clipIndex 无效"
+        },
+        AgentAction(type: "toggle_enabled", domain: .adjust, doc: "停用/启用主轴第 clipIndex 个片段。enabled=false 停用(不参与预览/导出,时间线变暗)。",
+                    params: [ParamSpec(name: "clipIndex", kind: .int, required: true, doc: "片段索引"),
+                             ParamSpec(name: "enabled", kind: .string, required: true, doc: "true/false")]) { store, a in
+            guard let id = clipID(store, intArg(a, "clipIndex") ?? -1) else { return "错误:clipIndex 无效" }
+            let on = boolArg(a, "enabled") ?? true
+            store.dispatch(.setEnabled(id, on)); return on ? "已启用片段" : "已停用片段"
         },
     ]
     static let navigate: [AgentAction] = [

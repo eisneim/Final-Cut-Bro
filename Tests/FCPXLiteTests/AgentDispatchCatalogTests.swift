@@ -195,4 +195,40 @@ final class AgentDispatchCatalogTests: XCTestCase {
         let q = reg.execute(name: "query_timeline", args: [:])
         XCTAssertTrue(q.contains("素材库"))
     }
+
+    func testAddAndRemoveEffect() {
+        let store = storeWith2Assets()
+        _ = AgentActionCatalog.find("append")!.apply(store, ["assetIndex": 0])
+        _ = AgentActionCatalog.find("add_effect")!.apply(store, ["clipIndex": 0, "kind": "blur"])
+        guard case .clip(let c1) = store.document.sequence.spine[0] else { return XCTFail() }
+        XCTAssertEqual(c1.effects.count, 1)
+        XCTAssertEqual(c1.effects[0].kind, .blur)
+        _ = AgentActionCatalog.find("remove_effect")!.apply(store, ["clipIndex": 0, "effectIndex": 0])
+        guard case .clip(let c2) = store.document.sequence.spine[0] else { return XCTFail() }
+        XCTAssertEqual(c2.effects.count, 0)
+    }
+
+    func testSetEffectParam() {
+        let store = storeWith2Assets()
+        _ = AgentActionCatalog.find("append")!.apply(store, ["assetIndex": 0])
+        _ = AgentActionCatalog.find("add_effect")!.apply(store, ["clipIndex": 0, "kind": "color"])
+        _ = AgentActionCatalog.find("set_effect_param")!.apply(store, ["clipIndex": 0, "effectIndex": 0, "key": "brightness", "value": 0.3])
+        guard case .clip(let c) = store.document.sequence.spine[0] else { return XCTFail() }
+        XCTAssertEqual(c.effects[0].params["brightness"], 0.3)
+    }
+
+    func testAddEffectBadKindErrors() {
+        let store = storeWith2Assets()
+        _ = AgentActionCatalog.find("append")!.apply(store, ["assetIndex": 0])
+        let r = AgentActionCatalog.find("add_effect")!.apply(store, ["clipIndex": 0, "kind": "nonsense"])
+        XCTAssertTrue(r.contains("错误"), r)
+    }
+
+    func testToggleEnabled() {
+        let store = storeWith2Assets()
+        _ = AgentActionCatalog.find("append")!.apply(store, ["assetIndex": 0])
+        _ = AgentActionCatalog.find("toggle_enabled")!.apply(store, ["clipIndex": 0, "enabled": false])
+        guard case .clip(let c) = store.document.sequence.spine[0] else { return XCTFail() }
+        XCTAssertFalse(c.enabled)
+    }
 }
