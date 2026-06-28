@@ -90,8 +90,7 @@ struct InspectorView: View {
         HStack(spacing: 8) {
             Text(label).font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted).frame(width: 80, alignment: .leading)
             Slider(value: value, in: range)
-            Text("\(display, specifier: "%.0f") \(suffix)").font(Tokens.Typeface.label)
-                .foregroundStyle(Tokens.Palette.textPrimary).frame(width: 54, alignment: .trailing)
+            EditableNumberField(value: value, range: range, suffix: suffix)
         }
         .padding(.horizontal, 10).padding(.vertical, 3)
     }
@@ -100,9 +99,11 @@ struct InspectorView: View {
         HStack(spacing: 8) {
             Text(label).font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted).frame(width: 80, alignment: .leading)
             Text("X").font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
-            Slider(value: x, in: -1000...1000).frame(width: 70)
+            Slider(value: x, in: -1000...1000).frame(width: 50)
+            EditableNumberField(value: x, range: -1000...1000, width: 44)
             Text("Y").font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
-            Slider(value: y, in: -1000...1000).frame(width: 70)
+            Slider(value: y, in: -1000...1000).frame(width: 50)
+            EditableNumberField(value: y, range: -1000...1000, width: 44)
         }
         .padding(.horizontal, 10).padding(.vertical, 3)
     }
