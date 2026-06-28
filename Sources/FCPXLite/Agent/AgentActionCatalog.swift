@@ -92,8 +92,9 @@ enum AgentActionCatalog {
             }
             guard found else { return "错误:atSeconds 处主轴无片段可挂载" }
             let lane = intArg(a, "lane") ?? 1
-            store.dispatch(.connect(clip, host: hostIdx, lane: lane == 0 ? 1 : lane, offset: .seconds(at - hostStart)))
-            return "已连接素材 \(intArg(a, "assetIndex")!) 到 lane\(lane)"
+            let effectiveLane = lane == 0 ? 1 : lane
+            store.dispatch(.connect(clip, host: hostIdx, lane: effectiveLane, offset: .seconds(at - hostStart)))
+            return "已连接素材 \(intArg(a, "assetIndex")!) 到 lane\(effectiveLane)"
         },
         AgentAction(type: "delete", domain: .timeline,
                     doc: "删除主轴第 clipIndex 个片段。ripple=true 磁性合拢,false 留 gap。",
