@@ -58,10 +58,8 @@ enum FCPXMLExporter {
         return s
     }
 
-    /// FCPXML 有理时间 "value/timescales"(timescale=1 时写 "Ns")。
-    private static func time(_ t: Time) -> String {
-        t.timescale == 1 ? "\(t.value)s" : "\(t.value)/\(t.timescale)s"
-    }
+    /// FCPXML 有理时间。复用模型的 Time.fcpxmlString(零写 "0s")。
+    private static func time(_ t: Time) -> String { t.fcpxmlString }
 
     /// XML 属性转义。
     private static func esc(_ s: String) -> String {
