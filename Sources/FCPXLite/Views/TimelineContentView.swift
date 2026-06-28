@@ -42,6 +42,8 @@ final class TimelineContentView: NSView {
     enum TrimEdge { case head, tail }
     /// 修剪工具:正在拖的 clip 边缘。
     var trimDrag: (clipID: ClipID, index: Int, edge: TrimEdge)?
+    /// Roll 编辑:select 工具拖两片段交界切点。
+    var rollDrag: (leftIndex: Int, rightIndex: Int, leftClipID: ClipID, rightClipID: ClipID, startX: CGFloat)?
     /// 手工具:上一次拖动 x(用于滚动增量)。
     var handLastX: CGFloat?
     /// 缩放工具:拖动起点 x + 起始 pxPerSecond。

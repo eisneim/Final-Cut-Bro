@@ -1,7 +1,7 @@
 import AppKit
 
 /// TimelineContentView 鼠标交互,按当前工具分支:
-/// - select:拖片段 → relocate(磁吸)
+/// - select:拖片段边缘 → trim/roll;拖中部 → relocate(磁吸)
 /// - position:拖片段 → positionMove(不吸附,原处留灰 gap)
 /// - trim:拖片段首/尾 → rippleTrimLeft/Right(光标 resizeLeftRight)
 /// - hand:拖动 → 横向滚动(光标 openHand)
@@ -33,6 +33,31 @@ extension TimelineContentView {
                let s = spineClipAndIndex(p.clipID) { return (p.clipID, s.index, .head) }
             if abs(pt.x - r.maxX) <= Self.edgeHitPx,
                let s = spineClipAndIndex(p.clipID) { return (p.clipID, s.index, .tail) }
+        }
+        return nil
+    }
+
+    /// 命中两片段间切点(lane 0 相邻 clip,尾紧接头,无 gap)→ roll 编辑。
+    /// 若命中,优先使用 roll(不走单边 edge trim)。
+    func rollHit(at pt: NSPoint) -> (leftIndex: Int, rightIndex: Int, leftClipID: ClipID, rightClipID: ClipID)? {
+        // 收集 lane-0 clips,按 absStart 排序
+        let lane0 = placed.filter { $0.lane == 0 }.sorted { $0.absStart < $1.absStart }
+        guard lane0.count >= 2 else { return nil }
+        for i in 0..<(lane0.count - 1) {
+            let left  = lane0[i]
+            let right = lane0[i + 1]
+            let leftR  = clipRect(left)
+            let rightR = clipRect(right)
+            // 必须在同一 y 区间(两者 lane 均为 0,高度相同)
+            guard pt.y >= leftR.minY, pt.y <= leftR.maxY else { continue }
+            // 两片段必须紧邻(无 gap):left.maxX ≈ right.minX
+            guard abs(leftR.maxX - rightR.minX) < 2 else { continue }
+            // 光标在切点附近
+            let cutX = leftR.maxX
+            guard abs(pt.x - cutX) <= Self.edgeHitPx else { continue }
+            guard let ls = spineClipAndIndex(left.clipID),
+                  let rs = spineClipAndIndex(right.clipID) else { continue }
+            return (ls.index, rs.index, left.clipID, right.clipID)
         }
         return nil
     }
@@ -72,14 +97,30 @@ extension TimelineContentView {
             dispatch?(.setPlayhead(Time.seconds(t)))
             return
         case .select, .position, .range:
-            if !inRuler, let p = hitTestClip(at: pt) {
-                dragClipID = p.clipID
-                let clipStartX = TimelineGeometry.x(forSeconds: p.absStart.seconds, pxPerSecond: pxPerSecond)
-                dragGrabDX = pt.x - clipStartX
-                dragStartPoint = pt
-                dragCurrentPoint = pt
-                dispatch?(.selectClip(p.clipID))
-                return
+            if !inRuler {
+                // 1. roll hit 优先(两片段切点)
+                if currentTool == .select, let roll = rollHit(at: pt) {
+                    rollDrag = (roll.leftIndex, roll.rightIndex,
+                                roll.leftClipID, roll.rightClipID, pt.x)
+                    dispatch?(.selectClip(roll.leftClipID))
+                    return
+                }
+                // 2. 边缘 trim(select 工具也支持)
+                if currentTool == .select, let e = edgeHit(at: pt) {
+                    trimDrag = e
+                    dispatch?(.selectClip(e.clipID))
+                    return
+                }
+                // 3. 普通片段拖动/选择
+                if let p = hitTestClip(at: pt) {
+                    dragClipID = p.clipID
+                    let clipStartX = TimelineGeometry.x(forSeconds: p.absStart.seconds, pxPerSecond: pxPerSecond)
+                    dragGrabDX = pt.x - clipStartX
+                    dragStartPoint = pt
+                    dragCurrentPoint = pt
+                    dispatch?(.selectClip(p.clipID))
+                    return
+                }
             }
             dragClipID = nil
             dispatch?(.setPlayhead(Time.seconds(t)))
@@ -108,7 +149,28 @@ extension TimelineContentView {
             dispatch?(.setZoom(Double(zoomStartPx) * factor))
             return
         }
-        // 修剪工具:实时 trim
+        // Roll 编辑:拖动切点,左 clip 向右 / 右 clip 向左等量调整
+        if let rd = rollDrag {
+            guard let (leftClip, _)  = spineClipAndIndex(rd.leftClipID),
+                  let (rightClip, _) = spineClipAndIndex(rd.rightClipID) else { return }
+            let deltaSec = Double(pt.x - rd.startX) / Double(pxPerSecond)
+            let leftAssetDur = assetDuration(of: leftClip)
+
+            // clamp:左不超素材;右不低于 1 帧(约 0.04s)
+            let maxExtendLeft  = leftAssetDur.seconds - (leftClip.sourceIn.seconds + leftClip.duration.seconds)
+            let maxShrinkRight = rightClip.duration.seconds - 0.04
+            let clampedDelta = max(-maxShrinkRight, min(maxExtendLeft, deltaSec))
+
+            let newLeftDur  = leftClip.duration.seconds  + clampedDelta
+            let newRightIn  = clampedDelta   // trimLeft deltaIn = 正值收头
+
+            dispatch?(.trimRight(at: rd.leftIndex,
+                                 newDuration: .seconds(max(0.04, newLeftDur)),
+                                 assetDuration: leftAssetDur))
+            dispatch?(.trimLeft(at: rd.rightIndex, deltaIn: .seconds(newRightIn)))
+            return
+        }
+        // 修剪工具 / select 工具边缘 trim:实时 trim
         if let td = trimDrag {
             guard let (clip, _) = spineClipAndIndex(td.clipID) else { return }
             let clipStartSec = (placed.first { $0.clipID == td.clipID }?.absStart.seconds) ?? 0
@@ -159,21 +221,53 @@ extension TimelineContentView {
         }
         // 其余工具的片段拖动已在 mouseDragged 中实时完成(所见即所得),这里只清状态。
         dragClipID = nil; dragStartPoint = nil; dragCurrentPoint = nil
-        trimDrag = nil; handLastX = nil; zoomStartX = nil
+        trimDrag = nil; rollDrag = nil; handLastX = nil; zoomStartX = nil
         needsDisplay = true
     }
 
-    // MARK: - 光标(随工具)
+    // MARK: - 光标(随工具 + select 工具边缘热区)
 
     override func resetCursorRects() {
-        let cursor: NSCursor
+        discardCursorRects()
         switch currentTool {
-        case .hand:  cursor = .openHand
-        case .zoom:  cursor = .crosshair
-        case .trim:  cursor = .resizeLeftRight
-        default:     cursor = .arrow
+        case .hand:
+            addCursorRect(bounds, cursor: .openHand)
+        case .zoom:
+            addCursorRect(bounds, cursor: .crosshair)
+        case .trim:
+            addCursorRect(bounds, cursor: .resizeLeftRight)
+        case .select:
+            // 默认箭头覆盖全区
+            addCursorRect(bounds, cursor: .arrow)
+            // lane-0 clip 的首/尾边缘热区 + roll 切点热区 → 双箭头光标
+            let lane0 = placed.filter { $0.lane == 0 }.sorted { $0.absStart < $1.absStart }
+            for p in lane0 {
+                let r = clipRect(p)
+                // 尾边缘
+                let tailRect = NSRect(x: r.maxX - Self.edgeHitPx, y: r.minY,
+                                     width: Self.edgeHitPx * 2, height: r.height)
+                addCursorRect(tailRect, cursor: .resizeLeftRight)
+                // 首边缘(不包含 roll 切点,若下一片段紧跟则那里已被 roll 热区覆盖)
+                let headRect = NSRect(x: r.minX - Self.edgeHitPx, y: r.minY,
+                                     width: Self.edgeHitPx * 2, height: r.height)
+                addCursorRect(headRect, cursor: .resizeLeftRight)
+            }
+            // roll 切点:两相邻片段交界处单独设一次(与首/尾重叠也没关系,覆盖即可)
+            for i in 0..<(lane0.count - 1) {
+                let left  = lane0[i]
+                let right = lane0[i + 1]
+                let leftR  = clipRect(left)
+                let rightR = clipRect(right)
+                // 仅当两片段紧邻(无 gap)
+                guard abs(leftR.maxX - rightR.minX) < 2 else { continue }
+                let cutX = leftR.maxX
+                let rollRect = NSRect(x: cutX - Self.edgeHitPx, y: leftR.minY,
+                                     width: Self.edgeHitPx * 2, height: leftR.height)
+                addCursorRect(rollRect, cursor: .resizeLeftRight)
+            }
+        default:
+            addCursorRect(bounds, cursor: .arrow)
         }
-        addCursorRect(bounds, cursor: cursor)
     }
 
     // MARK: - 吸附
