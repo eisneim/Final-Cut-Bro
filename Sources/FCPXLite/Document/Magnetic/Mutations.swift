@@ -295,7 +295,9 @@ enum Mutations {
                          connected: c.connected
                             .filter { $0.offset >= localTime }
                             .map { var x = $0; x.offset = x.offset - localTime; return x },
-                         adjust: c.adjust)
+                         adjust: c.adjust,
+                         effects: c.effects,    // 切割保留特效(否则第二段静默丢特效)
+                         enabled: c.enabled)    // 切割保留启用状态(否则停用片段切后右半被重新启用)
 
         s.spine.replaceSubrange(index...index, with: [.clip(left), .clip(right)])
         assertInvariants(s)

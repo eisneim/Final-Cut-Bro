@@ -21,6 +21,21 @@ final class MutationBladeConnectTests: XCTestCase {
         XCTAssertEqual(right.sourceIn, .seconds(3))           // 1 + 2
     }
 
+    // 回归:切割保留两半的 effects + enabled(否则第二段静默丢特效/被重新启用)。
+    func testBladePreservesEffectsAndEnabled() {
+        var original = clip(6, sourceIn: .zero)
+        original.effects = [Effect.make(.blur), Effect.make(.color)]
+        original.enabled = false
+        let seq = Mutations.blade(at: 0, localTime: .seconds(2), in: Sequence(spine: [.clip(original)]))
+        let left = seq.spine[0].asClip!
+        let right = seq.spine[1].asClip!
+        XCTAssertEqual(left.effects.count, 2)
+        XCTAssertEqual(right.effects.count, 2, "右半应保留特效")
+        XCTAssertEqual(right.effects[0].kind, .blur)
+        XCTAssertFalse(left.enabled)
+        XCTAssertFalse(right.enabled, "右半应保留停用状态")
+    }
+
     func testBladeRoutesConnectedToCorrectHalf() {
         let connLeft = Clip(assetID: AssetID(), sourceIn: .zero, duration: .seconds(1),
                             lane: 1, offset: .seconds(0.5))   // 在 2s 切点之前 → 留左
