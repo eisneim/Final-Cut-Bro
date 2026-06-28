@@ -36,7 +36,21 @@ enum CompositionBuilder {
                 do { try at.insertTimeRange(range, of: a, at: start)
                      inserted = true   // 纯音频也算"有内容":否则下面 guard 会让纯音乐轨返回 nil(无法播放)
                      let p = AVMutableAudioMixInputParameters(track: at)
-                     p.setVolume(Float(clip.adjust.volume), at: .zero)
+                     let vol = Float(clip.adjust.volume)
+                     p.setVolume(vol, at: .zero)
+                     if let fade = clip.effects.first(where: { $0.enabled && $0.kind == .fade }) {
+                         let inS = fade.params["inSeconds"] ?? 0
+                         let outS = fade.params["outSeconds"] ?? 0
+                         if inS > 0 {
+                             p.setVolumeRamp(fromStartVolume: 0, toEndVolume: vol,
+                                             timeRange: CMTimeRange(start: start, duration: cm(.seconds(inS))))
+                         }
+                         if outS > 0 {
+                             let endStart = start + cm(clip.duration) - cm(.seconds(outS))
+                             p.setVolumeRamp(fromStartVolume: vol, toEndVolume: 0,
+                                             timeRange: CMTimeRange(start: endStart, duration: cm(.seconds(outS))))
+                         }
+                     }
                      audioParams.append(p)
                 } catch { print("[CompositionBuilder] audio: \(error)") }
             }
