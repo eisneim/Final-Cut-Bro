@@ -40,6 +40,12 @@ enum AgentActionCatalog {
     static func intArg(_ a: [String: Any], _ k: String) -> Int? { (a[k] as? Int) ?? (a[k] as? Double).map(Int.init) ?? (a[k] as? NSNumber)?.intValue }
     static func numArg(_ a: [String: Any], _ k: String) -> Double? { (a[k] as? Double) ?? (a[k] as? Int).map(Double.init) ?? (a[k] as? NSNumber)?.doubleValue }
     static func strArg(_ a: [String: Any], _ k: String) -> String? { a[k] as? String }
+    static func boolArg(_ a: [String: Any], _ k: String) -> Bool? {
+        if let b = a[k] as? Bool { return b }
+        if let n = a[k] as? NSNumber { return n.boolValue }
+        if let s = a[k] as? String { return (s as NSString).boolValue }
+        return nil
+    }
 
     static let all: [AgentAction] = timeline + adjust + navigate
 
@@ -52,8 +58,11 @@ enum AgentActionCatalog {
             guard let clip = clipFromAsset(store, intArg(a, "assetIndex") ?? -1) else { return "错误:assetIndex 无效" }
             let count = store.document.sequence.spine.count
             if let at = numArg(a, "atSeconds") {
-                var idx = 0, acc = 0.0
-                for (i, el) in store.document.sequence.spine.enumerated() { if acc >= at { idx = i; break }; acc += el.duration.seconds; idx = i + 1 }
+                var idx = store.document.sequence.spine.count, acc = 0.0
+                for (i, el) in store.document.sequence.spine.enumerated() {
+                    if acc + el.duration.seconds > at { idx = i; break }
+                    acc += el.duration.seconds
+                }
                 store.dispatch(.insertClip(clip, at: idx))
             } else {
                 store.dispatch(.insertClip(clip, at: count))
@@ -91,7 +100,7 @@ enum AgentActionCatalog {
                     params: [ParamSpec(name: "clipIndex", kind: .int, required: true, doc: "主轴片段索引,0基"),
                              ParamSpec(name: "ripple", kind: .string, required: false, doc: "true/false,默认true")]) { store, a in
             guard let ei = spineElementIndex(store, clipIndex: intArg(a, "clipIndex") ?? -1) else { return "错误:clipIndex 无效" }
-            let ripple = (strArg(a, "ripple") ?? "true") != "false"
+            let ripple = boolArg(a, "ripple") ?? true
             store.dispatch(ripple ? .rippleDelete(at: ei) : .liftDelete(at: ei))
             return "已删除片段 \(intArg(a, "clipIndex")!)"
         },

@@ -63,4 +63,63 @@ final class AgentDispatchCatalogTests: XCTestCase {
         let r = AgentActionCatalog.find("append")!.apply(store, ["assetIndex": 99])
         XCTAssertTrue(r.contains("错误"), "非法 index 应返回错误文本: \(r)")
     }
+
+    // Bug 1: insert mid-clip should land at the index of the element whose range contains `at`
+    func testInsertMidClipLandsAtCorrectIndex() {
+        // spine: [clip0=10s, clip1=8s]
+        // inserting at 7.0s falls inside clip0 (range 0..10), so new clip should go at spine index 0 (before clip0)
+        // Wait — per spec: "insert at index of FIRST element whose range contains at"
+        // clip0 occupies [0,10), at=7.0 is inside clip0, so idx=0 → new clip inserted AT position 0
+        // After insert: [newClip, clip0, clip1]
+        // But the more meaningful test for mid-clip is: at=7.0 inside clip0 should NOT land AFTER clip1
+        // Use at=7.0: inside clip0 [0,10) → idx=0
+        // spine after: index 0 = newClip (asset2 placeholder, but we only have 2 assets)
+        // Let's test: append a0 (10s), append a1 (8s), then insert a0 again at atSeconds=7.0
+        // Expected: new clip at spine[0], because 7.0 falls inside clip at [0,10)
+        // The bug would put it at spine index 2 (end), so we assert spine[0] is the inserted clip
+
+        let store = storeWith2Assets()
+        _ = AgentActionCatalog.find("append")!.apply(store, ["assetIndex": 0]) // clip0, 10s, spine[0]
+        _ = AgentActionCatalog.find("append")!.apply(store, ["assetIndex": 1]) // clip1, 8s, spine[1]
+
+        // Insert asset 1 at 7.0s — inside clip0 [0,10) — should land at spine index 0
+        _ = AgentActionCatalog.find("insert")!.apply(store, ["assetIndex": 1, "atSeconds": 7.0])
+
+        XCTAssertEqual(store.document.sequence.spine.count, 3, "spine should have 3 elements after insert")
+
+        // The inserted clip (asset1, 8s) should be at spine[0]
+        // clip0 (asset0, 10s) should now be at spine[1]
+        guard case .clip(let insertedClip) = store.document.sequence.spine[0] else {
+            XCTFail("spine[0] should be the newly inserted clip")
+            return
+        }
+        guard case .clip(let originalClip0) = store.document.sequence.spine[1] else {
+            XCTFail("spine[1] should be the original clip0 (asset0)")
+            return
+        }
+        let assets = store.document.assetLibrary
+        XCTAssertEqual(insertedClip.assetID, assets[1].id,
+                       "newly inserted clip should be asset1 (8s) at spine[0]")
+        XCTAssertEqual(originalClip0.assetID, assets[0].id,
+                       "original clip0 (asset0, 10s) should remain at spine[1]")
+    }
+
+    // Bug 2: delete with ripple=false (Swift Bool) should leave a gap, not ripple-delete
+    func testDeleteRippleFalseLeavesGap() {
+        let store = storeWith2Assets()
+        _ = AgentActionCatalog.find("append")!.apply(store, ["assetIndex": 0]) // clip0
+        _ = AgentActionCatalog.find("append")!.apply(store, ["assetIndex": 1]) // clip1
+
+        // Delete clip0 with ripple=false passed as Swift Bool (JSON boolean)
+        _ = AgentActionCatalog.find("delete")!.apply(store, ["clipIndex": 0, "ripple": false])
+
+        // With ripple=false (liftDelete), the spine element count stays 2 (gap replaces clip)
+        XCTAssertEqual(store.document.sequence.spine.count, 2,
+                       "liftDelete should leave a gap; spine should still have 2 elements")
+
+        // The first element should now be a gap, not a clip
+        if case .clip = store.document.sequence.spine[0] {
+            XCTFail("spine[0] should be a .gap after ripple=false delete, not a clip")
+        }
+    }
 }
