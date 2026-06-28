@@ -39,4 +39,12 @@ final class SetEffectsTests: XCTestCase {
         store.undo()
         XCTAssertEqual(store.selectedClip()?.enabled, false)
     }
+
+    func testUpdateSelectedEffectsAddsAndPersists() {
+        let (store, id) = store1Clip()
+        store.dispatch(.selectClip(id))
+        store.updateSelectedEffects { $0.append(Effect.make(.color)) }
+        guard case .clip(let c) = store.document.sequence.spine[0] else { return XCTFail() }
+        XCTAssertEqual(c.effects.count, 1)
+    }
 }

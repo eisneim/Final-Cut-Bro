@@ -26,6 +26,7 @@ struct InspectorView: View {
                             sliderRow("上", value: bind(\.crop.top), range: 0...1000, suffix: "px", display: clip.adjust.crop.top)
                             sliderRow("下", value: bind(\.crop.bottom), range: 0...1000, suffix: "px", display: clip.adjust.crop.bottom)
                         }
+                        InspectorEffectsSection(store: store)
                     }
                 }
                 .background(Tokens.Palette.chrome)

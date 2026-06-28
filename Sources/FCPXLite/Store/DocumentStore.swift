@@ -93,6 +93,13 @@ import Observation
         dispatch(.setAdjust(id, clip.adjust))
     }
 
+    /// 改选中 clip 的 effects(走命令层,可撤销)。
+    func updateSelectedEffects(_ f: (inout [Effect]) -> Void) {
+        guard let id = ui.selectedClipID, var clip = selectedClip() else { return }
+        f(&clip.effects)
+        dispatch(.setEffects(id, clip.effects))
+    }
+
     /// V 键:停用/启用选中片段(停用→不参与预览/导出,时间线变暗)。
     func toggleSelectedEnabled() {
         guard let id = ui.selectedClipID, let clip = selectedClip() else { return }
