@@ -144,6 +144,8 @@ import Observation
         case let .trimRight(i, dur, assetDur):   apply { Mutations.rippleTrimRight(at: i, newDuration: dur, assetDuration: assetDur, in: $0) }
         case let .trimLeft(i, deltaIn):          apply { Mutations.rippleTrimLeft(at: i, deltaIn: deltaIn, in: $0) }
         case let .blade(i, localTime):           apply { Mutations.blade(at: i, localTime: localTime, in: $0) }
+        case let .removeConnected(id):           apply { Mutations.removeConnected(clipID: id, in: $0) }
+        case let .bladeConnected(id, localTime): apply { Mutations.bladeConnected(clipID: id, localTime: localTime, in: $0) }
         case let .connect(c, host, lane, off):   apply { Mutations.connectClip(c, toHostIndex: host, lane: lane, offset: off, in: $0) }
         case let .relocateClip(id, lane, t):     apply { Mutations.relocate(clipID: id, toLane: lane, atTime: t, in: $0) }
         case let .positionMove(id, t):           apply { Mutations.positionMove(clipID: id, atTime: t, in: $0) }
@@ -227,6 +229,12 @@ import Observation
     /// 在播放头处切割主轴 clip(FCP: ⌘B)。
     func bladeAtPlayhead() {
         let playhead = ui.playhead
+        // 优先:若选中的是连接片段且播放头在其范围内,切它(FCP:不在主轨也能切)。
+        if let id = ui.selectedClipID, let conn = connectedPlacement(id),
+           playhead > conn.start, playhead < conn.start + conn.duration {
+            dispatch(.bladeConnected(id, localTime: playhead - conn.start))
+            return
+        }
         var elapsed = Time.zero
         for (i, el) in document.sequence.spine.enumerated() {
             let start = elapsed
@@ -238,11 +246,22 @@ import Observation
         }
     }
 
-    /// 删除选中的主轴 clip(FCP: Delete,ripple 合拢)。
+    /// 选中片段的连接位置(绝对起点+时长),非连接片段返回 nil。
+    private func connectedPlacement(_ id: ClipID) -> (start: Time, duration: Time)? {
+        for p in Layout.compute(document.sequence) where p.isConnected && p.clipID == id {
+            return (p.absStart, p.duration)
+        }
+        return nil
+    }
+
+    /// 删除选中片段(FCP: Delete)。主轴 clip → ripple 合拢;连接片段 → 从宿主移除。
     func deleteSelected() {
-        guard let id = ui.selectedClipID,
-              let idx = TimelineGeometry.spineIndex(ofClipID: id, in: document.sequence) else { return }
-        dispatch(.rippleDelete(at: idx))
+        guard let id = ui.selectedClipID else { return }
+        if let idx = TimelineGeometry.spineIndex(ofClipID: id, in: document.sequence) {
+            dispatch(.rippleDelete(at: idx))
+        } else {
+            dispatch(.removeConnected(id))   // 连接片段
+        }
         dispatch(.selectClip(nil))
     }
 

@@ -304,7 +304,39 @@ enum Mutations {
         return s
     }
 
-    /// 把 clip 作为连接片段挂到主轴第 toHostIndex 个 clip 上。
+    /// 删除一个连接片段(按 id 从其宿主的 connected 里移除)。主轴片段不在此处理。
+    static func removeConnected(clipID id: ClipID, in seq: Sequence) -> Sequence {
+        var s = seq
+        for (i, el) in s.spine.enumerated() {
+            guard case .clip(var host) = el else { continue }
+            if let j = host.connected.firstIndex(where: { $0.id == id }) {
+                host.connected.remove(at: j); s.spine[i] = .clip(host)
+                assertInvariants(s); return s
+            }
+        }
+        return s
+    }
+
+    /// 在连接片段(id)内部 localTime 处切两半,两半都作为同宿主的连接片段(第二段 offset 右移)。
+    static func bladeConnected(clipID id: ClipID, localTime: Time, in seq: Sequence) -> Sequence {
+        var s = seq
+        for (i, el) in s.spine.enumerated() {
+            guard case .clip(var host) = el,
+                  let j = host.connected.firstIndex(where: { $0.id == id }) else { continue }
+            let c = host.connected[j]
+            guard localTime > .zero, localTime < c.duration else { return s }
+            var left = c; left.duration = localTime
+            let right = Clip(assetID: c.assetID, sourceIn: c.sourceIn + localTime,
+                             duration: c.duration - localTime, connected: [],
+                             lane: c.lane, offset: c.offset + localTime,
+                             adjust: c.adjust, effects: c.effects, enabled: c.enabled)
+            host.connected.replaceSubrange(j...j, with: [left, right])
+            s.spine[i] = .clip(host)
+            assertInvariants(s); return s
+        }
+        return s
+    }
+
     /// lane 0 为主轴保留,connected clip 不得使用 lane 0 → 原样返回(no-op)。
     static func connectClip(_ clip: Clip, toHostIndex: Int, lane: Int, offset: Time,
                             in seq: Sequence) -> Sequence {

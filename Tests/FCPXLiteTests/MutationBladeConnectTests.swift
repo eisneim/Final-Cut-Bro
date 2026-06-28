@@ -88,4 +88,26 @@ final class MutationBladeConnectTests: XCTestCase {
         XCTAssertEqual(seq1.spine[0].asClip!.connected.count, 0,
                        "宿主 connected 应仍为 0")
     }
+
+    // 连接片段:删除(backspace bug 修复)。
+    func testRemoveConnectedDeletesChild() {
+        let child = Clip(assetID: AssetID(), sourceIn: .zero, duration: .seconds(2), lane: 1, offset: .seconds(1))
+        let host = Clip(assetID: AssetID(), sourceIn: .zero, duration: .seconds(5), connected: [child])
+        let seq = Sequence(spine: [.clip(host)])
+        let out = Mutations.removeConnected(clipID: child.id, in: seq)
+        XCTAssertEqual(out.spine[0].asClip!.connected.count, 0, "连接片段应被删除")
+    }
+
+    // 连接片段:切割(⌘B bug 修复)。
+    func testBladeConnectedSplitsChild() {
+        let child = Clip(assetID: AssetID(), sourceIn: .zero, duration: .seconds(4), lane: 1, offset: .seconds(1))
+        let host = Clip(assetID: AssetID(), sourceIn: .zero, duration: .seconds(8), connected: [child])
+        let seq = Sequence(spine: [.clip(host)])
+        let out = Mutations.bladeConnected(clipID: child.id, localTime: .seconds(2), in: seq)
+        let conns = out.spine[0].asClip!.connected
+        XCTAssertEqual(conns.count, 2, "连接片段应切成两段")
+        XCTAssertEqual(conns[0].duration, .seconds(2))
+        XCTAssertEqual(conns[1].duration, .seconds(2))
+        XCTAssertEqual(conns[1].offset, .seconds(3), "第二段 offset = 原offset1 + 切点2")
+    }
 }

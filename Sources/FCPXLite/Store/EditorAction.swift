@@ -11,6 +11,8 @@ enum EditorAction: Codable, Equatable {
     case trimRight(at: Int, newDuration: Time, assetDuration: Time)
     case trimLeft(at: Int, deltaIn: Time)
     case blade(at: Int, localTime: Time)
+    case removeConnected(ClipID)
+    case bladeConnected(ClipID, localTime: Time)
     case connect(Clip, host: Int, lane: Int, offset: Time)
     case relocateClip(ClipID, lane: Int, time: Time)
     case positionMove(ClipID, time: Time)
