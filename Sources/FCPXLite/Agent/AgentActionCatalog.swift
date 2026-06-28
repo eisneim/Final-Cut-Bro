@@ -143,7 +143,7 @@ enum AgentActionCatalog {
             return "已修剪片段 \(intArg(a, "clipIndex")!) \(strArg(a, "edge") ?? "")"
         },
         AgentAction(type: "set_gap", domain: .timeline,
-                    doc: "把主轴第 spineIndex 个元素(须为间隙)的时长设为 seconds。",
+                    doc: "调整已存在的【间隙(gap)】时长 —— 不是切割也不是删除。spineIndex 必须指向一个间隙元素。要在片段间制造间隙请用 delete(ripple=false) 或 position_move。",
                     params: [ParamSpec(name: "spineIndex", kind: .int, required: true, doc: "spine 元素索引(含间隙)"),
                              ParamSpec(name: "seconds", kind: .number, required: true, doc: "新间隙时长(秒)")]) { store, a in
             let i = intArg(a, "spineIndex") ?? -1
@@ -152,7 +152,7 @@ enum AgentActionCatalog {
             return "已设置间隙时长"
         },
         AgentAction(type: "position_move", domain: .timeline,
-                    doc: "位置工具:把主轴第 clipIndex 个片段移到 atSeconds,源处留下占位间隙(不磁性合拢)。",
+                    doc: "【位置工具】把主轴第 clipIndex 个片段整体移到 atSeconds,源位置留下占位间隙(不像 blade 那样切开,也不像 move 那样调顺序)。用于在保持其它片段位置不变的前提下挪动一个片段。",
                     params: [ParamSpec(name: "clipIndex", kind: .int, required: true, doc: "片段索引"),
                              ParamSpec(name: "atSeconds", kind: .number, required: true, doc: "目标时间(秒)")]) { store, a in
             guard let id = clipID(store, intArg(a, "clipIndex") ?? -1) else { return "错误:clipIndex 无效" }
@@ -289,6 +289,17 @@ enum AgentActionCatalog {
             guard let p = strArg(a, "path") else { return "错误:缺 path" }
             do { let asset = try MediaImporter.importAsset(from: URL(fileURLWithPath: p)); store.dispatch(.importAsset(asset)); return "已导入 \(URL(fileURLWithPath: p).lastPathComponent)" }
             catch { return "错误:导入失败 \(error)" }
+        },
+        AgentAction(type: "export_fcpxml", domain: .navigate, doc: "把当前剪辑导出为 .fcpxml 工程文件到磁盘绝对路径(可回真 FCP 继续剪)。",
+                    params: [ParamSpec(name: "path", kind: .string, required: true, doc: "目标 .fcpxml 绝对路径")]) { store, a in
+            guard let p = strArg(a, "path") else { return "错误:缺 path" }
+            do { try store.exportFCPXML(to: URL(fileURLWithPath: p)); return "已导出 fcpxml 到 \(p)" }
+            catch { return "错误:导出失败 \(error)" }
+        },
+        AgentAction(type: "export_movie", domain: .navigate, doc: "把当前剪辑渲染导出为成片(有视频→mp4,纯音频→m4a)到磁盘绝对路径。异步,返回已开始。",
+                    params: [ParamSpec(name: "path", kind: .string, required: true, doc: "目标文件绝对路径")]) { store, a in
+            guard let p = strArg(a, "path") else { return "错误:缺 path" }
+            store.exportMovie(to: URL(fileURLWithPath: p)); return "已开始导出成片到 \(p)(渲染中)"
         },
     ]
 }

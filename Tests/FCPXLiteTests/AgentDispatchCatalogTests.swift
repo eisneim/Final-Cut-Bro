@@ -241,4 +241,21 @@ final class AgentDispatchCatalogTests: XCTestCase {
         guard case .clip(let c) = store.document.sequence.spine[0] else { return XCTFail() }
         XCTAssertFalse(c.enabled)
     }
+
+    func testExportFCPXMLAction() throws {
+        let store = storeWith2Assets()
+        _ = AgentActionCatalog.find("append")!.apply(store, ["assetIndex": 0])
+        let out = FileManager.default.temporaryDirectory.appendingPathComponent("agent-\(UUID().uuidString).fcpxml")
+        defer { try? FileManager.default.removeItem(at: out) }
+        let r = AgentActionCatalog.find("export_fcpxml")!.apply(store, ["path": out.path])
+        XCTAssertFalse(r.contains("错误"), r)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: out.path))
+        let content = try String(contentsOf: out, encoding: .utf8)
+        XCTAssertTrue(content.contains("<fcpxml"))
+    }
+
+    func testExportActionsRegisteredInNavigate() {
+        XCTAssertEqual(AgentActionCatalog.find("export_fcpxml")?.domain, .navigate)
+        XCTAssertEqual(AgentActionCatalog.find("export_movie")?.domain, .navigate)
+    }
 }
