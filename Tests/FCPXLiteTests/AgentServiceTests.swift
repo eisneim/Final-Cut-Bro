@@ -34,7 +34,7 @@ final class AgentServiceTests: XCTestCase {
     func testAgentExecutesToolThenReplies() async {
         let s = store()
         let mock = MockBackend([
-            [.toolCallEnd(id: "1", name: "append_clip", args: ["assetIndex": 0]), .done],
+            [.toolCallEnd(id: "1", name: "timeline_edit", args: ["type": "append", "assetIndex": 0]), .done],
             [.textDelta("已把素材"), .textDelta("追加到时间线。"), .done],
         ])
         let svc = AgentService(store: s, backend: mock)
@@ -44,15 +44,15 @@ final class AgentServiceTests: XCTestCase {
         XCTAssertEqual(s.agentMessages.last?.role, .assistant)
         XCTAssertEqual(s.agentMessages.last?.text, "已把素材追加到时间线。")  // 流式拼接
         XCTAssertFalse(s.agentBusy)
-        XCTAssertGreaterThan(mock.lastTools.count, 8)                    // 工具传给了 LLM
-        XCTAssertTrue(s.agentMessages.contains { $0.role == .tool && $0.toolName == "append_clip" })
+        XCTAssertEqual(mock.lastTools.count, 4)                          // 4 个 dispatch 工具传给 LLM
+        XCTAssertTrue(s.agentMessages.contains { $0.role == .tool && $0.toolName == "timeline_edit" })
     }
 
     func testMultiToolSequence() async {
         let s = store()
         let mock = MockBackend([
-            [.toolCallEnd(id: "1", name: "append_clip", args: ["assetIndex": 0]), .done],
-            [.toolCallEnd(id: "2", name: "blade_clip", args: ["atSeconds": 2.0]), .done],
+            [.toolCallEnd(id: "1", name: "timeline_edit", args: ["type": "append", "assetIndex": 0]), .done],
+            [.toolCallEnd(id: "2", name: "timeline_edit", args: ["type": "blade", "clipIndex": 0, "atSeconds": 2.0]), .done],
             [.textDelta("完成。"), .done],
         ])
         let svc = AgentService(store: s, backend: mock)

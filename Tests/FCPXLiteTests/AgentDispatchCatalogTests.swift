@@ -176,4 +176,23 @@ final class AgentDispatchCatalogTests: XCTestCase {
         _ = AgentActionCatalog.find("select")!.apply(store, ["clipIndex": 0])
         XCTAssertNotNil(store.ui.selectedClipID)
     }
+
+    func testRegistryExposesFourTools() {
+        let store = storeWith2Assets()
+        let reg = AgentToolRegistry(store: store)
+        let names = Set(reg.tools().map { $0.name })
+        XCTAssertEqual(names, ["query_timeline", "timeline_edit", "clip_adjust", "navigate"])
+    }
+
+    func testDispatchToolRoutesToCatalog() {
+        let store = storeWith2Assets()
+        let reg = AgentToolRegistry(store: store)
+        // 通过 timeline_edit 工具发 append
+        let r = reg.execute(name: "timeline_edit", args: ["type": "append", "assetIndex": 0])
+        XCTAssertFalse(r.contains("错误"), r)
+        XCTAssertEqual(clipCount(store), 1)
+        // query_timeline 返回摘要文本
+        let q = reg.execute(name: "query_timeline", args: [:])
+        XCTAssertTrue(q.contains("素材库"))
+    }
 }

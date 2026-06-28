@@ -4,8 +4,8 @@ import Foundation
 /// 解析 SSE:content→文本, reasoning_content→推理, tool_calls[]按 index 拼接 arguments。
 /// 参考 dpdframesStudio runner._stream_once 与 shotCrafter llmProvider。
 struct StreamingOpenAIBackend: StreamingLLMBackend {
-    let provider: LLMProvider
-    let apiKey: String
+    let provider: ProviderConfig
+    var apiKey: String { provider.apiKey }
 
     private var endpoint: URL {
         var base = provider.baseURL.trimmingCharacters(in: .whitespaces)
