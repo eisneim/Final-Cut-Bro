@@ -30,6 +30,14 @@ final class AgentDispatchCatalogTests: XCTestCase {
         s.document.sequence.spine.reduce(0) { if case .clip = $1 { return $0 + 1 }; return $0 }
     }
 
+    private func currentAdjust(_ s: DocumentStore, clipIndex: Int) -> Adjustments? {
+        var n = 0
+        for el in s.document.sequence.spine {
+            if case .clip(let c) = el { if n == clipIndex { return c.adjust }; n += 1 }
+        }
+        return nil
+    }
+
     func testTimelineAppendInsertDelete() {
         let store = storeWith2Assets()
         // append 第0个素材
@@ -121,5 +129,29 @@ final class AgentDispatchCatalogTests: XCTestCase {
         if case .clip = store.document.sequence.spine[0] {
             XCTFail("spine[0] should be a .gap after ripple=false delete, not a clip")
         }
+    }
+
+    func testAdjustScaleVolumeCrop() {
+        let store = storeWith2Assets()
+        _ = AgentActionCatalog.find("append")!.apply(store, ["assetIndex": 0]) // 1920x1080
+        // scale 2x
+        _ = AgentActionCatalog.find("scale")!.apply(store, ["clipIndex": 0, "value": 2.0])
+        XCTAssertEqual(currentAdjust(store, clipIndex: 0)?.transform.scale.width, 2.0)
+        // volume 0.2
+        _ = AgentActionCatalog.find("volume")!.apply(store, ["clipIndex": 0, "value": 0.2])
+        XCTAssertEqual(currentAdjust(store, clipIndex: 0)?.volume ?? 0, 0.2, accuracy: 0.001)
+        // crop left 15% → 0.15 * 1920 = 288 px
+        _ = AgentActionCatalog.find("crop")!.apply(store, ["clipIndex": 0, "left": 0.15])
+        XCTAssertEqual(currentAdjust(store, clipIndex: 0)?.crop.left ?? 0, 288, accuracy: 0.5)
+    }
+
+    func testAdjustOpacityAndPosition() {
+        let store = storeWith2Assets()
+        _ = AgentActionCatalog.find("append")!.apply(store, ["assetIndex": 0])
+        _ = AgentActionCatalog.find("opacity")!.apply(store, ["clipIndex": 0, "value": 0.5])
+        XCTAssertEqual(currentAdjust(store, clipIndex: 0)?.opacity ?? 0, 0.5, accuracy: 0.001)
+        _ = AgentActionCatalog.find("position")!.apply(store, ["clipIndex": 0, "x": 100, "y": -50])
+        XCTAssertEqual(currentAdjust(store, clipIndex: 0)?.transform.position.x, 100)
+        XCTAssertEqual(currentAdjust(store, clipIndex: 0)?.transform.position.y, -50)
     }
 }

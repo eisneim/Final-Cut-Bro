@@ -159,8 +159,59 @@ enum AgentActionCatalog {
             return "已位置移动片段 \(intArg(a, "clipIndex")!)"
         },
     ]
+
+    static func mutateAdjust(_ store: DocumentStore, clipIndex: Int, _ f: (inout Adjustments) -> Void) -> Bool {
+        guard let id = clipID(store, clipIndex), let ei = spineElementIndex(store, clipIndex: clipIndex),
+              case .clip(let c) = store.document.sequence.spine[ei] else { return false }
+        var adj = c.adjust; f(&adj); store.dispatch(.setAdjust(id, adj)); return true
+    }
+
     static let adjust: [AgentAction] = [
-        AgentAction(type: "volume", domain: .adjust, doc: "占位", params: []) { _, _ in "未实现" }
+        AgentAction(type: "scale", domain: .adjust, doc: "缩放主轴第 clipIndex 个片段画面,value 0.1–4(画中画/放大)。",
+                    params: [ParamSpec(name: "clipIndex", kind: .int, required: true, doc: "片段索引"),
+                             ParamSpec(name: "value", kind: .number, required: true, doc: "缩放比例 0.1–4")]) { store, a in
+            let v = numArg(a, "value") ?? 1
+            return mutateAdjust(store, clipIndex: intArg(a, "clipIndex") ?? -1) { $0.transform.scale = CGSize(width: v, height: v) }
+                ? "已缩放片段到 \(v)x" : "错误:clipIndex 无效"
+        },
+        AgentAction(type: "position", domain: .adjust, doc: "平移主轴第 clipIndex 个片段画面 x/y 像素。",
+                    params: [ParamSpec(name: "clipIndex", kind: .int, required: true, doc: "片段索引"),
+                             ParamSpec(name: "x", kind: .number, required: true, doc: "水平位移px"),
+                             ParamSpec(name: "y", kind: .number, required: true, doc: "垂直位移px")]) { store, a in
+            let x = numArg(a, "x") ?? 0, y = numArg(a, "y") ?? 0
+            return mutateAdjust(store, clipIndex: intArg(a, "clipIndex") ?? -1) { $0.transform.position = CGPoint(x: x, y: y) }
+                ? "已平移片段" : "错误:clipIndex 无效"
+        },
+        AgentAction(type: "crop", domain: .adjust, doc: "裁剪主轴第 clipIndex 个片段。left/right/top/bottom 为各边裁剪比例 0–1(如 left=0.15 裁左15%)。",
+                    params: [ParamSpec(name: "clipIndex", kind: .int, required: true, doc: "片段索引"),
+                             ParamSpec(name: "left", kind: .number, required: false, doc: "左裁比例0–1"),
+                             ParamSpec(name: "right", kind: .number, required: false, doc: "右裁比例0–1"),
+                             ParamSpec(name: "top", kind: .number, required: false, doc: "上裁比例0–1"),
+                             ParamSpec(name: "bottom", kind: .number, required: false, doc: "下裁比例0–1")]) { store, a in
+            let ci = intArg(a, "clipIndex") ?? -1
+            guard let ei = spineElementIndex(store, clipIndex: ci), case .clip(let c) = store.document.sequence.spine[ei] else { return "错误:clipIndex 无效" }
+            let nat = store.document.assetLibrary.first { $0.id == c.assetID }?.naturalSize ?? CGSize(width: 1920, height: 1080)
+            return mutateAdjust(store, clipIndex: ci) {
+                if let l = numArg(a, "left")   { $0.crop.left   = l * Double(nat.width) }
+                if let r = numArg(a, "right")  { $0.crop.right  = r * Double(nat.width) }
+                if let t = numArg(a, "top")    { $0.crop.top    = t * Double(nat.height) }
+                if let b = numArg(a, "bottom") { $0.crop.bottom = b * Double(nat.height) }
+            } ? "已裁剪片段 \(ci)" : "错误:clipIndex 无效"
+        },
+        AgentAction(type: "opacity", domain: .adjust, doc: "设主轴第 clipIndex 个片段不透明度 value 0–1。",
+                    params: [ParamSpec(name: "clipIndex", kind: .int, required: true, doc: "片段索引"),
+                             ParamSpec(name: "value", kind: .number, required: true, doc: "不透明度0–1")]) { store, a in
+            let v = numArg(a, "value") ?? 1
+            return mutateAdjust(store, clipIndex: intArg(a, "clipIndex") ?? -1) { $0.opacity = v }
+                ? "已设不透明度 \(v)" : "错误:clipIndex 无效"
+        },
+        AgentAction(type: "volume", domain: .adjust, doc: "设主轴第 clipIndex 个片段音量 value 0–2(1=原始,0=静音;压低视频原声/调音乐用)。",
+                    params: [ParamSpec(name: "clipIndex", kind: .int, required: true, doc: "片段索引"),
+                             ParamSpec(name: "value", kind: .number, required: true, doc: "音量0–2")]) { store, a in
+            let v = numArg(a, "value") ?? 1
+            return mutateAdjust(store, clipIndex: intArg(a, "clipIndex") ?? -1) { $0.volume = v }
+                ? "已设音量 \(v)" : "错误:clipIndex 无效"
+        },
     ]
     static let navigate: [AgentAction] = [
         AgentAction(type: "playhead", domain: .navigate, doc: "占位", params: []) { _, _ in "未实现" }
