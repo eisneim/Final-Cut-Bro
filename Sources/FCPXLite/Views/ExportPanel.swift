@@ -28,6 +28,10 @@ struct ExportPanel: View {
                 Button("导出 FCPXML 工程…") { exportFCPXML() }
                     .buttonStyle(.plain).padding(8).background(Tokens.Palette.elevated).cornerRadius(6)
                     .foregroundStyle(Tokens.Palette.textPrimary)
+                if let err = store.ui.exportError {
+                    Text(err).font(.system(size: 11)).foregroundStyle(Tokens.Palette.windowClose)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
         .padding(18).frame(width: 360).background(Tokens.Palette.chrome)
@@ -43,9 +47,13 @@ struct ExportPanel: View {
     private func exportFCPXML() {
         let panel = NSSavePanel()
         panel.nameFieldStringValue = "导出.fcpxml"
-        if panel.runModal() == .OK, let url = panel.url {
-            try? store.exportFCPXML(to: url)
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try store.exportFCPXML(to: url)
+            store.ui.exportError = nil
             store.dispatch(.setShowExport(false))
+        } catch {
+            store.ui.exportError = "导出失败:\(error)"   // fail-fast:暴露而非静默
         }
     }
 }

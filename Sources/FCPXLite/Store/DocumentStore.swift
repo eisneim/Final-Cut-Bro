@@ -268,17 +268,27 @@ import Observation
 
     // MARK: - 导出
 
-    /// 导出 fcpxml 工程文件(同步写字符串)。
+    /// 导出 fcpxml 工程文件(同步写字符串)。失败抛出,不静默。
     func exportFCPXML(to url: URL) throws {
         let xml = FCPXMLExporter.export(document)
         try xml.write(to: url, atomically: true, encoding: .utf8)
     }
 
-    /// 导出成片(异步,更新 ui.exportProgress)。
+    /// 导出成片(异步,更新 ui.exportProgress)。成功关闭面板;失败把原因写进 ui.exportError。
     func exportMovie(to url: URL) {
+        ui.exportError = nil
         ui.exportProgress = 0
         MovieExporter.export(document: document, to: url,
                              progress: { [weak self] p in self?.ui.exportProgress = Double(p) },
-                             completion: { [weak self] _ in self?.ui.exportProgress = nil })
+                             completion: { [weak self] result in
+            guard let self else { return }
+            self.ui.exportProgress = nil
+            switch result {
+            case .success:
+                self.ui.showExport = false
+            case .failure(let e):
+                self.ui.exportError = "导出失败:\(e)"
+            }
+        })
     }
 }
