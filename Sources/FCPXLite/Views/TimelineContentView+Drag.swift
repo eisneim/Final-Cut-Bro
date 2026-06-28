@@ -98,6 +98,8 @@ extension TimelineContentView {
             return
         case .select, .position, .range:
             if !inRuler {
+                // Volume level 线优先拦截(select 工具)
+                if volumeMouseDown(with: event, at: pt) { return }
                 // 1. roll hit 优先(两片段切点)
                 if currentTool == .select, let roll = rollHit(at: pt) {
                     rollDrag = (roll.leftIndex, roll.rightIndex,
@@ -131,6 +133,9 @@ extension TimelineContentView {
 
     override func mouseDragged(with event: NSEvent) {
         let pt = convert(event.locationInWindow, from: nil)
+
+        // Volume level 线拖拽优先
+        if volumeMouseDragged(with: event, at: pt) { return }
 
         // 手工具:横向滚动
         if currentTool == .hand, let last = handLastX, let sv = enclosingScrollView {
@@ -209,6 +214,7 @@ extension TimelineContentView {
     // MARK: - mouseUp
 
     override func mouseUp(with event: NSEvent) {
+        volumeMouseUp()
         // 位置工具:松手时一次性 commit positionMove(源处留 gap,目标落点 = 光标,不吸附)。
         if currentTool == .position, let id = dragClipID, let cur = dragCurrentPoint,
            let start = dragStartPoint, hypot(cur.x - start.x, cur.y - start.y) > Self.dragThresholdPx {
@@ -239,6 +245,7 @@ extension TimelineContentView {
         case .select:
             // 默认箭头覆盖全区
             addCursorRect(bounds, cursor: .arrow)
+            addVolumeLineCursorRects()
             // lane-0 clip 的首/尾边缘热区 + roll 切点热区 → 双箭头光标
             let lane0 = placed.filter { $0.lane == 0 }.sorted { $0.absStart < $1.absStart }
             for p in lane0 {

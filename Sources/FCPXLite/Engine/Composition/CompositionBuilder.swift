@@ -37,18 +37,41 @@ enum CompositionBuilder {
                      inserted = true   // 纯音频也算"有内容":否则下面 guard 会让纯音乐轨返回 nil(无法播放)
                      let p = AVMutableAudioMixInputParameters(track: at)
                      let vol = Float(clip.adjust.volume)
-                     p.setVolume(vol, at: .zero)
-                     if let fade = clip.effects.first(where: { $0.enabled && $0.kind == .fade }) {
-                         let inS = fade.params["inSeconds"] ?? 0
-                         let outS = fade.params["outSeconds"] ?? 0
-                         if inS > 0 {
-                             p.setVolumeRamp(fromStartVolume: 0, toEndVolume: vol,
-                                             timeRange: CMTimeRange(start: start, duration: cm(.seconds(inS))))
+                     let sortedKFs = clip.volumeKeyframes.sorted { $0.time < $1.time }
+                     if sortedKFs.isEmpty {
+                         // 原有路径:平音量 + fade 斜坡
+                         p.setVolume(vol, at: .zero)
+                         if let fade = clip.effects.first(where: { $0.enabled && $0.kind == .fade }) {
+                             let inS = fade.params["inSeconds"] ?? 0
+                             let outS = fade.params["outSeconds"] ?? 0
+                             if inS > 0 {
+                                 p.setVolumeRamp(fromStartVolume: 0, toEndVolume: vol,
+                                                 timeRange: CMTimeRange(start: start, duration: cm(.seconds(inS))))
+                             }
+                             if outS > 0 {
+                                 let endStart = start + cm(clip.duration) - cm(.seconds(outS))
+                                 p.setVolumeRamp(fromStartVolume: vol, toEndVolume: 0,
+                                                 timeRange: CMTimeRange(start: endStart, duration: cm(.seconds(outS))))
+                             }
                          }
-                         if outS > 0 {
-                             let endStart = start + cm(clip.duration) - cm(.seconds(outS))
-                             p.setVolumeRamp(fromStartVolume: vol, toEndVolume: 0,
-                                             timeRange: CMTimeRange(start: endStart, duration: cm(.seconds(outS))))
+                     } else {
+                         // 关键帧路径:分段斜坡
+                         // 首关键帧之前:保持首帧音量
+                         p.setVolume(Float(sortedKFs[0].value), at: start)
+                         // 相邻关键帧之间:线性斜坡
+                         for i in 0..<(sortedKFs.count - 1) {
+                             let k0 = sortedKFs[i], k1 = sortedKFs[i + 1]
+                             let rStart = start + cm(k0.time)
+                             let rDur = cm(k1.time - k0.time)
+                             if rDur > .zero {
+                                 p.setVolumeRamp(fromStartVolume: Float(k0.value),
+                                                 toEndVolume: Float(k1.value),
+                                                 timeRange: CMTimeRange(start: rStart, duration: rDur))
+                             }
+                         }
+                         // 末关键帧之后:保持末帧音量
+                         if let last = sortedKFs.last {
+                             p.setVolume(Float(last.value), at: start + cm(last.time))
                          }
                      }
                      audioParams.append(p)

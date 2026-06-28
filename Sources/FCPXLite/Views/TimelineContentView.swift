@@ -281,6 +281,11 @@ final class TimelineContentView: NSView {
         }
         NSGraphicsContext.current?.restoreGraphicsState()
 
+        // 音量 level 线
+        if let clip = clipByID(p.clipID) {
+            drawVolumeLine(clip: clip, in: rect)
+        }
+
         // 停用片段:盖一层暗色半透明遮罩(视觉变淡,表示不参与预览/导出)。
         if let clip = clipByID(p.clipID), !clip.enabled {
             NSColor.black.withAlphaComponent(0.55).setFill()
@@ -364,7 +369,7 @@ final class TimelineContentView: NSView {
     }
 
     /// 取某 clip(主轴或连接子项)。
-    private func clipByID(_ id: ClipID) -> Clip? {
+    func clipByID(_ id: ClipID) -> Clip? {
         for el in sequence.spine {
             if case .clip(let c) = el {
                 if c.id == id { return c }

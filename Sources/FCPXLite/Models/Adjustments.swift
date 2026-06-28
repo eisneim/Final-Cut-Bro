@@ -61,3 +61,16 @@ struct Adjustments: Codable, Equatable {
     var opacity = 1.0   // → <adjust-blend> / video opacity
     var volume = 1.0    // → <adjust-volume>
 }
+
+/// 音频音量关键帧:相对 clip 起点的时间 + 音量值(0–2)。
+struct VolumeKeyframe: Codable, Equatable, Identifiable {
+    var id: UUID
+    var time: Time      // 相对 clip 起点
+    var value: Double   // 音量 0–2
+
+    init(id: UUID = UUID(), time: Time, value: Double) {
+        self.id = id
+        self.time = time
+        self.value = value
+    }
+}

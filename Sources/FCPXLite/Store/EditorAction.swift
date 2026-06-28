@@ -42,6 +42,7 @@ enum EditorAction: Codable, Equatable {
     case setVideoAudioRatio(Double)
     case setAdjust(ClipID, Adjustments)
     case setEffects(ClipID, [Effect])
+    case setVolumeKeyframes(ClipID, [VolumeKeyframe])
     case setEnabled(ClipID, Bool)
 }
 

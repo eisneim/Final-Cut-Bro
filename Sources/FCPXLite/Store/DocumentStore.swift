@@ -207,6 +207,7 @@ import Observation
         case let .setVideoAudioRatio(r): ui.videoAudioRatio = max(0.1, min(0.9, r))
         case let .setAdjust(id, a):      apply { Mutations.setAdjust(clipID: id, a, in: $0) }
         case let .setEffects(id, fx):    apply { Mutations.setEffects(clipID: id, fx, in: $0) }
+        case let .setVolumeKeyframes(id, kfs): apply { Mutations.setVolumeKeyframes(clipID: id, kfs, in: $0) }
         case let .setEnabled(id, on):    apply { Mutations.setEnabled(clipID: id, on, in: $0) }
         }
     }
