@@ -231,8 +231,10 @@ enum AgentActionCatalog {
                     params: [ParamSpec(name: "clipIndex", kind: .int, required: true, doc: "片段索引"),
                              ParamSpec(name: "effectIndex", kind: .int, required: true, doc: "特效索引,0基")]) { store, a in
             let ei = intArg(a, "effectIndex") ?? -1
-            return mutateEffects(store, clipIndex: intArg(a, "clipIndex") ?? -1) { if $0.indices.contains(ei) { $0.remove(at: ei) } }
-                ? "已删特效 \(ei)" : "错误:clipIndex 无效"
+            var found = false
+            let ok = mutateEffects(store, clipIndex: intArg(a, "clipIndex") ?? -1) { if $0.indices.contains(ei) { $0.remove(at: ei); found = true } }
+            if !ok { return "错误:clipIndex 无效" }
+            return found ? "已删特效 \(ei)" : "错误:effectIndex \(ei) 无效"
         },
         AgentAction(type: "set_effect_param", domain: .adjust, doc: "调主轴第 clipIndex 个片段第 effectIndex 个特效的参数 key=value。color: brightness/contrast/saturation; blur: radius; fade: inSeconds/outSeconds。",
                     params: [ParamSpec(name: "clipIndex", kind: .int, required: true, doc: "片段索引"),
@@ -242,8 +244,10 @@ enum AgentActionCatalog {
             let ei = intArg(a, "effectIndex") ?? -1
             guard let key = strArg(a, "key") else { return "错误:缺 key" }
             let v = numArg(a, "value") ?? 0
-            return mutateEffects(store, clipIndex: intArg(a, "clipIndex") ?? -1) { if $0.indices.contains(ei) { $0[ei].params[key] = v } }
-                ? "已设特效参数 \(key)=\(v)" : "错误:clipIndex 无效"
+            var found = false
+            let ok = mutateEffects(store, clipIndex: intArg(a, "clipIndex") ?? -1) { if $0.indices.contains(ei) { $0[ei].params[key] = v; found = true } }
+            if !ok { return "错误:clipIndex 无效" }
+            return found ? "已设特效参数 \(key)=\(v)" : "错误:effectIndex \(ei) 无效"
         },
         AgentAction(type: "toggle_enabled", domain: .adjust, doc: "停用/启用主轴第 clipIndex 个片段。enabled=false 停用(不参与预览/导出,时间线变暗)。",
                     params: [ParamSpec(name: "clipIndex", kind: .int, required: true, doc: "片段索引"),

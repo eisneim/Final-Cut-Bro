@@ -208,6 +208,16 @@ final class AgentDispatchCatalogTests: XCTestCase {
         XCTAssertEqual(c2.effects.count, 0)
     }
 
+    func testRemoveEffectBadIndexErrors() {
+        let store = storeWith2Assets()
+        _ = AgentActionCatalog.find("append")!.apply(store, ["assetIndex": 0])
+        // 没有任何 effect,删 index 5 → 应明确报错而非假成功
+        let r = AgentActionCatalog.find("remove_effect")!.apply(store, ["clipIndex": 0, "effectIndex": 5])
+        XCTAssertTrue(r.contains("错误"), r)
+        let r2 = AgentActionCatalog.find("set_effect_param")!.apply(store, ["clipIndex": 0, "effectIndex": 5, "key": "radius", "value": 3])
+        XCTAssertTrue(r2.contains("错误"), r2)
+    }
+
     func testSetEffectParam() {
         let store = storeWith2Assets()
         _ = AgentActionCatalog.find("append")!.apply(store, ["assetIndex": 0])
