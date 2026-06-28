@@ -53,17 +53,13 @@ struct TimelineToolbar: View {
                 Button {
                     store.dispatch(.setTool(tool))
                 } label: {
-                    HStack {
-                        toolIcon(for: tool).foregroundStyle(Tokens.Palette.textIcon)
-                        Text(tool.label)
-                        Spacer()
-                        Text(tool.shortcut).foregroundStyle(Tokens.Palette.textMuted)
-                    }
+                    Label(tool.label + " (\(tool.shortcut))", systemImage: tool.icon)
                 }
             }
         } label: {
             HStack(spacing: 4) {
-                toolIcon(for: store.ui.currentTool)
+                Image(systemName: store.ui.currentTool.icon)
+                    .font(.system(size: 12))
                     .frame(width: 16, height: 16)
                     .foregroundStyle(Tokens.Palette.textIcon)
                 Image(systemName: "chevron.down")

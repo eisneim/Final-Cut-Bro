@@ -26,4 +26,16 @@ enum EditTool: String, Codable, CaseIterable {
         case .hand:     return "H"
         }
     }
+
+    var icon: String {
+        switch self {
+        case .select:   return "cursorarrow"
+        case .trim:     return "arrow.left.and.right.square"
+        case .position: return "arrow.up.and.down.and.arrow.left.and.right"
+        case .range:    return "selection.pin.in.out"
+        case .blade:    return "scissors"
+        case .zoom:     return "magnifyingglass"
+        case .hand:     return "hand.raised"
+        }
+    }
 }
