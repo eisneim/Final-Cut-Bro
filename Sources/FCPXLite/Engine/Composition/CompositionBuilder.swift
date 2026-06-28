@@ -130,13 +130,18 @@ enum CompositionBuilder {
         return pref.concatenating(fit).concatenating(user)
     }
 
-    /// 绕中心的 缩放 + 位移(显式仿射矩阵)。x' = sw·x + tx,保持中心不动:tx = cx·(1−sw) + posX。
+    /// 绕中心的 缩放 + 旋转 + 位移。先把渲染中心移到原点,套 缩放·旋转,再移回 + 位移。
     private static func transform(for adj: Adjustments, renderSize: CGSize) -> CGAffineTransform {
         let cx = renderSize.width / 2, cy = renderSize.height / 2
         let sw = adj.transform.scale.width, sh = adj.transform.scale.height
-        let tx = cx * (1 - sw) + adj.transform.position.x
-        let ty = cy * (1 - sh) + adj.transform.position.y
-        return CGAffineTransform(a: sw, b: 0, c: 0, d: sh, tx: tx, ty: ty)
+        let rot = adj.transform.rotation * .pi / 180
+        // T = 移回中心+位移 · 旋转 · 缩放 · 移到原点
+        var t = CGAffineTransform(translationX: -cx, y: -cy)
+        t = t.concatenating(CGAffineTransform(scaleX: sw, y: sh))
+        t = t.concatenating(CGAffineTransform(rotationAngle: rot))
+        t = t.concatenating(CGAffineTransform(translationX: cx + adj.transform.position.x,
+                                              y: cy + adj.transform.position.y))
+        return t
     }
 
     private static func collectConnected(_ seq: Sequence) -> [ClipID: Clip] {
