@@ -116,7 +116,7 @@ struct TimelineToolbar: View {
     // MARK: - Effects toggle (最右)
 
     private var effectsToggle: some View {
-        Button { store.dispatch(.setEffects(!store.ui.showEffects)) } label: {
+        Button { store.dispatch(.setShowEffects(!store.ui.showEffects)) } label: {
             Text("▤▤").font(Tokens.Typeface.body)
         }
         .help("效果开关 ⌘5")

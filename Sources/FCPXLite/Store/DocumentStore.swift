@@ -135,7 +135,7 @@ import Observation
         case let .positionMove(id, t):           apply { Mutations.positionMove(clipID: id, atTime: t, in: $0) }
         case let .setGapDuration(i, dur):        apply { Mutations.setGapDuration(at: i, duration: dur, in: $0) }
         case let .setInspector(v):               ui.showInspector = v
-        case let .setEffects(v):                 ui.showEffects = v
+        case let .setShowEffects(v):             ui.showEffects = v
         case let .importAsset(a):                snapshot(); document.assetLibrary.append(a)
         case let .selectClip(id):                ui.selectedClipID = id
         case let .setTool(t):                    ui.currentTool = t
@@ -157,6 +157,7 @@ import Observation
         case let .setClipHeight(h):      ui.clipHeight = max(40, min(160, h))
         case let .setVideoAudioRatio(r): ui.videoAudioRatio = max(0.1, min(0.9, r))
         case let .setAdjust(id, a):      apply { Mutations.setAdjust(clipID: id, a, in: $0) }
+        case let .setEffects(id, fx):    apply { Mutations.setEffects(clipID: id, fx, in: $0) }
         }
     }
 

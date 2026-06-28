@@ -16,7 +16,7 @@ enum EditorAction: Codable, Equatable {
     case positionMove(ClipID, time: Time)
     case setGapDuration(at: Int, duration: Time)
     case setInspector(Bool)
-    case setEffects(Bool)
+    case setShowEffects(Bool)
     case importAsset(Asset)
     case selectClip(ClipID?)
     case setTool(EditTool)
@@ -31,6 +31,7 @@ enum EditorAction: Codable, Equatable {
     case setClipHeight(Double)
     case setVideoAudioRatio(Double)
     case setAdjust(ClipID, Adjustments)
+    case setEffects(ClipID, [Effect])
 }
 
 /// 可调宽度的面板。

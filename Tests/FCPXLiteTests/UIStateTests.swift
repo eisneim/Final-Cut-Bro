@@ -23,9 +23,9 @@ final class UIStateTests: XCTestCase {
 
     func testDispatchSetEffects() {
         let store = emptyStore()
-        store.dispatch(.setEffects(true))
+        store.dispatch(.setShowEffects(true))
         XCTAssertTrue(store.ui.showEffects)
-        store.dispatch(.setEffects(false))
+        store.dispatch(.setShowEffects(false))
         XCTAssertFalse(store.ui.showEffects)
     }
 
@@ -38,7 +38,7 @@ final class UIStateTests: XCTestCase {
         let decoded1 = try decoder.decode(EditorAction.self, from: data1)
         XCTAssertEqual(decoded1, action1)
 
-        let action2 = EditorAction.setEffects(false)
+        let action2 = EditorAction.setShowEffects(false)
         let data2 = try encoder.encode(action2)
         let decoded2 = try decoder.decode(EditorAction.self, from: data2)
         XCTAssertEqual(decoded2, action2)

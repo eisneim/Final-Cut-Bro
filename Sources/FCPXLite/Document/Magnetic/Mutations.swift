@@ -380,6 +380,19 @@ enum Mutations {
         return s
     }
 
+    /// 设置某 clip(主轴或连接子项)的 effects 列表。纯函数，调用方负责 commit。
+    static func setEffects(clipID: ClipID, _ effects: [Effect], in seq: Sequence) -> Sequence {
+        var s = seq
+        for (i, el) in s.spine.enumerated() {
+            guard case .clip(var c) = el else { continue }
+            if c.id == clipID { c.effects = effects; s.spine[i] = .clip(c); return s }
+            if let j = c.connected.firstIndex(where: { $0.id == clipID }) {
+                c.connected[j].effects = effects; s.spine[i] = .clip(c); return s
+            }
+        }
+        return s
+    }
+
     private static func assertInvariants(_ seq: Sequence) {
         #if DEBUG
         do { try Invariants.check(seq) }
