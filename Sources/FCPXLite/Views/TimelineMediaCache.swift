@@ -59,9 +59,13 @@ final class TimelineMediaCache {
         return out
     }
 
-    // MARK: - 音频波形峰值(每资源固定 N 桶,按 presentation time 分桶;绘制时重采样)
+    // MARK: - 音频波形峰值(按【每秒固定采样率】分桶,长音乐也保持密度;绘制时重采样)
 
-    static let waveBuckets = 2000
+    /// 每秒波形桶数(20ms/桶)。固定总桶数会让长音乐每桶覆盖很长时间→缩放后成方块;
+    /// 改为按时长线性扩展桶数,任何长度都保持同样的时间分辨率。
+    static let waveBucketsPerSecond = 50
+    /// 安全上限:超长音频(数小时)封顶,避免内存爆掉。
+    static let waveMaxBuckets = 600_000
 
     func waveform(for asset: Asset) -> [Float]? {
         let key = asset.id.raw
@@ -69,7 +73,7 @@ final class TimelineMediaCache {
         guard asset.hasAudio, !wavesLoading.contains(key) else { return nil }
         wavesLoading.insert(key)
         q.async { [weak self] in
-            let peaks = Self.genWaveform(asset, buckets: Self.waveBuckets)
+            let peaks = Self.genWaveform(asset)
             DispatchQueue.main.async {
                 self?.waves[key] = peaks
                 self?.wavesLoading.remove(key)
@@ -79,7 +83,7 @@ final class TimelineMediaCache {
         return nil
     }
 
-    private static func genWaveform(_ asset: Asset, buckets: Int) -> [Float] {
+    private static func genWaveform(_ asset: Asset) -> [Float] {
         let av = AVURLAsset(url: asset.url)
         guard let track = av.tracks(withMediaType: .audio).first,
               let reader = try? AVAssetReader(asset: av) else { return [] }
@@ -99,6 +103,8 @@ final class TimelineMediaCache {
 
         let totalDur = CMTimeGetSeconds(av.duration)
         guard totalDur > 0 else { return [] }
+        // 桶数 = 时长 × 每秒桶数(封顶),长音乐自然得到更多桶 → 缩放后仍有细节。
+        let buckets = min(waveMaxBuckets, max(1, Int(totalDur * Double(waveBucketsPerSecond))))
         var peaks = [Float](repeating: 0, count: buckets)
         while reader.status == .reading, let sb = output.copyNextSampleBuffer() {
             let pts = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(sb))
