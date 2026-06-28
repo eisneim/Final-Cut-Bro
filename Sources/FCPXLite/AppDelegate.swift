@@ -92,6 +92,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 default:       return event
                 }
             }
+            // ⌥[ / ⌥] : 快速 trim 删左 / 删右(只 option,无 cmd/ctrl)
+            if mods.contains(.option) && !hasCmd && !mods.contains(.control) {
+                switch event.charactersIgnoringModifiers {
+                case "[": store.trimLeftOfPlayhead();  return nil
+                case "]": store.trimRightOfPlayhead(); return nil
+                default: break
+                }
+            }
             if hasCmd || hasOptCtrl { return event }   // 其它带修饰键放行
 
             // 方向键 / Home / End / 空格 / Delete(允许 Shift)

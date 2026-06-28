@@ -54,4 +54,29 @@ final class ShortcutOpsTests: XCTestCase {
         // 删了第一个,b 合拢到 0
         XCTAssertEqual(Layout.compute(s.document.sequence).first?.absStart, .seconds(0))
     }
+
+    @MainActor
+    func testTrimRightOfPlayheadRemovesRightClips() {
+        let a = Clip(assetID: AssetID(), sourceIn: .zero, duration: .seconds(4))
+        let b = Clip(assetID: AssetID(), sourceIn: .zero, duration: .seconds(4))
+        let s = storeWith(spine: [.clip(a), .clip(b)])  // 0..4, 4..8
+        s.dispatch(.setPlayhead(.seconds(2)))           // 切在第一段里
+        s.trimRightOfPlayhead()
+        // 第一段被切成 0..2,右边全删 → 总时长 ~2s,只剩 1 个 clip
+        let clips = s.document.sequence.spine.filter { if case .clip = $0 { return true }; return false }
+        XCTAssertEqual(clips.count, 1)
+    }
+
+    @MainActor
+    func testTrimLeftOfPlayheadRemovesLeftClips() {
+        let a = Clip(assetID: AssetID(), sourceIn: .zero, duration: .seconds(4))
+        let b = Clip(assetID: AssetID(), sourceIn: .zero, duration: .seconds(4))
+        let s = storeWith(spine: [.clip(a), .clip(b)])  // 0..4, 4..8
+        s.dispatch(.setPlayhead(.seconds(6)))           // 切在第二段里
+        s.trimLeftOfPlayhead()
+        let clips = s.document.sequence.spine.filter { if case .clip = $0 { return true }; return false }
+        XCTAssertEqual(clips.count, 1)
+        XCTAssertEqual(s.ui.playhead.seconds, 0, accuracy: 1e-6)
+    }
+
 }

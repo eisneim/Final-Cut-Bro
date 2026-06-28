@@ -272,6 +272,50 @@ import Observation
         return Clip(assetID: asset.id, sourceIn: .zero, duration: asset.duration)
     }
 
+    // MARK: - 快速 trim 到播放头(⌥[ 删左 / ⌥] 删右)
+
+    /// ⌥[ : 删掉播放头左边的内容(在播放头切一刀,移除左侧所有主轴片段,右侧合拢到 0)。
+    func trimLeftOfPlayhead() {
+        bladeMainAtPlayhead()
+        let playhead = ui.playhead
+        var elapsed = Time.zero
+        var remove: [Int] = []
+        for (i, el) in document.sequence.spine.enumerated() {
+            let end = elapsed + el.duration
+            if end <= playhead + .seconds(0.0005) { remove.append(i) }   // 整段在播放头左侧
+            elapsed = end
+        }
+        for i in remove.reversed() { dispatch(.rippleDelete(at: i)) }
+        dispatch(.setPlayhead(.zero))
+    }
+
+    /// ⌥] : 删掉播放头右边的内容(在播放头切一刀,移除右侧所有主轴片段)。
+    func trimRightOfPlayhead() {
+        bladeMainAtPlayhead()
+        let playhead = ui.playhead
+        var elapsed = Time.zero
+        var remove: [Int] = []
+        for (i, el) in document.sequence.spine.enumerated() {
+            let start = elapsed
+            elapsed = elapsed + el.duration
+            if start >= playhead - .seconds(0.0005) { remove.append(i) }  // 整段在播放头右侧
+        }
+        for i in remove.reversed() { dispatch(.rippleDelete(at: i)) }
+    }
+
+    /// 仅在主轴的播放头处切一刀(不碰连接片段),供 ⌥[ / ⌥] 用。
+    private func bladeMainAtPlayhead() {
+        let playhead = ui.playhead
+        var elapsed = Time.zero
+        for (i, el) in document.sequence.spine.enumerated() {
+            let start = elapsed
+            elapsed = elapsed + el.duration
+            if case .clip = el, playhead > start, playhead < elapsed {
+                dispatch(.blade(at: i, localTime: playhead - start)); return
+            }
+        }
+    }
+
     private func spineIndexAtPlayhead() -> Int {
         let playhead = ui.playhead
         var elapsed = Time.zero
