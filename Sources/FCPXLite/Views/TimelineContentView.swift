@@ -142,6 +142,7 @@ final class TimelineContentView: NSView {
         }
 
         drawClipsOrHint()
+        if currentTool == .position, dragClipID != nil { drawDragGhost() }   // 位置工具拖拽:画 ghost 跟随
         drawRuler()      // 刻度尺最后画 → 永远在 clip 之上(拖高的 clip 不会盖住刻度)
         drawPlayhead()   // 播放头红线再压在刻度尺之上
     }
@@ -187,7 +188,10 @@ final class TimelineContentView: NSView {
     private func drawDragGhost() {
         guard let id = dragClipID, let cur = dragCurrentPoint,
               let dragged = placed.first(where: { $0.clipID == id }) else { return }
-        let snappedT = snappedTargetSeconds(forCursorX: cur.x)
+        // 位置工具不吸附(鼠标指哪打哪);其它工具用吸附后的位置。
+        let snappedT = currentTool == .position
+            ? max(0, TimelineGeometry.seconds(forX: cur.x - dragGrabDX, pxPerSecond: pxPerSecond))
+            : snappedTargetSeconds(forCursorX: cur.x)
         let lane = TimelineGeometry.lane(forY: cur.y,
                                          rulerHeight: Self.rulerHeight,
                                          laneHeight: laneH,

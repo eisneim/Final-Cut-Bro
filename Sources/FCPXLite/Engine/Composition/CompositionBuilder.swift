@@ -73,7 +73,9 @@ enum CompositionBuilder {
 
         // 分段构建 instruction:在每个编辑点(各段 start/end)切一段,每段只含该时刻活跃的轨。
         // 单条覆盖全程的 instruction 在 clip 时间错开时会让变换串掉(bug6),故必须分段。
-        var bounds = Set<CMTime>()
+        // bounds 必须从 0 起,且空洞(gap/前导空白)也要发空 instruction —— 否则 AVFoundation
+        // 的 videoComposition 出现未覆盖的时间区间会整体黑屏(只剩声音)。
+        var bounds = Set<CMTime>([.zero])
         for s in segments { bounds.insert(s.start); bounds.insert(s.end) }
         let sorted = bounds.sorted { $0 < $1 }
         var instructions: [CompositorInstruction] = []
@@ -83,7 +85,7 @@ enum CompositionBuilder {
             // 该区间活跃的段(start<=t0 且 end>=t1)。CoreImageCompositor 底→顶叠加:
             // 按 lane 升序(低 lane 在前=底层, 高 lane 在后=顶层)。
             let active = segments.filter { $0.start <= t0 && $0.end >= t1 }.sorted { $0.lane < $1.lane }
-            guard !active.isEmpty else { continue }
+            // 空区间(gap):发一个空 layers 的 instruction(渲染黑帧),保证 instructions 连续无空洞。
             let layers = active.map { seg -> CompositorLayer in
                 let xf = fullTransform(adjust: seg.adjust, natural: seg.natural,
                                        pref: seg.pref, renderSize: renderSize)

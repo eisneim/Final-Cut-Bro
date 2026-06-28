@@ -131,9 +131,9 @@ extension TimelineContentView {
                                              laneHeight: laneH, laneGap: Self.laneGap,
                                              contentHeight: bounds.height)
             if currentTool == .position {
-                let raw = max(0, TimelineGeometry.seconds(forX: pt.x - dragGrabDX, pxPerSecond: pxPerSecond))
-                if lane == 0 { dispatch?(.positionMove(id, time: Time.seconds(raw))) }
-                else { dispatch?(.relocateClip(id, lane: lane, time: Time.seconds(raw))) }
+                // 位置工具:拖拽中只画 ghost 跟随光标(不 dispatch)。positionMove 会在源处留 gap,
+                // 若每个 tick 都发就会叠出多个 gap("两个黑条")且坐标失效跳变 → 改为松手一次性 commit。
+                needsDisplay = true
             } else {
                 let snapped = snappedTargetSeconds(forCursorX: pt.x)
                 dispatch?(.relocateClip(id, lane: lane, time: Time.seconds(snapped)))
@@ -147,7 +147,17 @@ extension TimelineContentView {
     // MARK: - mouseUp
 
     override func mouseUp(with event: NSEvent) {
-        // 片段拖动已在 mouseDragged 中实时完成(所见即所得),这里只清状态。
+        // 位置工具:松手时一次性 commit positionMove(源处留 gap,目标落点 = 光标,不吸附)。
+        if currentTool == .position, let id = dragClipID, let cur = dragCurrentPoint,
+           let start = dragStartPoint, hypot(cur.x - start.x, cur.y - start.y) > Self.dragThresholdPx {
+            let lane = TimelineGeometry.lane(forY: cur.y, rulerHeight: Self.rulerHeight,
+                                             laneHeight: laneH, laneGap: Self.laneGap,
+                                             contentHeight: bounds.height)
+            let raw = max(0, TimelineGeometry.seconds(forX: cur.x - dragGrabDX, pxPerSecond: pxPerSecond))
+            if lane == 0 { dispatch?(.positionMove(id, time: Time.seconds(raw))) }
+            else { dispatch?(.relocateClip(id, lane: lane, time: Time.seconds(raw))) }
+        }
+        // 其余工具的片段拖动已在 mouseDragged 中实时完成(所见即所得),这里只清状态。
         dragClipID = nil; dragStartPoint = nil; dragCurrentPoint = nil
         trimDrag = nil; handLastX = nil; zoomStartX = nil
         needsDisplay = true
