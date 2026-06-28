@@ -24,15 +24,18 @@ enum MovieExporter {
         if hasVideo { session.videoComposition = item.videoComposition }
         session.audioMix = item.audioMix
 
-        // 进度轮询(导出在后台,主线程回调 UI)。
+        // 进度轮询(导出在后台,主线程回调 UI)。done 守卫:cancel() 不会撤回已入队的主线程 block,
+        // 故用标志防止"完成后还报一次进度"打到已拆除的 UI。
+        var done = false
         let timer = DispatchSource.makeTimerSource(queue: .main)
         timer.schedule(deadline: .now(), repeating: 0.1)
-        timer.setEventHandler { progress(session.progress) }
+        timer.setEventHandler { if !done { progress(session.progress) } }
         timer.resume()
 
         session.exportAsynchronously {
             timer.cancel()
             DispatchQueue.main.async {
+                done = true
                 switch session.status {
                 case .completed: progress(1); completion(.success(url))
                 case .cancelled: completion(.failure(MovieExportError.sessionFailed("已取消")))
