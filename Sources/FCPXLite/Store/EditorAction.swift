@@ -5,6 +5,7 @@ import Foundation
 /// 因为 Codable,Agent 可直接发 JSON 驱动整个编辑器,也便于日志/重放/撤销。
 enum EditorAction: Codable, Equatable {
     case insertClip(Clip, at: Int)
+    case overwrite(Clip, atTime: Time)
     case rippleDelete(at: Int)
     case liftDelete(at: Int)
     case moveClip(from: Int, to: Int)

@@ -16,6 +16,74 @@ enum Mutations {
         return s
     }
 
+    /// 真覆盖(FCP B/D):用 newClip 覆盖主轴 [t, t+newClip.duration] 区间,裁掉/分割/移除被覆盖内容,
+    /// 总时长不变(t 超出现有末尾则用 gap 补齐并延长)。不 ripple。连接片段随其宿主裁切。
+    static func overwrite(_ newClip: Clip, atTime t: Time, in seq: Sequence) -> Sequence {
+        let dur = newClip.duration
+        guard dur > .zero else { return seq }
+        let regionEnd = t + dur
+        var before: [Element] = []
+        var after: [Element] = []
+        var acc = Time.zero
+        for el in seq.spine {
+            let s = acc, e = acc + el.duration
+            acc = e
+            // 左侧保留部分 [s, min(e,t)]
+            if s < t {
+                let b = e < t ? e : t
+                if b > s, let piece = trimElement(el, fromAbs: s, keepFrom: s, keepTo: b) { before.append(piece) }
+            }
+            // 右侧保留部分 [max(s, regionEnd), e]
+            if e > regionEnd {
+                let a = s > regionEnd ? s : regionEnd
+                if e > a, let piece = trimElement(el, fromAbs: s, keepFrom: a, keepTo: e) { after.append(piece) }
+            }
+            // 中间 [t, regionEnd] 被覆盖,丢弃
+        }
+        // t 超出现有末尾:在 before 末尾补 gap 到 t
+        let existingEnd = acc
+        if t > existingEnd {
+            before.append(.gap(duration: t - existingEnd))
+        }
+        var clip = newClip
+        clip.lane = 0; clip.offset = .zero
+        var s2 = seq
+        s2.spine = before + [.clip(clip)] + after
+        assertInvariants(s2)
+        return s2
+    }
+
+    /// 把一个元素裁到绝对区间 [keepFrom, keepTo](fromAbs = 该元素的绝对起点)。clip 调 sourceIn/duration
+    /// 并把 connected 子项按偏移过滤/平移;gap 改时长。返回 nil 表示空裁剪。
+    private static func trimElement(_ el: Element, fromAbs: Time, keepFrom: Time, keepTo: Time) -> Element? {
+        let newDur = keepTo - keepFrom
+        guard newDur > .zero else { return nil }
+        switch el {
+        case .gap(let id, _):
+            // 左半保留原 id,右半给新 id(避免两段同 id)
+            return keepFrom == fromAbs ? .gap(id: id, duration: newDur) : .gap(duration: newDur)
+        case .clip(let c):
+            let headCut = keepFrom - fromAbs          // 从头部砍掉的时长
+            var nc = c
+            nc.sourceIn = c.sourceIn + headCut
+            nc.duration = newDur
+            // connected:保留落在 [headCut, headCut+newDur) 内的,offset 平移 -headCut
+            nc.connected = c.connected.compactMap { child in
+                let off = child.offset
+                guard off >= headCut, off < headCut + newDur else { return nil }
+                var cc = child; cc.offset = off - headCut; return cc
+            }
+            // 左半(keepFrom==fromAbs)保留原 id;右半另给新 id,避免分割后两段同 id
+            if keepFrom != fromAbs {
+                nc = Clip(assetID: nc.assetID, sourceIn: nc.sourceIn, duration: nc.duration,
+                          connected: nc.connected, lane: nc.lane, offset: nc.offset,
+                          adjust: nc.adjust, effects: nc.effects,
+                          volumeKeyframes: nc.volumeKeyframes, enabled: nc.enabled)
+            }
+            return .clip(nc)
+        }
+    }
+
     /// ripple 删除(默认):移除元素,后续自动左移合拢。
     /// 宿主 clip 的 connected 子节点将重锚到删除后占据该时间的主轴 clip,保持绝对位置不变。
     static func rippleDelete(at index: Int, in seq: Sequence) -> Sequence {

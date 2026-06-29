@@ -138,6 +138,7 @@ import Observation
     func dispatch(_ action: EditorAction) {
         switch action {
         case let .insertClip(c, i):              apply { Mutations.insertClip(c, at: i, in: $0) }
+        case let .overwrite(c, t):               apply { Mutations.overwrite(c, atTime: t, in: $0) }
         case let .rippleDelete(i):               apply { Mutations.rippleDelete(at: i, in: $0) }
         case let .liftDelete(i):                 apply { Mutations.liftDelete(at: i, in: $0) }
         case let .moveClip(from, to):            apply { Mutations.moveClip(from: from, to: to, in: $0) }
@@ -253,8 +254,11 @@ import Observation
         dispatch(.connect(clip, host: host, lane: 1, offset: .zero))
     }
 
-    /// 覆盖(TODO: 真覆盖语义;v1 暂同插入)。
-    func overwriteAtPlayhead() { insertAtPlayhead() }
+    /// 覆盖(FCP D):用所选素材覆盖播放头处的区间,裁掉被覆盖内容,总时长不变。
+    func overwriteAtPlayhead() {
+        guard let clip = clipFromSelection() else { return }
+        dispatch(.overwrite(clip, atTime: ui.playhead))
+    }
 
     // MARK: - 播放头 / 切割 / 删除(键盘快捷键共用)
 
