@@ -93,6 +93,14 @@ extension TimelineContentView {
                 dispatch?(.selectClip(e.clipID))
                 return
             }
+            // 中段(非边缘):slip(默认)/ slide(⌥)。命中主轴 clip 即开始。
+            if !inRuler, let p = hitTestClip(at: pt), p.lane == 0,
+               let idx = TimelineGeometry.spineIndex(ofClipID: p.clipID, in: sequence) {
+                let isSlide = event.modifierFlags.contains(.option)
+                slipDrag = (index: idx, startX: pt.x, isSlide: isSlide, origin: sequence, firstTick: true)
+                dispatch?(.selectClip(p.clipID))
+                return
+            }
             // 修剪工具点空白也移播放头
             dispatch?(.setPlayhead(Time.seconds(t)))
             return
@@ -179,6 +187,36 @@ extension TimelineContentView {
             dispatch?(.trimLeft(at: rd.rightIndex, deltaIn: .seconds(newRightIn)))
             return
         }
+        // Slip/Slide:修剪工具拖片段中段。每 tick 从拖拽起点序列按总位移重算(幂等,不累积)。
+        if var sd = slipDrag {
+            let deltaSec = Double(pt.x - sd.startX) / Double(pxPerSecond)
+            let origin = sd.origin
+            let idx = sd.index
+            guard origin.spine.indices.contains(idx), case .clip(let c) = origin.spine[idx] else {
+                slipDrag = nil; return
+            }
+            let first = sd.firstTick
+            if sd.isSlide {
+                // slide:正 delta(右)→ 前片段延长、后片段头部裁掉。需前后片段的素材时长。
+                guard origin.spine.indices.contains(idx - 1), origin.spine.indices.contains(idx + 1),
+                      case .clip(let prev) = origin.spine[idx - 1],
+                      case .clip(let next) = origin.spine[idx + 1] else { return }
+                let prevAD = assetDuration(of: prev), nextAD = assetDuration(of: next)
+                dragEdit?(first) { _ in
+                    Mutations.slide(at: idx, delta: .seconds(deltaSec),
+                                    prevAssetDuration: prevAD, nextAssetDuration: nextAD, in: origin)
+                }
+            } else {
+                // slip:正 deltaSec(右拖)→ sourceIn 减少(显示更早画面,内容随光标右移),贴近 FCP 习惯。
+                let assetDur = assetDuration(of: c)
+                dragEdit?(first) { _ in
+                    Mutations.slip(at: idx, delta: .seconds(-deltaSec), assetDuration: assetDur, in: origin)
+                }
+            }
+            sd.firstTick = false
+            slipDrag = sd
+            return
+        }
         // 修剪工具 / select 工具边缘 trim:实时 trim
         if let td = trimDrag {
             guard let (clip, _) = spineClipAndIndex(td.clipID) else { return }
@@ -233,6 +271,7 @@ extension TimelineContentView {
         // 其余工具的片段拖动已在 mouseDragged 中实时完成(所见即所得),这里只清状态。
         dragClipID = nil; dragStartPoint = nil; dragCurrentPoint = nil
         trimDrag = nil; rollDrag = nil; handLastX = nil; zoomStartX = nil
+        slipDrag = nil
         needsDisplay = true
     }
 

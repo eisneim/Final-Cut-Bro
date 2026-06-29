@@ -47,6 +47,13 @@ import Observation
         document.sequence = transform(document.sequence)
     }
 
+    /// 拖拽会话实时编辑:firstTick=true 时先快照(整段拖拽合成【一次】撤销),之后只替换序列不再堆 undo。
+    /// transform 通常从【拖拽起点的序列快照】按总位移重算,保证幂等(不累积)。
+    func dragEdit(firstTick: Bool, _ transform: (Sequence) -> Sequence) {
+        if firstTick { snapshot() }
+        document.sequence = transform(document.sequence)
+    }
+
     // MARK: - 撤销 / 重做
 
     private var undoStack: [Document] = []

@@ -31,6 +31,9 @@ struct TimelineCanvas: NSViewRepresentable {
         content.dispatch = { [weak store] action in
             store?.dispatch(action)
         }
+        content.dragEdit = { [weak store] firstTick, transform in
+            store?.dragEdit(firstTick: firstTick, transform)
+        }
         scrollView.documentView = content
         return scrollView
     }

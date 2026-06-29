@@ -26,6 +26,8 @@ final class TimelineContentView: NSView {
 
     /// dispatch 闭包,避免对 store 的强引用环;由 representable 注入。
     var dispatch: ((EditorAction) -> Void)?
+    /// 拖拽实时编辑(slip/slide):firstTick=true 压一次撤销,transform 从拖拽起点序列重算。
+    var dragEdit: ((Bool, @escaping (Sequence) -> Sequence) -> Void)?
 
     // MARK: - 拖动片段状态(Pass 2)
     /// 正在拖动的片段 id(nil = 未拖动 / 在擦洗播放头)。
@@ -45,6 +47,9 @@ final class TimelineContentView: NSView {
     var trimDrag: (clipID: ClipID, index: Int, edge: TrimEdge)?
     /// Roll 编辑:select 工具拖两片段交界切点。
     var rollDrag: (leftIndex: Int, rightIndex: Int, leftClipID: ClipID, rightClipID: ClipID, startX: CGFloat)?
+    /// Slip/Slide:修剪工具拖片段中段。slip 改入出点(不动位置时长);slide(⌥)移片段并调两侧。
+    /// origin = 拖拽开始时的序列快照(每 tick 从 origin 按总位移重算,不累积);firstTick 决定是否压一次撤销。
+    var slipDrag: (index: Int, startX: CGFloat, isSlide: Bool, origin: Sequence, firstTick: Bool)?
     /// Gap 拖动:移动整个 gap(记 id + 抓取偏移)。
     var dragGapID: GapID?
     var dragGapGrabDX: CGFloat = 0
