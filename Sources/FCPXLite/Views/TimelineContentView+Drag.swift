@@ -100,7 +100,9 @@ extension TimelineContentView {
             if !inRuler {
                 // Volume level 线优先拦截(select 工具)
                 if volumeMouseDown(with: event, at: pt) { return }
-                // 1. roll hit 优先(两片段切点)
+                // gap(灰条)最优先:在 gap 上(含边界)就处理 gap,避免被相邻 clip 的 trim/roll 抢走。
+                if gapMouseDown(at: pt) { return }
+                // 1. roll hit(两片段切点)
                 if currentTool == .select, let roll = rollHit(at: pt) {
                     rollDrag = (roll.leftIndex, roll.rightIndex,
                                 roll.leftClipID, roll.rightClipID, pt.x)
@@ -113,8 +115,6 @@ extension TimelineContentView {
                     dispatch?(.selectClip(e.clipID))
                     return
                 }
-                // 2.5 gap(灰条)命中:选中 / 修剪边缘 / 拖动
-                if gapMouseDown(at: pt) { return }
                 // 3. 普通片段拖动/选择
                 if let p = hitTestClip(at: pt) {
                     dragClipID = p.clipID
@@ -228,7 +228,7 @@ extension TimelineContentView {
                                              contentHeight: bounds.height)
             let raw = max(0, TimelineGeometry.seconds(forX: cur.x - dragGrabDX, pxPerSecond: pxPerSecond))
             if lane == 0 { dispatch?(.positionMove(id, time: Time.seconds(raw))) }
-            else { dispatch?(.relocateClip(id, lane: lane, time: Time.seconds(raw))) }
+            else { dispatch?(.positionMoveToLane(id, lane: lane, time: Time.seconds(raw))) }   // 向上拖:源处留灰条
         }
         // 其余工具的片段拖动已在 mouseDragged 中实时完成(所见即所得),这里只清状态。
         dragClipID = nil; dragStartPoint = nil; dragCurrentPoint = nil

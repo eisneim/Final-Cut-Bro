@@ -38,3 +38,22 @@ final class GapInteractionTests: XCTestCase {
         XCTAssertEqual(s.spine[1].gapID, g)
     }
 }
+
+extension GapInteractionTests {
+    // P模式向上拖主轨clip:源处留灰条 + clip变连接片段。
+    func testPositionMoveToLaneLeavesGap() {
+        let c0 = Clip(assetID: AssetID(), sourceIn: .zero, duration: .seconds(4))
+        let c1 = Clip(assetID: AssetID(), sourceIn: .zero, duration: .seconds(4))
+        let seq = Sequence(spine: [.clip(c0), .clip(c1)])  // 0..4, 4..8
+        // 把 c0 拖到 lane 1, 时间2s
+        let out = Mutations.positionMoveToLane(clipID: c0.id, toLane: 1, atTime: .seconds(2), in: seq)
+        // 源处(spine[0])应变成 gap
+        XCTAssertNotNil(out.spine[0].gapID, "源处应留灰条")
+        // c0 现在是某主轴 clip 的连接片段
+        let isConnected = out.spine.contains { el in
+            if case .clip(let h) = el { return h.connected.contains { $0.id == c0.id } }
+            return false
+        }
+        XCTAssertTrue(isConnected, "c0 应变成连接片段")
+    }
+}

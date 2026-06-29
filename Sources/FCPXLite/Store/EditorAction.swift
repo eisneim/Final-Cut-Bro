@@ -16,6 +16,7 @@ enum EditorAction: Codable, Equatable {
     case connect(Clip, host: Int, lane: Int, offset: Time)
     case relocateClip(ClipID, lane: Int, time: Time)
     case positionMove(ClipID, time: Time)
+    case positionMoveToLane(ClipID, lane: Int, time: Time)
     case setGapDuration(at: Int, duration: Time)
     case setInspector(Bool)
     case setShowEffects(Bool)

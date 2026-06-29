@@ -21,9 +21,9 @@ extension TimelineContentView {
         return out
     }
 
-    /// mouseDown 时检查 gap 命中(select 工具)。返回 true 表示已处理。
+    /// mouseDown 时检查 gap 命中(select / trim / position 工具)。返回 true 表示已处理。
     func gapMouseDown(at pt: NSPoint) -> Bool {
-        guard currentTool == .select || currentTool == .trim else { return false }
+        guard currentTool == .select || currentTool == .trim || currentTool == .position else { return false }
         for g in gapRects() {
             guard pt.y >= g.rect.minY, pt.y <= g.rect.maxY,
                   pt.x >= g.rect.minX - Self.edgeHitPx, pt.x <= g.rect.maxX + Self.edgeHitPx else { continue }

@@ -310,11 +310,16 @@ extension TimelineContentView {
                   asset.hasAudio else { continue }
             let rect = clipRect(p)
             guard let region = audioRegion(for: clip, in: rect) else { continue }
-            // 在 audio region 中间 ±6px 横条添加 resizeUpDown 光标
+            // fade 手柄(左/右):resizeLeftRight 光标 → 提示可左右拖。放在 level 线条之前优先。
+            let lh = NSRect(x: region.minX - 2, y: region.minY, width: Self.fadeHandleHitPx, height: region.height)
+            let rh = NSRect(x: region.maxX - Self.fadeHandleHitPx + 2, y: region.minY, width: Self.fadeHandleHitPx, height: region.height)
+            addCursorRect(lh, cursor: .resizeLeftRight)
+            addCursorRect(rh, cursor: .resizeLeftRight)
+            // 在 audio region 中间 ±6px 横条添加 resizeUpDown 光标(改音量)
             let midY = region.midY
             let stripH: CGFloat = 12
-            let stripRect = NSRect(x: region.minX, y: midY - stripH/2,
-                                   width: region.width, height: stripH)
+            let stripRect = NSRect(x: region.minX + Self.fadeHandleHitPx, y: midY - stripH/2,
+                                   width: max(2, region.width - Self.fadeHandleHitPx * 2), height: stripH)
             addCursorRect(stripRect, cursor: .resizeUpDown)
         }
     }

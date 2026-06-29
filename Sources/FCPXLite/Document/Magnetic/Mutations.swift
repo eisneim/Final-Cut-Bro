@@ -387,6 +387,34 @@ enum Mutations {
         return s
     }
 
+    /// 位置工具:把【主轴 clip】拖到连接轨(lane≠0),源处留下灰条占位(像 positionMove 一样)。
+    /// 连接片段(本就不占主轴)→ 退回普通 relocate。未知 id → no-op。
+    static func positionMoveToLane(clipID: ClipID, toLane lane: Int, atTime t: Time, in seq: Sequence) -> Sequence {
+        guard lane != 0 else { return positionMove(clipID: clipID, atTime: t, in: seq) }
+        var s = seq
+        // 是主轴直接 clip?→ 抽出后原位换成 gap,再连接到目标。
+        if let spineIdx = s.spine.firstIndex(where: {
+            if case .clip(let c) = $0 { return c.id == clipID }; return false
+        }) {
+            guard case .clip(let extracted) = s.spine[spineIdx] else { return seq }
+            s.spine[spineIdx] = .gap(duration: extracted.duration)   // 源处留灰条
+            // 连接到目标时间所在的主轴 clip 上
+            guard let host = hostSpineIndex(forTime: t, in: s) else { return seq }
+            let hostAbsStart = s.spine[0..<host.index].reduce(Time.zero) { $0 + $1.duration }
+            var clip = extracted
+            clip.lane = magneticLane(direction: lane, start: t, duration: extracted.duration, in: s)
+            let off = t - hostAbsStart
+            clip.offset = off < .zero ? .zero : off
+            guard case .clip(var hostClip) = s.spine[host.index] else { return seq }
+            hostClip.connected.append(clip)
+            s.spine[host.index] = .clip(hostClip)
+            assertInvariants(s)
+            return s
+        }
+        // 本就是连接片段 → 普通 relocate(无需留 gap)。
+        return relocate(clipID: clipID, toLane: lane, atTime: t, in: seq)
+    }
+
     /// Resize a .gap at spine[index] to new duration.
     /// Clamps to minimum 1 tick. No-op if spine[index] is a clip or index is out of bounds.
     static func setGapDuration(at index: Int, duration: Time, in seq: Sequence) -> Sequence {
