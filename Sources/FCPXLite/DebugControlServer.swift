@@ -106,6 +106,30 @@ final class DebugControlServer {
                     sendJSON(conn, data)
                 } else { sendText(conn, status: "500", "no timeline view") }
             }
+        case ("GET", "/scale"):
+            DispatchQueue.main.sync {
+                var info: [String: Any] = [:]
+                if let w = window {
+                    info["windowBackingScaleFactor"] = w.backingScaleFactor
+                    info["windowFrame"] = ["w": w.frame.width, "h": w.frame.height]
+                    let px = w.convertToBacking(w.frame)
+                    info["windowFrameInBackingPixels"] = ["w": px.width, "h": px.height]
+                }
+                if let scr = window?.screen ?? NSScreen.main {
+                    info["screenFramePoints"] = ["w": scr.frame.width, "h": scr.frame.height]
+                    info["screenBackingScaleFactor"] = scr.backingScaleFactor
+                    let backing = scr.convertRectToBacking(scr.frame)
+                    info["screenFrameBackingPixels"] = ["w": backing.width, "h": backing.height]
+                }
+                let mode = CGDisplayCopyDisplayMode(CGMainDisplayID())
+                if let m = mode {
+                    info["displayMode_pointsWidth"] = m.width        // 逻辑点
+                    info["displayMode_pixelWidth"] = m.pixelWidth    // 原生像素
+                    info["displayMode_ratio_pixelOverPoint"] = m.width > 0 ? Double(m.pixelWidth) / Double(m.width) : 0
+                }
+                let data = (try? JSONSerialization.data(withJSONObject: info, options: [.prettyPrinted, .sortedKeys])) ?? Data("{}".utf8)
+                sendJSON(conn, data)
+            }
         case ("GET", "/preview"):
             DispatchQueue.main.sync {
                 let item = CompositionBuilder.build(document: store.document)
