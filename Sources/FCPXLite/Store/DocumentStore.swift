@@ -309,6 +309,7 @@ import Observation
             }
         case let .setClipHeight(h):      ui.clipHeight = max(40, min(160, h))
         case let .setVideoAudioRatio(r): ui.videoAudioRatio = max(0.1, min(0.9, r))
+        case let .setAssetStripZoom(z):  ui.assetStripZoom = max(2, min(80, z))
         case let .setAdjust(id, a):      apply { Mutations.setAdjust(clipID: id, a, in: $0) }
         case let .setEffects(id, fx):    apply { Mutations.setEffects(clipID: id, fx, in: $0) }
         case let .setVolumeKeyframes(id, kfs): apply { Mutations.setVolumeKeyframes(clipID: id, kfs, in: $0) }

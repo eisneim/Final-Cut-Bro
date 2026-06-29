@@ -363,7 +363,9 @@ final class TimelineContentView: NSView {
     private func drawFilmstrip(_ asset: Asset, in r: NSRect, range: ClosedRange<Double>) {
         guard r.height > 2, r.width > 1 else { return }
         guard let all = TimelineMediaCache.shared.thumbnails(for: asset), !all.isEmpty else { return }
-        let thumbW = max(8, r.height * 16.0 / 9.0)
+        // 切片宽按素材真实显示宽高比(naturalSize 已含方向),竖屏 → 窄切片排更多帧,不再横向拉伸。
+        let ar = asset.naturalSize.height > 0 ? asset.naturalSize.width / asset.naturalSize.height : 16.0 / 9.0
+        let thumbW = max(8, r.height * CGFloat(ar))
         let visible = max(1, Int(ceil(r.width / thumbW)))
         let lo = range.lowerBound, span = max(1e-6, range.upperBound - range.lowerBound)
         for i in 0..<visible {

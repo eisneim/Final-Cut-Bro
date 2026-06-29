@@ -1,6 +1,11 @@
 import AVFoundation
 import AppKit
 
+extension Notification.Name {
+    /// 缩略图/波形异步生成完成 → 通知所有视图刷新(timeline 用 onUpdate,SwiftUI 素材池用此通知)。
+    static let mediaCacheUpdated = Notification.Name("fcpxlite.mediaCacheUpdated")
+}
+
 /// 时间线媒体缓存:异步生成 clip 的缩略图序列(filmstrip)与音频波形峰值,按 assetID 缓存。
 /// 生成完成后调用 onUpdate 触发画布重绘。AppKit 画布在 draw 时请求,未就绪先返回 nil 并后台生成。
 final class TimelineMediaCache {
@@ -8,6 +13,12 @@ final class TimelineMediaCache {
 
     /// 任一资源生成完成后回调(由画布设为 needsDisplay)。
     var onUpdate: (() -> Void)?
+
+    /// 生成完成统一通知:既调 onUpdate(timeline 画布)又发通知(SwiftUI 素材池)。
+    private func notifyUpdated() {
+        onUpdate?()
+        NotificationCenter.default.post(name: .mediaCacheUpdated, object: nil)
+    }
 
     private var thumbs: [String: [CGImage]] = [:]
     private var thumbsLoading: Set<String> = []
@@ -29,7 +40,7 @@ final class TimelineMediaCache {
             DispatchQueue.main.async {
                 self?.thumbs[key] = imgs
                 self?.thumbsLoading.remove(key)
-                self?.onUpdate?()
+                self?.notifyUpdated()
             }
         }
         return nil
@@ -77,7 +88,7 @@ final class TimelineMediaCache {
             DispatchQueue.main.async {
                 self?.waves[key] = peaks
                 self?.wavesLoading.remove(key)
-                self?.onUpdate?()
+                self?.notifyUpdated()
             }
         }
         return nil

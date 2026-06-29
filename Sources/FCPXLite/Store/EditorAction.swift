@@ -48,6 +48,7 @@ enum EditorAction: Codable, Equatable {
     case setPanelWidth(PanelKind, Double)
     case setClipHeight(Double)
     case setVideoAudioRatio(Double)
+    case setAssetStripZoom(Double)
     case setAdjust(ClipID, Adjustments)
     case setEffects(ClipID, [Effect])
     case setVolumeKeyframes(ClipID, [VolumeKeyframe])

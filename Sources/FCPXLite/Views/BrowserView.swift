@@ -5,8 +5,10 @@ import UniformTypeIdentifiers
 struct BrowserView: View {
     let store: DocumentStore
 
-    // Grid layout: 2 columns
-    let columns = [GridItem(.adaptive(minimum: 110), spacing: 8)]
+    // strip 行高(像素):缩略图 + 波形;与缩放无关(缩放只改宽=时间密度)。
+    private let bandH: CGFloat = 56
+    private let spacing: CGFloat = 6
+    private let minTile: CGFloat = 64
 
     var body: some View {
         VStack(spacing: 0) {
@@ -15,7 +17,7 @@ struct BrowserView: View {
             if store.document.assetLibrary.isEmpty {
                 emptyState
             } else {
-                assetGrid
+                stripFlow
             }
         }
         .background(Tokens.Palette.chrome)
@@ -25,27 +27,40 @@ struct BrowserView: View {
         }
     }
 
-    // MARK: - Header
+    // MARK: - Header(片段 N + 外观缩放 -/+ + 导入)
 
     private var browserHeader: some View {
         HStack(spacing: 8) {
             Text("片段 (\(store.document.assetLibrary.count))")
                 .font(Tokens.Typeface.label)
                 .foregroundStyle(Tokens.Palette.textPrimary)
-            Spacer()
-            Button("导入") {
-                ImportPanel.present(into: store)
+            // FCPX 式片段外观缩放:- 缩小成网格小方块,+ 放大成长胶片条
+            HStack(spacing: 2) {
+                zoomButton("minus", delta: 0.66, help: "缩小(更像网格)")
+                zoomButton("plus", delta: 1.5, help: "放大(长胶片条)")
             }
-            .font(Tokens.Typeface.label)
-            .buttonStyle(.plain)
-            .foregroundStyle(Tokens.Palette.selectYellow)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(Tokens.Palette.elevated)
-            .cornerRadius(4)
+            Spacer()
+            Button("导入") { ImportPanel.present(into: store) }
+                .font(Tokens.Typeface.label)
+                .buttonStyle(.plain)
+                .foregroundStyle(Tokens.Palette.selectYellow)
+                .padding(.horizontal, 6).padding(.vertical, 3)
+                .background(Tokens.Palette.elevated).cornerRadius(4)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
+    }
+
+    private func zoomButton(_ icon: String, delta: Double, help: String) -> some View {
+        Button {
+            store.dispatch(.setAssetStripZoom(store.ui.assetStripZoom * delta))
+        } label: {
+            Image(systemName: icon).font(.system(size: 10, weight: .bold))
+                .foregroundStyle(Tokens.Palette.textCool)
+                .frame(width: 20, height: 18)
+                .background(Tokens.Palette.elevated).cornerRadius(4)
+        }
+        .buttonStyle(.plain).help(help)
     }
 
     // MARK: - Empty State
@@ -62,36 +77,42 @@ struct BrowserView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Asset Grid
+    // MARK: - Strip 流式布局(贪心换行,窗口不够宽就多行)
 
-    private var assetGrid: some View {
-        LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(store.document.assetLibrary) { asset in
-                    AssetCardView(asset: asset)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .strokeBorder(
-                                    // 多选集或 anchor 选中时高亮
-                                    store.ui.selectedAssetIDs.contains(asset.id)
-                                        ? Tokens.Palette.selectYellow
-                                        : Color.clear,
-                                    lineWidth: 1.5
-                                )
-                        )
-                        .onTapGesture {
-                            // 读当前 NSEvent 修饰键:⌘=多选切换,⇧=区间,否则单选
-                            let mods = NSEvent.modifierFlags
-                            if mods.contains(.command) {
-                                store.dispatch(.toggleAssetSelected(asset.id))
-                            } else if mods.contains(.shift) {
-                                store.dispatch(.selectAssetRange(asset.id))
-                            } else {
-                                store.dispatch(.selectAsset(asset.id))
-                            }
-                        }
+    private var stripFlow: some View {
+        // 左侧栏宽度已知(browserWidth),不用 GeometryReader(它在 ScrollView 里会塌成 0 高)。
+        let avail = max(minTile, CGFloat(store.ui.browserWidth) - 16)
+        let assets = store.document.assetLibrary
+        let widths = assets.map {
+            AssetStripLayout.cellWidth(durationSecs: $0.duration.seconds,
+                                       pxPerSecond: store.ui.assetStripZoom,
+                                       minTile: minTile, availWidth: avail)
+        }
+        let rows = AssetStripLayout.flow(itemWidths: widths, availWidth: avail, spacing: spacing)
+        return VStack(alignment: .leading, spacing: spacing) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                HStack(spacing: spacing) {
+                    ForEach(row, id: \.self) { idx in
+                        cell(assets[idx], width: widths[idx])
+                    }
                 }
             }
-            .padding(8)
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func cell(_ asset: Asset, width: CGFloat) -> some View {
+        AssetStripCell(asset: asset, width: width, height: bandH,
+                       selected: store.ui.selectedAssetIDs.contains(asset.id),
+                       vaRatio: CGFloat(store.ui.videoAudioRatio))
+            .onTapGesture {
+                let mods = NSEvent.modifierFlags
+                if mods.contains(.command) { store.dispatch(.toggleAssetSelected(asset.id)) }
+                else if mods.contains(.shift) { store.dispatch(.selectAssetRange(asset.id)) }
+                else { store.dispatch(.selectAsset(asset.id)) }
+            }
+            .draggable(asset.id.raw)   // 拖到时间线(与原网格一致)
     }
 
     // MARK: - Drop
@@ -113,83 +134,3 @@ struct BrowserView: View {
     }
 }
 
-// MARK: - Asset Card
-
-struct AssetCardView: View {
-    let asset: Asset
-
-    var body: some View {
-        VStack(spacing: 4) {
-            thumbnailView
-                .frame(width: 100, height: 56)
-                .clipShape(RoundedRectangle(cornerRadius: 4))
-
-            Text(asset.url.lastPathComponent)
-                .font(Tokens.Typeface.label)
-                .foregroundStyle(Tokens.Palette.textPrimary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .frame(maxWidth: 100)
-
-            Text(durationString(asset.duration))
-                .font(Tokens.Typeface.label)
-                .foregroundStyle(Tokens.Palette.textMuted)
-        }
-        .padding(4)
-        .background(Tokens.Palette.elevated)
-        .cornerRadius(6)
-        // Drag this card's AssetID onto the timeline
-        .draggable(asset.id.raw)
-    }
-
-    @ViewBuilder
-    private var thumbnailView: some View {
-        if asset.kind == .audio {
-            ZStack {
-                Tokens.Palette.elevated
-                VStack(spacing: 2) {
-                    Text("♪")
-                        .font(.system(size: 22))
-                        .foregroundStyle(Tokens.Palette.waveform)
-                    Text("音频")
-                        .font(Tokens.Typeface.label)
-                        .foregroundStyle(Tokens.Palette.textMuted)
-                }
-            }
-        } else {
-            ThumbnailView(asset: asset)
-        }
-    }
-
-    private func durationString(_ t: Time) -> String {
-        let total = Int(t.seconds)
-        let mm = total / 60
-        let ss = total % 60
-        return String(format: "%d:%02d", mm, ss)
-    }
-}
-
-// MARK: - Thumbnail (loads async)
-
-struct ThumbnailView: View {
-    let asset: Asset
-    @State private var image: NSImage? = nil
-
-    var body: some View {
-        Group {
-            if let img = image {
-                Image(nsImage: img)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                Tokens.Palette.elevated
-            }
-        }
-        .task(id: asset.id.raw) {
-            let img = await Task.detached(priority: .utility) {
-                MediaImporter.thumbnail(for: asset)
-            }.value
-            self.image = img
-        }
-    }
-}

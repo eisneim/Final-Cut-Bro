@@ -21,6 +21,7 @@ struct UIState: Codable, Equatable {
     var chatWidth: Double = 320
     var clipHeight: Double = 72
     var videoAudioRatio: Double = 0.6
+    var assetStripZoom: Double = 6   // 素材池 strip 外观缩放(px/秒);小=网格小方块,大=长胶片条
     var agentInput: String = ""
     var providerId: String = "stepfun"
     var showSettings: Bool = false
