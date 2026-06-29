@@ -33,6 +33,7 @@ enum TimelineColors {
     static let gapFill       = NSColor(hex: "#3A3A3A")
     static let gapBorder     = NSColor(hex: "#555555")
     static let waveform      = NSColor(hex: "#8C9CBD")
+    static let transition    = NSColor(hex: "#C58CF0")   // 交叉叠化转场标记(淡紫)
 }
 
 extension NSColor {

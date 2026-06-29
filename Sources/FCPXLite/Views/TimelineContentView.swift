@@ -150,6 +150,7 @@ final class TimelineContentView: NSView {
         } else {
             for p in ps { drawClip(p) }
         }
+        drawTransitions()
 
         drawClipsOrHint()
         if currentTool == .position, dragClipID != nil { drawDragGhost() }   // 位置工具拖拽:画 ghost 跟随
@@ -185,6 +186,32 @@ final class TimelineContentView: NSView {
                                      .foregroundColor: TimelineColors.textMuted])
             }
             acc = acc + el.duration
+        }
+    }
+
+    /// 画交叉叠化转场标记:在带 crossfadeIn 的主轴片段【左接缝】处,跨缝画一块淡紫半透明区 + "蝴蝶结"叠化符号。
+    /// 时间线仍按 Layout 顺铺(不重叠);标记只是提示该接缝有 dissolve,宽度=转场时长。
+    func drawTransitions() {
+        let laneY = TimelineGeometry.laneTopY(lane: 0, rulerHeight: Self.rulerHeight,
+                                              laneHeight: laneH, laneGap: Self.laneGap,
+                                              contentHeight: bounds.height)
+        for p in placed where p.lane == 0 {
+            guard let clip = clipByID(p.clipID), clip.crossfadeIn > .zero else { continue }
+            let seamX = clipRect(p).minX
+            let rect = TimelineGeometry.transitionRect(seamX: seamX, crossfadeSecs: clip.crossfadeIn.seconds,
+                                                       pxPerSecond: pxPerSecond, laneY: laneY, laneHeight: laneH)
+            let path = NSBezierPath(roundedRect: rect, xRadius: 3, yRadius: 3)
+            TimelineColors.transition.withAlphaComponent(0.35).setFill(); path.fill()
+            TimelineColors.transition.withAlphaComponent(0.9).setStroke(); path.lineWidth = 1; path.stroke()
+            // 蝴蝶结(两个对顶三角)= 叠化符号
+            let bow = NSBezierPath()
+            let midY = rect.midY, h = min(rect.height * 0.4, 14)
+            bow.move(to: NSPoint(x: rect.minX, y: midY - h/2))
+            bow.line(to: NSPoint(x: rect.maxX, y: midY + h/2))
+            bow.line(to: NSPoint(x: rect.maxX, y: midY - h/2))
+            bow.line(to: NSPoint(x: rect.minX, y: midY + h/2))
+            bow.close()
+            TimelineColors.transition.withAlphaComponent(0.8).setStroke(); bow.lineWidth = 1; bow.stroke()
         }
     }
 

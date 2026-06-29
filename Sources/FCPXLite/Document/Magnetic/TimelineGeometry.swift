@@ -46,6 +46,14 @@ enum TimelineGeometry {
         return max(0, Double(x / pxPerSecond))
     }
 
+    /// 交叉叠化转场标记的矩形:以接缝 seamX 为中心,宽 = crossfade 秒 × pxPerSecond,
+    /// 跨接缝两侧各一半(夹最小宽,保证可见)。纯几何,供画布与单测共用。
+    static func transitionRect(seamX: CGFloat, crossfadeSecs: Double, pxPerSecond: CGFloat,
+                               laneY: CGFloat, laneHeight: CGFloat) -> CGRect {
+        let w = max(6, CGFloat(crossfadeSecs) * pxPerSecond)
+        return CGRect(x: seamX - w / 2, y: laneY, width: w, height: laneHeight)
+    }
+
     /// 车道(lane)→ 该车道行的 y 顶部坐标(在 isFlipped 坐标系下,y 向下增长)。
     /// 布局:lane 0(主轴)在标尺下方可用区域【垂直居中】;
     /// lane n>0 连接片段在主轴【上方】(y 更小),lane n<0 在主轴【下方】(y 更大)。
