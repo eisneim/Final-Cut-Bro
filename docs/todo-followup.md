@@ -40,4 +40,18 @@
 - ✅ **T6** clip 复制/粘贴 ⌘C/⌘V — 深拷贝换新 id 粘贴到播放头最近编辑点 + 7 测试(commit c5d42af)。
 - 🔸 额外:左侧栏整体滚动 + PNG 保留 alpha(commit 5c9d07d)。
 - ⏳ **T7/T8** 需用户启动 server + 配置真实 LLkey,无法自动跑。
-- ⏳ **T9** 导出矩阵 — 见下。
+- ✅ **T9** 导出矩阵 — 编码 FourCC(avc1/hvc1/apcn)×分辨率(720/1080)正确 + 质量档码率绑定(高熵噪声内容)+ 码率单调性单测(commit 508b89f)。
+
+### T7/T8 用户自跑手册(我已验证可自动化的部分)
+**已自动验证(无需 LLM token):**
+- 20 个 catalog 动作的执行层 —— `AgentDispatchCatalogTests`(20 单测)全绿。
+- 翻译层(index/秒 → ClipID/Time)+ server 路由 —— 运行版 app 经 `dispatchAction` 实测 append/blade/delete/undo/scale 全部生效(scaleWidth=2 实测)。
+
+**仍需你来跑(要真实 LLM key + 你启动/关闭 server):**
+1. `bash scripts/run.sh`(或 `./.build/debug/FCPXLite`)启动带 :8765 的 debug 版。
+2. 确保设置里配了可用 provider(chat 顶栏能看到模型名)。
+3. 逐条发指令(走真实 LLM):
+   `curl -s -XPOST 127.0.0.1:8765/cmd -d '{"op":"agentSend","path":"把素材0加到时间线末尾"}'`
+   然后 `curl -s 127.0.0.1:8765/state` 按 `docs/agent-e2e-checklist.md` 步骤 A 表逐行核对、回填 ✅/❌。
+4. T8 深度工作流:一句话「导入这首音乐X,拼上视频Y,把音乐连到背景层,原声压到20%,导出」验证多步连贯 + 产物。
+5. **测完务必关闭 server。**
