@@ -10,6 +10,7 @@ struct TimelineCanvas: NSViewRepresentable {
     let pxPerSecond: CGFloat
     let playheadSeconds: Double
     let selectedClipID: ClipID?
+    let selectedGapID: GapID?
     let tool: EditTool
     let sequence: Sequence            // Equatable,内容变化即触发更新
     let assetLibrary: [Asset]
@@ -43,6 +44,7 @@ struct TimelineCanvas: NSViewRepresentable {
             pxPerSecond: pxPerSecond,
             playheadSeconds: playheadSeconds,
             selectedClipID: selectedClipID,
+            selectedGapID: selectedGapID,
             currentTool: tool,
             snappingEnabled: snappingEnabled,
             clipHeight: clipHeight,
@@ -82,6 +84,7 @@ struct TimelineView: View {
             pxPerSecond: CGFloat(store.ui.pxPerSecond),
             playheadSeconds: store.ui.playhead.seconds,
             selectedClipID: store.ui.selectedClipID,
+            selectedGapID: store.ui.selectedGapID,
             tool: store.ui.currentTool,
             sequence: store.document.sequence,
             assetLibrary: store.document.assetLibrary,

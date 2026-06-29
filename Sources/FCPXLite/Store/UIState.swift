@@ -6,6 +6,7 @@ struct UIState: Codable, Equatable {
     var showInspector: Bool = false
     var showEffects: Bool = false
     var selectedClipID: ClipID? = nil
+    var selectedGapID: GapID? = nil      // 选中的空隙(gap 可像 clip 一样选中/修剪/拖动/删除)
     var currentTool: EditTool = .select
     var pxPerSecond: Double = 60
     var playhead: Time = .zero

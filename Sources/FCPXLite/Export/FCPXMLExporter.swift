@@ -28,7 +28,7 @@ enum FCPXMLExporter {
         s += "        <sequence format=\"r0\">\n          <spine>\n"
         for el in document.sequence.spine {
             switch el {
-            case .gap(let d):
+            case .gap(_, let d):
                 s += "            <gap duration=\"\(time(d))\"/>\n"
             case .clip(let c):
                 s += clipXML(c, document: document, indent: "            ")

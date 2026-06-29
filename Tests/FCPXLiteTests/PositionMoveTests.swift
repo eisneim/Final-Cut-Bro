@@ -14,7 +14,7 @@ final class PositionMoveTests: XCTestCase {
         // Move clip B (index 1) to time=6 (after c)
         let out = Mutations.positionMove(clipID: b.id, atTime: .seconds(6), in: seq)
         // spine[1] must now be a gap of 2s
-        if case .gap(let d) = out.spine[1] {
+        if case .gap(_, let d) = out.spine[1] {
             XCTAssertEqual(d, .seconds(2))
         } else {
             XCTFail("spine[1] should be .gap; got \(out.spine[1])")

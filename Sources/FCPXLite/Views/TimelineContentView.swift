@@ -17,6 +17,7 @@ final class TimelineContentView: NSView {
     private(set) var pxPerSecond: CGFloat = 60
     private(set) var playheadSeconds: Double = 0
     private(set) var selectedClipID: ClipID? = nil
+    private(set) var selectedGapID: GapID? = nil
     private(set) var currentTool: EditTool = .select
     private(set) var snappingEnabled: Bool = true
     /// clip 条高度(可调)与 画面/波形 占比(filmstrip 占上方比例)。
@@ -44,6 +45,11 @@ final class TimelineContentView: NSView {
     var trimDrag: (clipID: ClipID, index: Int, edge: TrimEdge)?
     /// Roll 编辑:select 工具拖两片段交界切点。
     var rollDrag: (leftIndex: Int, rightIndex: Int, leftClipID: ClipID, rightClipID: ClipID, startX: CGFloat)?
+    /// Gap 拖动:移动整个 gap(记 id + 抓取偏移)。
+    var dragGapID: GapID?
+    var dragGapGrabDX: CGFloat = 0
+    /// Gap 修剪:拖 gap 边缘改时长。
+    var gapTrim: (gapID: GapID, edge: TrimEdge, startSec: Double)?
     /// 手工具:上一次拖动 x(用于滚动增量)。
     var handLastX: CGFloat?
     /// 缩放工具:拖动起点 x + 起始 pxPerSecond。
@@ -82,7 +88,7 @@ final class TimelineContentView: NSView {
         var gaps: [[String: Any]] = []
         var acc = Time.zero
         for el in sequence.spine {
-            if case .gap(let d) = el {
+            if case .gap(_, let d) = el {
                 let x = TimelineGeometry.x(forSeconds: acc.seconds, pxPerSecond: pxPerSecond)
                 let w = TimelineGeometry.x(forSeconds: d.seconds, pxPerSecond: pxPerSecond)
                 gaps.append(["x": Double(x), "y": Double(lane0), "w": Double(w), "durationSec": d.seconds])
@@ -107,6 +113,7 @@ final class TimelineContentView: NSView {
         let pxPerSecond: CGFloat
         let playheadSeconds: Double
         let selectedClipID: ClipID?
+        let selectedGapID: GapID?
         let currentTool: EditTool
         let snappingEnabled: Bool
         let clipHeight: CGFloat
@@ -119,6 +126,7 @@ final class TimelineContentView: NSView {
         pxPerSecond = state.pxPerSecond
         playheadSeconds = state.playheadSeconds
         selectedClipID = state.selectedClipID
+        selectedGapID = state.selectedGapID
         currentTool = state.currentTool
         snappingEnabled = state.snappingEnabled
         laneH = state.clipHeight
@@ -160,13 +168,18 @@ final class TimelineContentView: NSView {
                                           contentHeight: bounds.height)
         var acc = Time.zero
         for el in sequence.spine {
-            if case .gap(let d) = el {
+            if case .gap(let gid, let d) = el {
                 let x = TimelineGeometry.x(forSeconds: acc.seconds, pxPerSecond: pxPerSecond)
                 let w = max(2, TimelineGeometry.x(forSeconds: d.seconds, pxPerSecond: pxPerSecond))
                 let rect = NSRect(x: x, y: y, width: w, height: laneH)
                 let path = NSBezierPath(roundedRect: rect, xRadius: 3, yRadius: 3)
                 TimelineColors.gapFill.setFill(); path.fill()
                 TimelineColors.gapBorder.setStroke(); path.lineWidth = 1; path.stroke()
+                // 选中的 gap:橙色 2pt 边框(像选中的 clip)
+                if gid == selectedGapID {
+                    let sel = NSBezierPath(roundedRect: rect.insetBy(dx: 1, dy: 1), xRadius: 3, yRadius: 3)
+                    TimelineColors.selectBorder.setStroke(); sel.lineWidth = 2; sel.stroke()
+                }
                 ("间隙" as NSString).draw(at: NSPoint(x: rect.minX + 4, y: rect.minY + 3),
                     withAttributes: [.font: NSFont.systemFont(ofSize: 9),
                                      .foregroundColor: TimelineColors.textMuted])

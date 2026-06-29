@@ -97,7 +97,7 @@ final class AgentToolRegistry {
         var acc = 0.0
         for el in store.document.sequence.spine {
             switch el {
-            case .gap(let d): s += "  (间隙 \(fmt(d.seconds))s)\n"; acc += d.seconds
+            case .gap(_, let d): s += "  (间隙 \(fmt(d.seconds))s)\n"; acc += d.seconds
             case .clip(let c):
                 let name = store.document.assetLibrary.first { $0.id == c.assetID }?.url.lastPathComponent ?? "?"
                 s += "  [\(ci)] \(name) \(fmt(acc))→\(fmt(acc + c.duration.seconds))s lane0\n"

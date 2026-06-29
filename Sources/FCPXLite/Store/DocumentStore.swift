@@ -159,7 +159,11 @@ import Observation
             snapshot(); document.currentProjectID = id; ui.selectedClipID = nil; ui.playhead = .zero
         case let .setShowProjectModal(v):        ui.showProjectModal = v
         case let .importAsset(a):                snapshot(); document.assetLibrary.append(a)
-        case let .selectClip(id):                ui.selectedClipID = id
+        case let .selectClip(id):                ui.selectedClipID = id; ui.selectedGapID = nil
+        case let .selectGap(id):                 ui.selectedGapID = id; ui.selectedClipID = nil
+        case let .setGapDurationByID(id, dur):   apply { Mutations.setGapDurationByID(id, duration: dur, in: $0) }
+        case let .moveGap(id, t):                apply { Mutations.moveGap(id, toTime: t, in: $0) }
+        case let .removeGap(id):                 apply { Mutations.removeGap(id, in: $0) }
         case let .setTool(t):                    ui.currentTool = t
         case let .setZoom(z):                    ui.pxPerSecond = max(1, min(400, z))   // 下限1px/秒:1小时电影可整屏展现
         case let .setPlayhead(t):                ui.playhead = t
@@ -298,8 +302,11 @@ import Observation
         return nil
     }
 
-    /// 删除选中片段(FCP: Delete)。主轴 clip → ripple 合拢;连接片段 → 从宿主移除。
+    /// 删除选中片段(FCP: Delete)。主轴 clip → ripple 合拢;连接片段 → 从宿主移除;gap → 移除。
     func deleteSelected() {
+        if let gid = ui.selectedGapID {
+            dispatch(.removeGap(gid)); dispatch(.selectGap(nil)); return
+        }
         guard let id = ui.selectedClipID else { return }
         if let idx = TimelineGeometry.spineIndex(ofClipID: id, in: document.sequence) {
             dispatch(.rippleDelete(at: idx))

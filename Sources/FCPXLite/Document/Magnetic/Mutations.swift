@@ -392,11 +392,37 @@ enum Mutations {
     static func setGapDuration(at index: Int, duration: Time, in seq: Sequence) -> Sequence {
         var s = seq
         guard s.spine.indices.contains(index) else { return s }
-        guard case .gap = s.spine[index] else { return s }
+        guard case .gap(let id, _) = s.spine[index] else { return s }   // 保留原 id
         let ts = duration.timescale > 0 ? duration.timescale : 600
         let minDur = Time(value: 1, timescale: ts)
         let clamped = duration < minDur ? minDur : duration
-        s.spine[index] = .gap(duration: clamped)
+        s.spine[index] = .gap(id: id, duration: clamped)
+        assertInvariants(s)
+        return s
+    }
+
+    /// 按 GapID 改时长(供 UI 选中 gap 后修剪)。
+    static func setGapDurationByID(_ gapID: GapID, duration: Time, in seq: Sequence) -> Sequence {
+        guard let i = seq.spine.firstIndex(where: { $0.gapID == gapID }) else { return seq }
+        return setGapDuration(at: i, duration: duration, in: seq)
+    }
+
+    /// 删除一个 gap(按 id,后续合拢)。
+    static func removeGap(_ gapID: GapID, in seq: Sequence) -> Sequence {
+        var s = seq
+        guard let i = s.spine.firstIndex(where: { $0.gapID == gapID }) else { return s }
+        s.spine.remove(at: i)
+        assertInvariants(s)
+        return s
+    }
+
+    /// 把 gap 移到目标绝对时间处(从原位移除,按时间插回主轴)。
+    static func moveGap(_ gapID: GapID, toTime t: Time, in seq: Sequence) -> Sequence {
+        var s = seq
+        guard let from = s.spine.firstIndex(where: { $0.gapID == gapID }) else { return s }
+        let el = s.spine.remove(at: from)
+        let idx = spineInsertionIndex(forTime: t, in: s)
+        s.spine.insert(el, at: idx)
         assertInvariants(s)
         return s
     }

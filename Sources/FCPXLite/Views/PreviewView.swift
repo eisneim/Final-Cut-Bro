@@ -76,7 +76,7 @@ struct PreviewView: NSViewRepresentable {
             var s = ""
             for el in seq.spine {
                 switch el {
-                case .gap(let d): s += "g\(d.value)/\(d.timescale);"
+                case .gap(_, let d): s += "g\(d.value)/\(d.timescale);"
                 case .clip(let c):
                     s += "c\(c.assetID.raw):\(c.sourceIn.value)/\(c.sourceIn.timescale):\(c.duration.value)/\(c.duration.timescale);"
                     for ch in c.connected {
