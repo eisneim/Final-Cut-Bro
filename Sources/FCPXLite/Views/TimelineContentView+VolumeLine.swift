@@ -23,15 +23,12 @@ extension TimelineContentView {
 
     /// volume(0–2) → y 在 region 内(volume=0→bottom, volume=2→top)。
     func volumeToY(volume: Double, in region: NSRect) -> CGFloat {
-        let clamped = max(0, min(2, volume))
-        // isFlipped=true: minY=top, maxY=bottom
-        return region.maxY - CGFloat(clamped / 2.0) * region.height
+        VolumeLineMath.volumeToY(volume: volume, regionMaxY: region.maxY, regionHeight: region.height)
     }
 
     /// y → volume(0–2),限定在 region 内。
     func yToVolume(y: CGFloat, in region: NSRect) -> Double {
-        let frac = Double((region.maxY - y) / region.height)
-        return max(0, min(2, frac * 2.0))
+        VolumeLineMath.yToVolume(y: y, regionMaxY: region.maxY, regionHeight: region.height)
     }
 
     /// 关键帧的画布 x(相对 clip 起点 time → clip rect x 范围内)。

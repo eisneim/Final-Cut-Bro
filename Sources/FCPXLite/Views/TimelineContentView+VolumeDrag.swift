@@ -106,32 +106,12 @@ extension TimelineContentView {
 
     /// 计算 level 线在给定 x 坐标处的 y 值。
     private func levelLineYAtX(_ x: CGFloat, clip: Clip, rect: NSRect, region: NSRect) -> CGFloat {
-        let sorted = clip.volumeKeyframes.sorted { $0.time < $1.time }
-        if sorted.isEmpty {
-            return volumeToY(volume: clip.adjust.volume, in: region)
-        }
         let durSecs = clip.duration.seconds
-        guard durSecs > 0 else { return volumeToY(volume: sorted[0].value, in: region) }
-        let frac = Double((x - rect.minX) / rect.width)
-        let t = frac * durSecs
-        // 找对应关键帧区间
-        if t <= sorted[0].time.seconds {
-            return volumeToY(volume: sorted[0].value, in: region)
-        }
-        if t >= sorted[sorted.count - 1].time.seconds {
-            return volumeToY(volume: sorted[sorted.count - 1].value, in: region)
-        }
-        for i in 0..<(sorted.count - 1) {
-            let k0 = sorted[i], k1 = sorted[i + 1]
-            if t >= k0.time.seconds && t <= k1.time.seconds {
-                let span = k1.time.seconds - k0.time.seconds
-                guard span > 0 else { return volumeToY(volume: k0.value, in: region) }
-                let alpha = (t - k0.time.seconds) / span
-                let vol = k0.value + alpha * (k1.value - k0.value)
-                return volumeToY(volume: vol, in: region)
-            }
-        }
-        return volumeToY(volume: sorted[0].value, in: region)
+        let frac = rect.width > 0 ? Double((x - rect.minX) / rect.width) : 0
+        let vol = VolumeLineMath.interpolatedVolume(
+            keyframes: clip.volumeKeyframes, durationSecs: durSecs,
+            atSeconds: frac * durSecs, baseVolume: clip.adjust.volume)
+        return volumeToY(volume: vol, in: region)
     }
 
     // MARK: - mouseDown 拦截(select 工具)
