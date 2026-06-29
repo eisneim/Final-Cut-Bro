@@ -291,6 +291,8 @@ import Observation
         case let .setEffects(id, fx):    apply { Mutations.setEffects(clipID: id, fx, in: $0) }
         case let .setVolumeKeyframes(id, kfs): apply { Mutations.setVolumeKeyframes(clipID: id, kfs, in: $0) }
         case let .setTransformKeyframes(id, kfs): apply { Mutations.setTransformKeyframes(clipID: id, kfs, in: $0) }
+        case let .slip(i, delta, assetDur): apply { Mutations.slip(at: i, delta: delta, assetDuration: assetDur, in: $0) }
+        case let .slide(i, delta, prevDur, nextDur): apply { Mutations.slide(at: i, delta: delta, prevAssetDuration: prevDur, nextAssetDuration: nextDur, in: $0) }
         case let .setEnabled(id, on):    apply { Mutations.setEnabled(clipID: id, on, in: $0) }
         }
     }

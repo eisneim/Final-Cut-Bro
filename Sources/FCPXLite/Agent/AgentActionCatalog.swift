@@ -180,6 +180,32 @@ enum AgentActionCatalog {
             store.dispatch(.selectClip(dup.id))
             return "已复制片段 \(intArg(a, "clipIndex")!)"
         },
+        AgentAction(type: "slip", domain: .timeline,
+                    doc: "滑移(slip):改主轴第 clipIndex 个片段看到素材的哪一段(入出点 +deltaSeconds),【片段在时间线的位置和时长都不变】。正=往素材后面取,负=往前。",
+                    params: [ParamSpec(name: "clipIndex", kind: .int, required: true, doc: "片段索引"),
+                             ParamSpec(name: "deltaSeconds", kind: .number, required: true, doc: "入点偏移(秒),正/负")]) { store, a in
+            guard let ei = spineElementIndex(store, clipIndex: intArg(a, "clipIndex") ?? -1),
+                  case .clip(let c) = store.document.sequence.spine[ei] else { return "错误:clipIndex 无效" }
+            let assetDur = store.document.assetLibrary.first { $0.id == c.assetID }?.duration ?? c.duration
+            store.dispatch(.slip(at: ei, delta: .seconds(numArg(a, "deltaSeconds") ?? 0), assetDuration: assetDur))
+            return "已滑移片段 \(intArg(a, "clipIndex")!)"
+        },
+        AgentAction(type: "slide", domain: .timeline,
+                    doc: "滑动(slide):把主轴第 clipIndex 个片段沿时间线移 deltaSeconds,【自身入出/时长不变】,由前后相邻片段伸缩补偿,总时长不变。要求前后都有片段(非间隙)。",
+                    params: [ParamSpec(name: "clipIndex", kind: .int, required: true, doc: "片段索引"),
+                             ParamSpec(name: "deltaSeconds", kind: .number, required: true, doc: "移动量(秒),正右/负左")]) { store, a in
+            guard let ei = spineElementIndex(store, clipIndex: intArg(a, "clipIndex") ?? -1) else { return "错误:clipIndex 无效" }
+            let spine = store.document.sequence.spine
+            guard spine.indices.contains(ei - 1), spine.indices.contains(ei + 1),
+                  case .clip(let prev) = spine[ei - 1], case .clip(let next) = spine[ei + 1] else {
+                return "错误:slide 需要前后都是片段(非间隙/非边缘)"
+            }
+            let prevDur = store.document.assetLibrary.first { $0.id == prev.assetID }?.duration ?? prev.duration
+            let nextDur = store.document.assetLibrary.first { $0.id == next.assetID }?.duration ?? next.duration
+            store.dispatch(.slide(at: ei, delta: .seconds(numArg(a, "deltaSeconds") ?? 0),
+                                  prevAssetDuration: prevDur, nextAssetDuration: nextDur))
+            return "已滑动片段 \(intArg(a, "clipIndex")!)"
+        },
     ]
 
     /// 改某 clip 的 effects(走命令层,可撤销)。返回 false=clipIndex 无效。
