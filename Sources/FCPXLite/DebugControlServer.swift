@@ -224,6 +224,7 @@ final class DebugControlServer {
         case "resetSelectedTransform":
             store.updateSelectedAdjust { $0.transform = Transform() }
         case "setInspector": store.dispatch(.setInspector((cmd.width ?? 1) > 0))
+        case "setShowEffects": store.dispatch(.setShowEffects((cmd.width ?? 1) > 0))
         case "setSpineAdjust":
             // 自测inspector→预览: 给spine clip[index]设opacity(width字段)/scale(seconds字段)
             if let id = spineClipID(at: cmd.index ?? 0) {

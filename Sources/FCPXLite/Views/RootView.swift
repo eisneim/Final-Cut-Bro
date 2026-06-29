@@ -64,8 +64,7 @@ struct RootView: View {
                                 TimelineView(store: store)
                                 if store.ui.showEffects {
                                     Divider().overlay(Tokens.Palette.divider)
-                                    PanelPlaceholder(title: "效果/转场", background: Tokens.Palette.effectsPanel)
-                                        .frame(width: Tokens.Metric.effectsWidth)
+                                    EffectsPanel(store: store)
                                 }
                             }
                         } else {

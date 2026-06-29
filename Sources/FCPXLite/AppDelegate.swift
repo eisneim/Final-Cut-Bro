@@ -91,6 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 case "a":      store.dispatch(.selectAllAssets); return nil
                 case "c":      store.copySelected(); return nil
                 case "v":      store.pasteAtPlayhead(); return nil
+                case "5":      store.dispatch(.setShowEffects(!store.ui.showEffects)); return nil
                 default:       return event
                 }
             }

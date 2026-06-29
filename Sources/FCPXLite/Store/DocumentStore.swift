@@ -138,6 +138,21 @@ import Observation
         dispatch(.setTransformKeyframes(id, []))
     }
 
+    /// 效果/转场面板:给选中片段追加一个特效。
+    func addEffectToSelected(_ kind: EffectKind) {
+        updateSelectedEffects { $0.append(Effect.make(kind)) }
+    }
+
+    /// 效果/转场面板:给选中的【主轴片段】加交叉叠化转场(与前一片段)。返回 false=无法加(未选/首片段/连接片段)。
+    @discardableResult
+    func addCrossfadeToSelected(seconds: Double) -> Bool {
+        guard let id = ui.selectedClipID,
+              let idx = TimelineGeometry.spineIndex(ofClipID: id, in: document.sequence),
+              idx >= 1 else { return false }
+        dispatch(.setCrossfade(at: idx, duration: .seconds(seconds)))
+        return true
+    }
+
     // MARK: - 复制 / 粘贴(⌘C / ⌘V)
 
     /// ⌘C:复制选中片段到剪贴板(深拷贝,粘贴时再换新 id)。
