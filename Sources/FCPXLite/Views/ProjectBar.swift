@@ -8,6 +8,11 @@ struct ProjectBar: View {
     // 卡片纵向换行网格(随宽度自适应列数);不内置滚动,跟随外层一起滚。
     private let columns = [GridItem(.adaptive(minimum: 94), spacing: 8)]
 
+    // 重命名状态:正在改名的项目 id + 输入框文本。
+    @State private var editingID: ProjectID?
+    @State private var editingName: String = ""
+    @FocusState private var renameFocused: Bool
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             toolbarHeader
@@ -62,8 +67,21 @@ struct ProjectBar: View {
                     }
                 }
                 .frame(width: 84, height: 48)
-                Text(p.name).font(.system(size: 10)).lineLimit(1)
-                    .foregroundStyle(current ? Tokens.Palette.onAccent : Tokens.Palette.textCool)
+                // 名称:双击进入重命名 → TextField;否则文本。
+                if editingID == p.id {
+                    TextField("项目名", text: $editingName)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 10))
+                        .foregroundStyle(Tokens.Palette.textPrimary)
+                        .focused($renameFocused)
+                        .onSubmit { commitRename(p) }
+                        .onChange(of: renameFocused) { _, focused in
+                            if !focused { commitRename(p) }   // 失焦也提交
+                        }
+                } else {
+                    Text(p.name).font(.system(size: 10)).lineLimit(1)
+                        .foregroundStyle(current ? Tokens.Palette.onAccent : Tokens.Palette.textCool)
+                }
                 Text("\(p.formatWidth)×\(p.formatHeight)")
                     .font(.system(size: 8)).foregroundStyle(Tokens.Palette.textMuted)
             }
@@ -75,6 +93,23 @@ struct ProjectBar: View {
                 .stroke(current ? Tokens.Palette.selectYellow : .clear, lineWidth: 1.5))
         }
         .buttonStyle(.plain)
+        .simultaneousGesture(TapGesture(count: 2).onEnded { beginRename(p) })  // 双击改名
+        .contextMenu {
+            Button("重命名") { beginRename(p) }
+            Button("删除项目", role: .destructive) { store.dispatch(.removeProject(p.id)) }
+        }
+    }
+
+    private func beginRename(_ p: Project) {
+        editingName = p.name
+        editingID = p.id
+        renameFocused = true
+    }
+
+    private func commitRename(_ p: Project) {
+        guard editingID == p.id else { return }
+        store.dispatch(.renameProject(p.id, editingName))
+        editingID = nil
     }
 
     /// 项目首个主轴片段的首帧缩略图(异步缓存;未就绪返回 nil → 占位)。

@@ -24,6 +24,8 @@ enum EditorAction: Codable, Equatable {
     case setShowExport(Bool)
     case createProject(Project)
     case selectProject(ProjectID)
+    case removeProject(ProjectID)
+    case renameProject(ProjectID, String)
     case setShowProjectModal(Bool)
     case importAsset(Asset)
     case selectClip(ClipID?)

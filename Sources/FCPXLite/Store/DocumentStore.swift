@@ -159,6 +159,21 @@ import Observation
             snapshot(); document.projects.append(p); document.currentProjectID = p.id
         case let .selectProject(id):
             snapshot(); document.currentProjectID = id; ui.selectedClipID = nil; ui.playhead = .zero
+        case let .removeProject(id):
+            snapshot()
+            document.projects.removeAll { $0.id == id }
+            // 删的是当前项目 → 切到剩下的第一个(没有则回到无项目门控)。
+            if document.currentProjectID == id {
+                document.currentProjectID = document.projects.first?.id
+                ui.selectedClipID = nil; ui.selectedGapID = nil; ui.playhead = .zero
+            }
+        case let .renameProject(id, name):
+            let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return }   // 空名忽略
+            snapshot()
+            if let i = document.projects.firstIndex(where: { $0.id == id }) {
+                document.projects[i].name = trimmed
+            }
         case let .setShowProjectModal(v):        ui.showProjectModal = v
         case let .importAsset(a):                snapshot(); document.assetLibrary.append(a)
         case let .selectClip(id):                ui.selectedClipID = id; ui.selectedGapID = nil
