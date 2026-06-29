@@ -89,6 +89,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 case "i":      ImportPanel.present(into: store); return nil
                 case "z":      mods.contains(.shift) ? store.redo() : store.undo(); return nil
                 case "a":      store.dispatch(.selectAllAssets); return nil
+                case "c":      store.copySelected(); return nil
+                case "v":      store.pasteAtPlayhead(); return nil
                 default:       return event
                 }
             }

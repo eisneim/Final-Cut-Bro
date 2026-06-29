@@ -64,4 +64,14 @@ struct Clip: Identifiable, Codable, Equatable {
         try c.encode(transformKeyframes, forKey: .transformKeyframes)
         try c.encode(enabled, forKey: .enabled)
     }
+
+    /// 深拷贝并给自身+所有连接子项换新 ClipID(用于复制/粘贴,避免 id 撞车)。
+    /// 保留全部参数(adjust/effects/关键帧),只换 id。
+    func duplicatedWithNewIDs() -> Clip {
+        Clip(id: ClipID(), assetID: assetID, sourceIn: sourceIn, duration: duration,
+             connected: connected.map { $0.duplicatedWithNewIDs() },
+             lane: lane, offset: offset, adjust: adjust, effects: effects,
+             volumeKeyframes: volumeKeyframes, transformKeyframes: transformKeyframes,
+             enabled: enabled)
+    }
 }

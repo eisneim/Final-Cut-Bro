@@ -10,6 +10,8 @@ import Observation
     /// 用户配置的 LLM provider 列表(磁盘持久化,非文档/非撤销范围)。
     var providers: [ProviderConfig] = ProviderPersistence.load()
     @ObservationIgnored private var agentTask: Task<Void, Never>?
+    /// 复制/粘贴剪贴板(瞬时缓冲,不进文档/不撤销)。
+    @ObservationIgnored var clipboard: Clip?
     init(document: Document, ui: UIState = UIState()) {
         self.document = document
         self.ui = ui
@@ -134,6 +136,36 @@ import Observation
     func clearTransformKeyframes() {
         guard let id = ui.selectedClipID else { return }
         dispatch(.setTransformKeyframes(id, []))
+    }
+
+    // MARK: - 复制 / 粘贴(⌘C / ⌘V)
+
+    /// ⌘C:复制选中片段到剪贴板(深拷贝,粘贴时再换新 id)。
+    func copySelected() {
+        clipboard = selectedClip()
+    }
+
+    /// ⌘V:把剪贴板片段粘贴到播放头处 —— 插入主轴,起点在播放头所在的最近编辑点(不分割已有片段)。
+    /// 片段及其连接子项都换新 id(避免 id 撞车)。粘贴后选中新片段。
+    func pasteAtPlayhead() {
+        guard let src = clipboard else { return }
+        guard document.hasProject else { return }
+        let dup = src.duplicatedWithNewIDs()
+        let idx = spineInsertIndexAtPlayhead()
+        dispatch(.insertClip(dup, at: idx))
+        dispatch(.selectClip(dup.id))
+    }
+
+    /// 主轴插入下标:跳过所有"结束 ≤ 播放头"的元素 → 在播放头所在/之后的编辑点插入。
+    private func spineInsertIndexAtPlayhead() -> Int {
+        let ph = ui.playhead.seconds
+        var elapsed = 0.0
+        var idx = 0
+        for el in document.sequence.spine {
+            let end = elapsed + el.duration.seconds
+            if end <= ph + 0.0005 { idx += 1; elapsed = end } else { break }
+        }
+        return idx
     }
 
     // MARK: - Agent 对话(UI 按钮与 harness 共用同一路径)
