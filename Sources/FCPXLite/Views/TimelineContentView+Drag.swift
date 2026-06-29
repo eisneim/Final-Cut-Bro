@@ -84,7 +84,8 @@ extension TimelineContentView {
         case .blade:
             if !inRuler, let p = hitTestClip(at: pt),
                let s = TimelineGeometry.spineIndex(ofClipID: p.clipID, in: sequence) {
-                dispatch?(.blade(at: s, localTime: Time.seconds(max(0, t - p.absStart.seconds))))
+                let cutAbs = snapSeconds(t)   // 切割点吸附到邻近编辑点/光标
+                dispatch?(.blade(at: s, localTime: Time.seconds(max(0, cutAbs - p.absStart.seconds))))
             }
             return
         case .trim:
@@ -226,7 +227,7 @@ extension TimelineContentView {
         if let td = trimDrag {
             guard let (clip, _) = spineClipAndIndex(td.clipID) else { return }
             let clipStartSec = (placed.first { $0.clipID == td.clipID }?.absStart.seconds) ?? 0
-            let cursorSec = TimelineGeometry.seconds(forX: pt.x, pxPerSecond: pxPerSecond)
+            let cursorSec = snapSeconds(TimelineGeometry.seconds(forX: pt.x, pxPerSecond: pxPerSecond))
             let assetDur = assetDuration(of: clip)
             if td.edge == .tail {
                 let newDur = max(0.04, cursorSec - clipStartSec)
@@ -349,5 +350,15 @@ extension TimelineContentView {
             out.append(p.absStart + p.duration)
         }
         return out
+    }
+
+    /// 把一个【绝对时间(秒)】吸附到邻近编辑点(片段首尾/播放头/0),阈值=几像素。snapping 关时原样返回。
+    /// 供 blade(切割吸光标)、trim(修剪边吸邻近边)共用。
+    func snapSeconds(_ rawSeconds: Double) -> Double {
+        guard snappingEnabled else { return max(0, rawSeconds) }
+        let threshold = pxPerSecond > 0 ? Double(8.0 / pxPerSecond) : 0
+        let snapped = Snapping.snap(Time.seconds(rawSeconds), candidates: snapCandidates(),
+                                    threshold: Time.seconds(threshold))
+        return max(0, snapped.seconds)
     }
 }

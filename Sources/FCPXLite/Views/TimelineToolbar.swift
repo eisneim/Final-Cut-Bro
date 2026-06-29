@@ -88,6 +88,15 @@ struct TimelineToolbar: View {
                 Text("+").font(Tokens.Typeface.body).foregroundStyle(Tokens.Palette.textIcon)
             }
             .buttonStyle(.plain).frame(width: 22, height: 22).help("放大 (⌘+)")
+
+            // 磁吸编辑开关:吸铁石图标。开=切割/修剪/平移自动 snap 到邻近编辑点。
+            Button { store.dispatch(.toggleSnapping) } label: {
+                Image(systemName: "magnet")
+                    .font(.system(size: 13))
+                    .foregroundStyle(store.ui.snappingEnabled ? Tokens.Palette.selectYellow : Tokens.Palette.textMuted)
+            }
+            .buttonStyle(.plain).frame(width: 24, height: 22)
+            .help(store.ui.snappingEnabled ? "磁吸编辑:开(N 切换)" : "磁吸编辑:关(N 切换)")
         }
     }
 
