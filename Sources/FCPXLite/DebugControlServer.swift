@@ -342,10 +342,10 @@ final class DebugControlServer {
     // MARK: - 渲染
 
     private func snapshotJSON() -> Data {
-        struct Snap: Encodable { let document: Document; let ui: UIState }
+        struct Snap: Encodable { let document: Document; let ui: UIState; let agentBusy: Bool }
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]
-        return (try? enc.encode(Snap(document: store.document, ui: store.ui))) ?? Data("{}".utf8)
+        return (try? enc.encode(Snap(document: store.document, ui: store.ui, agentBusy: store.agentBusy))) ?? Data("{}".utf8)
     }
 
     private func screenshotPNG() -> Data? {

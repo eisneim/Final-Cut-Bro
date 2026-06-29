@@ -10,13 +10,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         assetLibrary: [], projects: [], currentProjectID: nil))   // 启动无项目 → 时间轴门控
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // 默认占满主显示器可用区域(扣掉菜单栏/Dock)。
+        let initial = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1280, height: 800),
+            contentRect: initial,
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered, defer: false)
         window.title = "FCPX-lite"
         window.contentView = NSHostingView(rootView: RootView(store: store))
-        window.center()
+        window.setFrame(initial, display: true)   // 占满可用屏幕
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         installMenu()
