@@ -1,5 +1,6 @@
 import AVFoundation
 import CoreGraphics
+import ImageIO
 import AppKit
 
 /// 文档 → 可播放合成。每个 clip(主轴或连接)各自一条视频轨 + 音频轨:
@@ -27,8 +28,8 @@ enum CompositionBuilder {
             if end > totalEnd { totalEnd = end }
             // 图片:作为静帧层直接交给合成器(无轨),不走 AVAsset 轨道。
             if asset.kind == .image {
-                guard let cg = NSImage(contentsOf: asset.url)?
-                        .cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+                // 用 CGImageSource 解码以保留 alpha 通道(NSImage.cgImage 会渲染进不透明上下文丢掉透明)。
+                guard let cg = loadCGImage(url: asset.url) else { return }
                 inserted = true
                 let natural = CGSize(width: cg.width, height: cg.height)
                 segments.append((kCMPersistentTrackID_Invalid, cg, lane, clip.adjust, start, end,
@@ -202,6 +203,12 @@ enum CompositionBuilder {
         t = t.concatenating(CGAffineTransform(translationX: cx + adj.transform.position.x,
                                               y: cy + adj.transform.position.y))
         return t
+    }
+
+    /// 解码图片(PNG/JPEG/…)为 CGImage,保留 alpha(CGImageSource 不像 NSImage 那样压扁透明)。
+    private static func loadCGImage(url: URL) -> CGImage? {
+        guard let src = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        return CGImageSourceCreateImageAtIndex(src, 0, nil)
     }
 
     // 缓存的 1 帧黑视频(供纯图片时间线撑时长)。

@@ -33,11 +33,13 @@ struct RootView: View {
                 let timelineH = max(140, min(avail - 140, avail * store.ui.timelineFraction))
                 VStack(spacing: 0) {
                     HStack(spacing: 0) {
-                        // 左侧只保留素材池(去掉原最左竖列);顶部含项目栏 + 创建。
-                        VStack(spacing: 0) {
-                            ProjectBar(store: store)
-                            Divider().overlay(Tokens.Palette.divider)
-                            BrowserView(store: store)
+                        // 左侧栏:项目 + 素材池在同一个 ScrollView 里整体滚动(项目可有很多个)。
+                        ScrollView {
+                            VStack(spacing: 0) {
+                                ProjectBar(store: store)
+                                Divider().overlay(Tokens.Palette.divider)
+                                BrowserView(store: store)
+                            }
                         }
                         .frame(width: store.ui.browserWidth)
                         WidthDragHandle(width: store.ui.browserWidth, sign: 1) {

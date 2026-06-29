@@ -65,8 +65,7 @@ struct BrowserView: View {
     // MARK: - Asset Grid
 
     private var assetGrid: some View {
-        ScrollView {
-            LazyVGrid(columns: columns, spacing: 8) {
+        LazyVGrid(columns: columns, spacing: 8) {
                 ForEach(store.document.assetLibrary) { asset in
                     AssetCardView(asset: asset)
                         .overlay(
@@ -93,7 +92,6 @@ struct BrowserView: View {
                 }
             }
             .padding(8)
-        }
     }
 
     // MARK: - Drop
