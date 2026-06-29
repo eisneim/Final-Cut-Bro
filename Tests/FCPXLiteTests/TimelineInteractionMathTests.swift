@@ -57,6 +57,7 @@ final class TimelineInteractionMathTests: XCTestCase {
         let v = TimelineContentView(frame: NSRect(x: 0, y: 0, width: 2000, height: 200))
         v.apply(state: .init(sequence: Sequence(spine: spine), assetLibrary: [],
                              pxPerSecond: 60, playheadSeconds: 0, selectedClipID: nil, selectedGapID: nil,
+                             selectedTransitionClipID: nil,
                              currentTool: .select, snappingEnabled: true, clipHeight: 72, vaRatio: 0.6))
         return v
     }
