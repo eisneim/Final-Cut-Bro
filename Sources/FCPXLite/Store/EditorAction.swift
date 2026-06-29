@@ -51,6 +51,7 @@ enum EditorAction: Codable, Equatable {
     case setAdjust(ClipID, Adjustments)
     case setEffects(ClipID, [Effect])
     case setVolumeKeyframes(ClipID, [VolumeKeyframe])
+    case setTransformKeyframes(ClipID, [TransformKeyframe])
     case setEnabled(ClipID, Bool)
 }
 

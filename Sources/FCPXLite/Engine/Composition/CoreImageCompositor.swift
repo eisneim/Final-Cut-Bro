@@ -41,6 +41,22 @@ final class CoreImageCompositor: NSObject, AVVideoCompositing {
                 } else {
                     continue
                 }
+                // 变换关键帧:按当前合成时间(相对片段起点)插值,重算几何矩阵 + 不透明度。
+                var effTransform = layer.transform
+                var effOpacity = layer.opacity
+                if !layer.transformKeyframes.isEmpty {
+                    let relT = (request.compositionTime - layer.clipStart).seconds
+                    let s = TransformKeyframeMath.sample(
+                        keyframes: layer.transformKeyframes, atSeconds: relT,
+                        basePosition: .zero, baseScale: CGSize(width: 1, height: 1), baseOpacity: 1)
+                    var adj = Adjustments()
+                    adj.transform.position = s.position
+                    adj.transform.scale = s.scale
+                    adj.transform.rotation = layer.baseRotation
+                    effTransform = CompositionBuilder.fullTransform(
+                        adjust: adj, natural: layer.natural, pref: layer.pref, renderSize: layer.renderSize)
+                    effOpacity = Float(s.opacity)
+                }
                 // 源 y-up → 左上原点 y-down,使 layer.transform 的垂直语义(position.y)与裁剪正确。
                 let flipSrc = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: src.extent.height)
                 var img = src.transformed(by: flipSrc)
@@ -53,13 +69,13 @@ final class CoreImageCompositor: NSObject, AVVideoCompositing {
                                       height: max(1, h - CGFloat(c.top) - CGFloat(c.bottom)))
                     img = img.cropped(to: kept)
                 }
-                img = img.transformed(by: layer.transform)
+                img = img.transformed(by: effTransform)
                 img = VideoEffectFilters.apply(layer.effects, to: img)
                 // 不透明度:乘 alpha
-                if layer.opacity < 1 {
+                if effOpacity < 1 {
                     if let f = CIFilter(name: "CIColorMatrix") {
                         f.setValue(img, forKey: kCIInputImageKey)
-                        f.setValue(CIVector(x: 0, y: 0, z: 0, w: CGFloat(layer.opacity)), forKey: "inputAVector")
+                        f.setValue(CIVector(x: 0, y: 0, z: 0, w: CGFloat(effOpacity)), forKey: "inputAVector")
                         img = f.outputImage ?? img
                     }
                 }

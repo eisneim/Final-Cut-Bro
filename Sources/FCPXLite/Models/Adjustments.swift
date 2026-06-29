@@ -74,3 +74,57 @@ struct VolumeKeyframe: Codable, Equatable, Identifiable {
         self.value = value
     }
 }
+
+/// 变换关键帧:相对 clip 起点的时间 + 位移/缩放/不透明度。
+/// 对齐 VolumeKeyframe 模型;合成器按 request time 线性插值实现动画。
+struct TransformKeyframe: Codable, Equatable, Identifiable {
+    var id: UUID
+    var time: Time            // 相对 clip 起点
+    var position: CGPoint     // 渲染坐标位移(像素)
+    var scale: CGSize         // 缩放(1=原始)
+    var opacity: Double       // 0–1
+
+    init(id: UUID = UUID(), time: Time,
+         position: CGPoint = .zero, scale: CGSize = CGSize(width: 1, height: 1),
+         opacity: Double = 1.0) {
+        self.id = id
+        self.time = time
+        self.position = position
+        self.scale = scale
+        self.opacity = opacity
+    }
+
+    enum CodingKeys: String, CodingKey {
+        // 扁平化(对齐 Transform 的持久化契约)。
+        case id, time, positionX, positionY, scaleWidth, scaleHeight, opacity
+    }
+
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        time = try c.decode(Time.self, forKey: .time)
+        position = CGPoint(x: try c.decode(Double.self, forKey: .positionX),
+                           y: try c.decode(Double.self, forKey: .positionY))
+        scale = CGSize(width: try c.decode(Double.self, forKey: .scaleWidth),
+                       height: try c.decode(Double.self, forKey: .scaleHeight))
+        opacity = try c.decode(Double.self, forKey: .opacity)
+    }
+
+    func encode(to e: Encoder) throws {
+        var c = e.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(time, forKey: .time)
+        try c.encode(position.x, forKey: .positionX)
+        try c.encode(position.y, forKey: .positionY)
+        try c.encode(scale.width, forKey: .scaleWidth)
+        try c.encode(scale.height, forKey: .scaleHeight)
+        try c.encode(opacity, forKey: .opacity)
+    }
+
+    static func == (l: TransformKeyframe, r: TransformKeyframe) -> Bool {
+        l.id == r.id && l.time == r.time &&
+        l.position.x == r.position.x && l.position.y == r.position.y &&
+        l.scale.width == r.scale.width && l.scale.height == r.scale.height &&
+        l.opacity == r.opacity
+    }
+}

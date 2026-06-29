@@ -16,8 +16,8 @@ enum CompositionBuilder {
         let composition = AVMutableComposition()
         let library = Dictionary(uniqueKeysWithValues: document.assetLibrary.map { ($0.id, $0) })
         var inserted = false
-        // 每段:轨ID(图片段为 invalid)+ 可选静帧图 + lane + adjust + [start,end) + 原生尺寸/方向 + effects
-        var segments: [(trackID: CMPersistentTrackID, image: CGImage?, lane: Int, adjust: Adjustments, start: CMTime, end: CMTime, natural: CGSize, pref: CGAffineTransform, effects: [Effect])] = []
+        // 每段:轨ID(图片段为 invalid)+ 可选静帧图 + lane + adjust + [start,end) + 原生尺寸/方向 + effects + 变换关键帧
+        var segments: [(trackID: CMPersistentTrackID, image: CGImage?, lane: Int, adjust: Adjustments, start: CMTime, end: CMTime, natural: CGSize, pref: CGAffineTransform, effects: [Effect], tkf: [TransformKeyframe])] = []
         var audioParams: [AVMutableAudioMixInputParameters] = []
         var totalEnd = CMTime.zero
 
@@ -33,7 +33,7 @@ enum CompositionBuilder {
                 inserted = true
                 let natural = CGSize(width: cg.width, height: cg.height)
                 segments.append((kCMPersistentTrackID_Invalid, cg, lane, clip.adjust, start, end,
-                                 natural, .identity, clip.effects))
+                                 natural, .identity, clip.effects, clip.transformKeyframes))
                 return
             }
             let av = AVURLAsset(url: asset.url)
@@ -43,7 +43,7 @@ enum CompositionBuilder {
                 do { try track.insertTimeRange(range, of: v, at: start)
                      inserted = true
                      segments.append((track.trackID, nil, lane, clip.adjust, start, start + cm(clip.duration),
-                                      v.naturalSize, v.preferredTransform, clip.effects))
+                                      v.naturalSize, v.preferredTransform, clip.effects, clip.transformKeyframes))
                 } catch { print("[CompositionBuilder] video: \(error)") }
             }
             if asset.hasAudio, let a = av.tracks(withMediaType: .audio).first,
@@ -148,7 +148,13 @@ enum CompositionBuilder {
                                        transform: xf,
                                        opacity: Float(seg.adjust.opacity),
                                        crop: seg.adjust.crop,
-                                       effects: seg.effects)
+                                       effects: seg.effects,
+                                       transformKeyframes: seg.tkf,
+                                       clipStart: seg.start,
+                                       natural: seg.natural,
+                                       pref: seg.pref,
+                                       renderSize: renderSize,
+                                       baseRotation: seg.adjust.transform.rotation)
             }
             instructions.append(CompositorInstruction(
                 timeRange: CMTimeRange(start: t0, end: t1), layers: layers))

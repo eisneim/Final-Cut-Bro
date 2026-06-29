@@ -13,21 +13,24 @@ struct Clip: Identifiable, Codable, Equatable {
     var adjust: Adjustments
     var effects: [Effect]
     var volumeKeyframes: [VolumeKeyframe]
+    var transformKeyframes: [TransformKeyframe]
     var enabled: Bool          // 停用(V 键)→ 不参与预览/导出,时间线上变暗
 
     init(id: ClipID = ClipID(), assetID: AssetID, sourceIn: Time, duration: Time,
          connected: [Clip] = [], lane: Int = 0, offset: Time = .zero,
          adjust: Adjustments = Adjustments(), effects: [Effect] = [],
-         volumeKeyframes: [VolumeKeyframe] = [], enabled: Bool = true) {
+         volumeKeyframes: [VolumeKeyframe] = [], transformKeyframes: [TransformKeyframe] = [],
+         enabled: Bool = true) {
         self.id = id; self.assetID = assetID
         self.sourceIn = sourceIn; self.duration = duration
         self.connected = connected; self.lane = lane
         self.offset = offset; self.adjust = adjust; self.effects = effects
-        self.volumeKeyframes = volumeKeyframes; self.enabled = enabled
+        self.volumeKeyframes = volumeKeyframes; self.transformKeyframes = transformKeyframes
+        self.enabled = enabled
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, assetID, sourceIn, duration, connected, lane, offset, adjust, effects, volumeKeyframes, enabled
+        case id, assetID, sourceIn, duration, connected, lane, offset, adjust, effects, volumeKeyframes, transformKeyframes, enabled
     }
 
     init(from decoder: Decoder) throws {
@@ -42,6 +45,7 @@ struct Clip: Identifiable, Codable, Equatable {
         adjust = try c.decode(Adjustments.self, forKey: .adjust)
         effects = try c.decodeIfPresent([Effect].self, forKey: .effects) ?? []   // 旧 JSON 缺字段 → []
         volumeKeyframes = try c.decodeIfPresent([VolumeKeyframe].self, forKey: .volumeKeyframes) ?? []
+        transformKeyframes = try c.decodeIfPresent([TransformKeyframe].self, forKey: .transformKeyframes) ?? []
         enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? true      // 旧 JSON 缺字段 → 启用
     }
 
@@ -57,6 +61,7 @@ struct Clip: Identifiable, Codable, Equatable {
         try c.encode(adjust, forKey: .adjust)
         try c.encode(effects, forKey: .effects)
         try c.encode(volumeKeyframes, forKey: .volumeKeyframes)
+        try c.encode(transformKeyframes, forKey: .transformKeyframes)
         try c.encode(enabled, forKey: .enabled)
     }
 }

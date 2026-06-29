@@ -19,6 +19,7 @@ struct InspectorView: View {
                                   dx: clip.adjust.transform.position.x, dy: clip.adjust.transform.position.y, suffix: "px")
                             sliderRow("旋转", value: bind(\.transform.rotation), range: -180...180, suffix: "°", display: clip.adjust.transform.rotation)
                             sliderRow("缩放(全部)", value: scaleAllBinding(clip), range: 1...400, suffix: "%", display: clip.adjust.transform.scale.width * 100)
+                            keyframeRow(clip)
                         }
                         section("裁剪", reset: { store.updateSelectedAdjust { $0.crop = Crop() } }) {
                             sliderRow("左", value: bind(\.crop.left), range: 0...1000, suffix: "px", display: clip.adjust.crop.left)
@@ -67,6 +68,37 @@ struct InspectorView: View {
     }
 
     // MARK: - UI 构件
+
+    /// 变换关键帧行:在播放头加关键帧(抓当前位移/缩放/不透明度)+ 显示已有数 + 清除。
+    private func keyframeRow(_ clip: Clip) -> some View {
+        HStack(spacing: 8) {
+            Text("关键帧").font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
+                .frame(width: 80, alignment: .leading)
+            Button {
+                store.addTransformKeyframeAtPlayhead()
+            } label: {
+                HStack(spacing: 3) {
+                    Image(systemName: "diamond.fill").font(.system(size: 8))
+                    Text("加关键帧").font(Tokens.Typeface.label)
+                }
+                .foregroundStyle(Tokens.Palette.selectYellow)
+                .padding(.horizontal, 6).padding(.vertical, 2)
+                .background(Tokens.Palette.elevated).cornerRadius(4)
+            }
+            .buttonStyle(.plain).help("在播放头处记录当前变换为关键帧")
+            if !clip.transformKeyframes.isEmpty {
+                Text("\(clip.transformKeyframes.count)")
+                    .font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
+                Button { store.clearTransformKeyframes() } label: {
+                    Image(systemName: "xmark.circle").font(.system(size: 11))
+                        .foregroundStyle(Tokens.Palette.textMuted)
+                }
+                .buttonStyle(.plain).help("清除全部变换关键帧")
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 10).padding(.vertical, 4)
+    }
 
     private func section<C: View>(_ title: String, reset: (() -> Void)? = nil, @ViewBuilder _ content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 0) {

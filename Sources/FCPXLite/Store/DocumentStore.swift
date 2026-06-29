@@ -107,6 +107,35 @@ import Observation
         dispatch(.setEnabled(id, !clip.enabled))
     }
 
+    /// 选中片段在时间线上的绝对起点(主轴或连接均可)。
+    func clipAbsStart(_ id: ClipID) -> Time? {
+        for p in Layout.compute(document.sequence) where p.clipID == id { return p.absStart }
+        return nil
+    }
+
+    /// 在播放头处给选中片段加一个变换关键帧:抓取当前 位移/缩放/不透明度,
+    /// 时间 = 播放头相对片段起点(clamp 到 [0, 时长])。同时间已有则替换。
+    func addTransformKeyframeAtPlayhead() {
+        guard let id = ui.selectedClipID, let clip = selectedClip(),
+              let absStart = clipAbsStart(id) else { return }
+        let relSecs = max(0, min(clip.duration.seconds, ui.playhead.seconds - absStart.seconds))
+        let t = Time.seconds(relSecs)
+        let kf = TransformKeyframe(time: t,
+                                   position: clip.adjust.transform.position,
+                                   scale: clip.adjust.transform.scale,
+                                   opacity: clip.adjust.opacity)
+        var kfs = clip.transformKeyframes.filter { abs($0.time.seconds - relSecs) > 0.001 }  // 同时间替换
+        kfs.append(kf)
+        kfs.sort { $0.time < $1.time }
+        dispatch(.setTransformKeyframes(id, kfs))
+    }
+
+    /// 清空选中片段的变换关键帧(回到静态变换)。
+    func clearTransformKeyframes() {
+        guard let id = ui.selectedClipID else { return }
+        dispatch(.setTransformKeyframes(id, []))
+    }
+
     // MARK: - Agent 对话(UI 按钮与 harness 共用同一路径)
 
     /// 发送输入框里的内容给 Agent(读 ui.agentInput,清空,跑流式循环)。
@@ -229,6 +258,7 @@ import Observation
         case let .setAdjust(id, a):      apply { Mutations.setAdjust(clipID: id, a, in: $0) }
         case let .setEffects(id, fx):    apply { Mutations.setEffects(clipID: id, fx, in: $0) }
         case let .setVolumeKeyframes(id, kfs): apply { Mutations.setVolumeKeyframes(clipID: id, kfs, in: $0) }
+        case let .setTransformKeyframes(id, kfs): apply { Mutations.setTransformKeyframes(clipID: id, kfs, in: $0) }
         case let .setEnabled(id, on):    apply { Mutations.setEnabled(clipID: id, on, in: $0) }
         }
     }
