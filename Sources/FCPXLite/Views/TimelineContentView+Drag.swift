@@ -88,6 +88,7 @@ extension TimelineContentView {
             }
             return
         case .trim:
+            if !inRuler, transitionMouseDown(at: pt) { return }   // 转场优先(选中/调宽)
             if let e = edgeHit(at: pt) {
                 trimDrag = e
                 dispatch?(.selectClip(e.clipID))
@@ -106,7 +107,9 @@ extension TimelineContentView {
             return
         case .select, .position, .range:
             if !inRuler {
-                // Volume level 线优先拦截(select 工具)
+                // 转场标记最优先(小而具体的区域,点它就是选/调转场,别被音量线/clip 抢走)。
+                if transitionMouseDown(at: pt) { return }
+                // Volume level 线拦截(select 工具)
                 if volumeMouseDown(with: event, at: pt) { return }
                 // gap(灰条)最优先:在 gap 上(含边界)就处理 gap,避免被相邻 clip 的 trim/roll 抢走。
                 if gapMouseDown(at: pt) { return }
@@ -146,6 +149,8 @@ extension TimelineContentView {
 
         // Volume level 线拖拽优先
         if volumeMouseDragged(with: event, at: pt) { return }
+        // 转场调宽
+        if transitionMouseDragged(at: pt) { return }
         // gap 修剪/拖动
         if gapMouseDragged(at: pt) { return }
 
@@ -258,6 +263,7 @@ extension TimelineContentView {
     override func mouseUp(with event: NSEvent) {
         volumeMouseUp()
         gapMouseUp()
+        transitionMouseUp()
         // 位置工具:松手时一次性 commit positionMove(源处留 gap,目标落点 = 光标,不吸附)。
         if currentTool == .position, let id = dragClipID, let cur = dragCurrentPoint,
            let start = dragStartPoint, hypot(cur.x - start.x, cur.y - start.y) > Self.dragThresholdPx {
@@ -291,6 +297,7 @@ extension TimelineContentView {
             addCursorRect(bounds, cursor: .arrow)
             addVolumeLineCursorRects()
             addGapCursorRects()
+            addTransitionCursorRects()
             // lane-0 clip 的首/尾边缘热区 + roll 切点热区 → 双箭头光标
             let lane0 = placed.filter { $0.lane == 0 }.sorted { $0.absStart < $1.absStart }
             for p in lane0 {

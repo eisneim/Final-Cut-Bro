@@ -18,6 +18,7 @@ final class TimelineContentView: NSView {
     private(set) var playheadSeconds: Double = 0
     private(set) var selectedClipID: ClipID? = nil
     private(set) var selectedGapID: GapID? = nil
+    private(set) var selectedTransitionClipID: ClipID? = nil
     private(set) var currentTool: EditTool = .select
     private(set) var snappingEnabled: Bool = true
     /// clip 条高度(可调)与 画面/波形 占比(filmstrip 占上方比例)。
@@ -60,6 +61,8 @@ final class TimelineContentView: NSView {
     /// 缩放工具:拖动起点 x + 起始 pxPerSecond。
     var zoomStartX: CGFloat?
     var zoomStartPx: CGFloat = 60
+    /// 转场调宽:拖转场边缘改 crossfadeIn 时长。seamX=接缝位置,startDur=起始时长。
+    var transitionDrag: (clipIndex: Int, seamX: CGFloat, startDur: Double)?
     /// 边缘命中阈值(像素)。
     static let edgeHitPx: CGFloat = 6
 
@@ -119,6 +122,7 @@ final class TimelineContentView: NSView {
         let playheadSeconds: Double
         let selectedClipID: ClipID?
         let selectedGapID: GapID?
+        let selectedTransitionClipID: ClipID?
         let currentTool: EditTool
         let snappingEnabled: Bool
         let clipHeight: CGFloat
@@ -132,6 +136,7 @@ final class TimelineContentView: NSView {
         playheadSeconds = state.playheadSeconds
         selectedClipID = state.selectedClipID
         selectedGapID = state.selectedGapID
+        selectedTransitionClipID = state.selectedTransitionClipID
         currentTool = state.currentTool
         snappingEnabled = state.snappingEnabled
         laneH = state.clipHeight
@@ -205,9 +210,11 @@ final class TimelineContentView: NSView {
             let seamX = clipRect(p).minX
             let rect = TimelineGeometry.transitionRect(seamX: seamX, crossfadeSecs: clip.crossfadeIn.seconds,
                                                        pxPerSecond: pxPerSecond, laneY: laneY, laneHeight: laneH)
+            let selected = clip.id == selectedTransitionClipID
             let path = NSBezierPath(roundedRect: rect, xRadius: 3, yRadius: 3)
-            TimelineColors.transition.withAlphaComponent(0.35).setFill(); path.fill()
-            TimelineColors.transition.withAlphaComponent(0.9).setStroke(); path.lineWidth = 1; path.stroke()
+            TimelineColors.transition.withAlphaComponent(selected ? 0.5 : 0.35).setFill(); path.fill()
+            (selected ? TimelineColors.selectBorder : TimelineColors.transition.withAlphaComponent(0.9)).setStroke()
+            path.lineWidth = selected ? 2 : 1; path.stroke()
             // 蝴蝶结(两个对顶三角)= 叠化符号
             let bow = NSBezierPath()
             let midY = rect.midY, h = min(rect.height * 0.4, 14)

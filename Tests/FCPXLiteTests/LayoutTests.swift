@@ -14,6 +14,21 @@ final class LayoutTests: XCTestCase {
         XCTAssertEqual(placed.map(\.absStart), [.seconds(0), .seconds(2), .seconds(5)])
     }
 
+    func testCrossfadeShiftsClipEarlier() {
+        // clip0 0-5;clip1 带 1s 叠化 → 起点前移到 4(与 clip0 重叠 [4,5]),其后也跟着前移。
+        var c1 = clip(3); c1.crossfadeIn = .seconds(1)
+        let seq = Sequence(spine: [.clip(clip(5)), .clip(c1), .clip(clip(2))])
+        let placed = Layout.compute(seq)
+        XCTAssertEqual(placed[0].absStart.seconds, 0, accuracy: 0.001)
+        XCTAssertEqual(placed[1].absStart.seconds, 4, accuracy: 0.001, "叠化片段起点前移 1s")
+        XCTAssertEqual(placed[2].absStart.seconds, 7, accuracy: 0.001, "其后片段也跟着前移(4+3=7)")
+    }
+
+    func testCrossfadeFirstClipNoShift() {
+        var c0 = clip(5); c0.crossfadeIn = .seconds(1)
+        XCTAssertEqual(Layout.compute(Sequence(spine: [.clip(c0)]))[0].absStart.seconds, 0, accuracy: 0.001)
+    }
+
     func testGapAdvancesTimeButNoPlaced() {
         let seq = Sequence(spine: [.clip(clip(2)), .gap(duration: .seconds(4)), .clip(clip(1))])
         let placed = Layout.compute(seq)

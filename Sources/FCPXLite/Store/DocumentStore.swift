@@ -272,8 +272,9 @@ import Observation
             }
         case let .setShowProjectModal(v):        ui.showProjectModal = v
         case let .importAsset(a):                snapshot(); document.assetLibrary.append(a)
-        case let .selectClip(id):                ui.selectedClipID = id; ui.selectedGapID = nil
-        case let .selectGap(id):                 ui.selectedGapID = id; ui.selectedClipID = nil
+        case let .selectClip(id):                ui.selectedClipID = id; ui.selectedGapID = nil; ui.selectedTransitionClipID = nil
+        case let .selectGap(id):                 ui.selectedGapID = id; ui.selectedClipID = nil; ui.selectedTransitionClipID = nil
+        case let .selectTransition(id):          ui.selectedTransitionClipID = id; ui.selectedClipID = nil; ui.selectedGapID = nil
         case let .setGapDurationByID(id, dur):   apply { Mutations.setGapDurationByID(id, duration: dur, in: $0) }
         case let .moveGap(id, t):                apply { Mutations.moveGap(id, toTime: t, in: $0) }
         case let .removeGap(id):                 apply { Mutations.removeGap(id, in: $0) }
@@ -427,6 +428,13 @@ import Observation
     func deleteSelected() {
         if let gid = ui.selectedGapID {
             dispatch(.removeGap(gid)); dispatch(.selectGap(nil)); return
+        }
+        // 选中转场 → 删除 = 把 crossfade 归零(移除转场,不删片段)。
+        if let tid = ui.selectedTransitionClipID {
+            if let idx = TimelineGeometry.spineIndex(ofClipID: tid, in: document.sequence) {
+                dispatch(.setCrossfade(at: idx, duration: .zero))
+            }
+            dispatch(.selectTransition(nil)); return
         }
         guard let id = ui.selectedClipID else { return }
         if let idx = TimelineGeometry.spineIndex(ofClipID: id, in: document.sequence) {

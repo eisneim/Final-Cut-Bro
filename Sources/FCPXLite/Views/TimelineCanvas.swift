@@ -48,6 +48,7 @@ struct TimelineCanvas: NSViewRepresentable {
             playheadSeconds: playheadSeconds,
             selectedClipID: selectedClipID,
             selectedGapID: selectedGapID,
+            selectedTransitionClipID: store.ui.selectedTransitionClipID,
             currentTool: tool,
             snappingEnabled: snappingEnabled,
             clipHeight: clipHeight,
