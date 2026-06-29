@@ -40,6 +40,8 @@
 - ✅ **T6** clip 复制/粘贴 ⌘C/⌘V — 深拷贝换新 id 粘贴到播放头最近编辑点 + 7 测试(commit c5d42af)。
 - 🔸 额外:左侧栏整体滚动 + PNG 保留 alpha(commit 5c9d07d)。
 - ⏳ **T7/T8** 需用户启动 server + 配置真实 LLkey,无法自动跑。
-- ✅ **T9** 导出矩阵 — 编码 FourCC(avc1/hvc1/apcn)×分辨率(720/1080)正确 + 质量档码率绑定(高熵噪声内容)+ 码率单调性单测(commit 508b89f)。
+- ✅ **T9** 导出矩阵 — 编码 FourCC(avc1/hvc1/apcn)×分辨率(720/1080)正确 + 质量档码率绑定 + 码率单调性单测(commit 508b89f)。
+- ✅ **T7** Agent 20 条逐动作冒烟 — 真实 LLM(StepFun)经 agentSend **19/19 全过**(import/append/insert/connect/blade/scale/crop/opacity/volume/position/add_effect/add_keyframe/transition/duplicate/playhead/zoom/tool/select)。driver: `scripts/agent_e2e_smoke.py`。最初 11/19 是测试链式状态漂移(insert 把音频放 clip0,画面操作被 agent 正确拒绝),非产品 bug。
+- ✅ **T8** Agent 真实工作流 — 一句话复合指令(导入→拼视频→连背景乐→压原声 20%→导出)**4/4**:多步推理连贯 + 产物。driver: `scripts/agent_e2e_workflow.py`。期间发现并修复真 bug:背景乐长于视频时导出 -11841(commit 628931e,live GPU 实测 2s 成功)。
 
 ### T7/T8 用户自跑手册(我已验证可自动化的部分)
