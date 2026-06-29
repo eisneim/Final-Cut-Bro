@@ -31,3 +31,13 @@
 
 ## 进度
 (逐项完成后在此记录 commit + 验证结果)
+
+- ✅ **T1** 真覆盖(Overwrite/D)— `Mutations.overwrite` + 5 测试。
+- ✅ **T2** 时间轴交互纯逻辑单测 — VolumeLineMath/几何 6 测试。
+- ✅ **T3** 图片进合成 — CGImage 静帧层 + 纯图时间线用 1 帧 blank 视频 scaleTimeRange 撑时长;端到端渲染验证(commit 6ef5719)。
+- ✅ **T4** 项目删除/重命名 — removeProject/renameProject + ProjectBar 右键+双击 + 7 测试(commit bd765f1)。
+- ✅ **T5** transform 关键帧 — TransformKeyframe 模型 + 合成器按 request time 插值(containsTweening)+ inspector 加关键帧按钮 + 18 测试(含不透明度动画端到端渲染)(commit 052d6dc)。
+- ✅ **T6** clip 复制/粘贴 ⌘C/⌘V — 深拷贝换新 id 粘贴到播放头最近编辑点 + 7 测试(commit c5d42af)。
+- 🔸 额外:左侧栏整体滚动 + PNG 保留 alpha(commit 5c9d07d)。
+- ⏳ **T7/T8** 需用户启动 server + 配置真实 LLkey,无法自动跑。
+- ⏳ **T9** 导出矩阵 — 见下。
