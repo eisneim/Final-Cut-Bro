@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 /// LLM 可见的动作领域。
 enum ActionDomain: String { case timeline, adjust, navigate }
@@ -159,6 +160,26 @@ enum AgentActionCatalog {
             store.dispatch(.positionMove(id, time: .seconds(numArg(a, "atSeconds") ?? 0)))
             return "已位置移动片段 \(intArg(a, "clipIndex")!)"
         },
+        AgentAction(type: "duplicate_clip", domain: .timeline,
+                    doc: "复制主轴第 clipIndex 个片段(连同参数/特效/关键帧,换新 id)并粘贴到 atSeconds 处(省略=末尾)。等价 ⌘C/⌘V。",
+                    params: [ParamSpec(name: "clipIndex", kind: .int, required: true, doc: "源片段索引,0基"),
+                             ParamSpec(name: "atSeconds", kind: .number, required: false, doc: "粘贴时间(秒),落到最近编辑点;省略=末尾")]) { store, a in
+            guard let ei = spineElementIndex(store, clipIndex: intArg(a, "clipIndex") ?? -1),
+                  case .clip(let c) = store.document.sequence.spine[ei] else { return "错误:clipIndex 无效" }
+            let dup = c.duplicatedWithNewIDs()
+            if let at = numArg(a, "atSeconds") {
+                var idx = store.document.sequence.spine.count, acc = 0.0
+                for (i, el) in store.document.sequence.spine.enumerated() {
+                    if acc + el.duration.seconds > at + 0.0005 { idx = i; break }
+                    acc += el.duration.seconds
+                }
+                store.dispatch(.insertClip(dup, at: idx))
+            } else {
+                store.dispatch(.insertClip(dup, at: store.document.sequence.spine.count))
+            }
+            store.dispatch(.selectClip(dup.id))
+            return "已复制片段 \(intArg(a, "clipIndex")!)"
+        },
     ]
 
     /// 改某 clip 的 effects(走命令层,可撤销)。返回 false=clipIndex 无效。
@@ -172,6 +193,13 @@ enum AgentActionCatalog {
         guard let id = clipID(store, clipIndex), let ei = spineElementIndex(store, clipIndex: clipIndex),
               case .clip(let c) = store.document.sequence.spine[ei] else { return false }
         var adj = c.adjust; f(&adj); store.dispatch(.setAdjust(id, adj)); return true
+    }
+
+    /// 改某 clip 的变换关键帧(走命令层,可撤销)。返回 false=clipIndex 无效。
+    static func mutateTransformKeyframes(_ store: DocumentStore, clipIndex: Int, _ f: (inout [TransformKeyframe]) -> Void) -> Bool {
+        guard let id = clipID(store, clipIndex), let ei = spineElementIndex(store, clipIndex: clipIndex),
+              case .clip(let c) = store.document.sequence.spine[ei] else { return false }
+        var kfs = c.transformKeyframes; f(&kfs); store.dispatch(.setTransformKeyframes(id, kfs)); return true
     }
 
     static let adjust: [AgentAction] = [
@@ -255,6 +283,31 @@ enum AgentActionCatalog {
             guard let id = clipID(store, intArg(a, "clipIndex") ?? -1) else { return "错误:clipIndex 无效" }
             let on = boolArg(a, "enabled") ?? true
             store.dispatch(.setEnabled(id, on)); return on ? "已启用片段" : "已停用片段"
+        },
+        AgentAction(type: "add_transform_keyframe", domain: .adjust,
+                    doc: "给主轴第 clipIndex 个片段在 atSeconds(相对片段起点的秒数)加一个变换关键帧,做位移/缩放/淡入淡出【动画】。多次用不同 atSeconds 调用即形成动画(如 0s scale=1 → 3s scale=2 是放大推进)。scale 默认1,x/y 位移px默认0,opacity 0–1默认1。同一时间再调用会覆盖。",
+                    params: [ParamSpec(name: "clipIndex", kind: .int, required: true, doc: "片段索引"),
+                             ParamSpec(name: "atSeconds", kind: .number, required: true, doc: "相对片段起点的时间(秒)"),
+                             ParamSpec(name: "scale", kind: .number, required: false, doc: "缩放,默认1"),
+                             ParamSpec(name: "x", kind: .number, required: false, doc: "水平位移px,默认0"),
+                             ParamSpec(name: "y", kind: .number, required: false, doc: "垂直位移px,默认0"),
+                             ParamSpec(name: "opacity", kind: .number, required: false, doc: "不透明度0–1,默认1")]) { store, a in
+            let t = numArg(a, "atSeconds") ?? 0
+            let sc = numArg(a, "scale") ?? 1
+            let kf = TransformKeyframe(time: .seconds(t),
+                                       position: CGPoint(x: numArg(a, "x") ?? 0, y: numArg(a, "y") ?? 0),
+                                       scale: CGSize(width: sc, height: sc),
+                                       opacity: numArg(a, "opacity") ?? 1)
+            return mutateTransformKeyframes(store, clipIndex: intArg(a, "clipIndex") ?? -1) { kfs in
+                kfs.removeAll { abs($0.time.seconds - t) < 0.001 }   // 同时间覆盖
+                kfs.append(kf); kfs.sort { $0.time < $1.time }
+            } ? "已加变换关键帧 @\(t)s" : "错误:clipIndex 无效"
+        },
+        AgentAction(type: "clear_transform_keyframes", domain: .adjust,
+                    doc: "清除主轴第 clipIndex 个片段的全部变换关键帧(回到静态变换)。",
+                    params: [ParamSpec(name: "clipIndex", kind: .int, required: true, doc: "片段索引")]) { store, a in
+            return mutateTransformKeyframes(store, clipIndex: intArg(a, "clipIndex") ?? -1) { $0.removeAll() }
+                ? "已清除变换关键帧" : "错误:clipIndex 无效"
         },
     ]
     static let navigate: [AgentAction] = [
