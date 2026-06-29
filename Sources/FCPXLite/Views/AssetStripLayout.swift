@@ -12,6 +12,13 @@ enum AssetStripLayout {
         return max(minTile, min(hi, w))
     }
 
+    /// 行数:素材条完整宽度(duration×px)超过 availWidth 时换行(FCP 单素材跨行)。
+    static func rowCount(durationSecs: Double, pxPerSecond: Double, availWidth: CGFloat) -> Int {
+        guard availWidth > 1 else { return 1 }
+        let full = CGFloat(max(0, durationSecs) * max(0, pxPerSecond))
+        return max(1, Int(ceil(full / availWidth)))
+    }
+
     /// 贪心流式换行:返回每行包含的 item 下标。spacing = item 间距。
     static func flow(itemWidths: [CGFloat], availWidth: CGFloat, spacing: CGFloat) -> [[Int]] {
         var rows: [[Int]] = []

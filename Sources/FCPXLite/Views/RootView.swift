@@ -15,6 +15,10 @@ struct RootView: View {
         }
         .background(Tokens.Palette.chrome)
         .frame(minWidth: 1100, minHeight: 680)
+        // 拖文件到窗口【任意处】即导入(不止素材池)。targeted 高亮可后续加。
+        .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+            store.importDroppedProviders(providers); return true
+        }
         .sheet(isPresented: Binding(get: { store.ui.showExport }, set: { store.dispatch(.setShowExport($0)) })) {
             ExportPanel(store: store)
         }
@@ -137,7 +141,8 @@ struct RootView: View {
                 }
             }
             .gesture(
-                DragGesture(minimumDistance: 1)
+                // global 坐标系:手柄随时间轴高度变化而移动,local 坐标会反馈半速+残影。
+                DragGesture(minimumDistance: 1, coordinateSpace: .global)
                     .onChanged { drag in
                         // 起始比例 → 起始高度 → 拖动累加 → 新比例。向上拖增高(translation.height<0)。
                         if dragStartHeight == nil { dragStartHeight = store.ui.timelineFraction * availableHeight }

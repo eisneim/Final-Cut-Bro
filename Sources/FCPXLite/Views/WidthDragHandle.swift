@@ -22,7 +22,9 @@ struct WidthDragHandle: View {
                         if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
                     }
                     .gesture(
-                        DragGesture(minimumDistance: 1)
+                        // 用 global 坐标系:手柄会随面板宽度变化而移动,默认(local)坐标下 translation
+                        // 相对【正在移动的手柄自身】计算 → 反馈回环,表现为半速 + 残影。global 相对窗口,1:1 跟手。
+                        DragGesture(minimumDistance: 1, coordinateSpace: .global)
                             .onChanged { g in
                                 if base == nil { base = width }
                                 set((base ?? width) + sign * Double(g.translation.width))

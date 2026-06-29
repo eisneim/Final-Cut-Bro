@@ -150,6 +150,19 @@ import Observation
         updateSelectedEffects { $0.append(Effect.make(kind)) }
     }
 
+    /// 从 Finder 拖入的文件 → 导入素材库(拖到窗口任意处都可用,不止素材池)。
+    func importDroppedProviders(_ providers: [NSItemProvider]) {
+        for provider in providers {
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                guard let url = url else { return }
+                Task { @MainActor in
+                    do { self.dispatch(.importAsset(try MediaImporter.importAsset(from: url))) }
+                    catch { print("[importDropped] 失败: \(error)") }
+                }
+            }
+        }
+    }
+
     /// 效果/转场面板:给选中的【主轴片段】加交叉叠化转场(与前一片段)。返回 false=无法加(未选/首片段/连接片段)。
     @discardableResult
     func addCrossfadeToSelected(seconds: Double) -> Bool {

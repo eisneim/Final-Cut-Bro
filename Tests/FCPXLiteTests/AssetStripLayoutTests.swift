@@ -45,4 +45,19 @@ final class AssetStripLayoutTests: XCTestCase {
     func testFlowEmpty() {
         XCTAssertEqual(AssetStripLayout.flow(itemWidths: [], availWidth: 800, spacing: 8), [])
     }
+
+    func testRowCountSingleWhenFits() {
+        // 10s × 8px = 80 ≤ 300 → 1 行
+        XCTAssertEqual(AssetStripLayout.rowCount(durationSecs: 10, pxPerSecond: 8, availWidth: 300), 1)
+    }
+
+    func testRowCountWrapsWhenWide() {
+        // 100s × 8px = 800,容器 300 → ceil(800/300)=3 行
+        XCTAssertEqual(AssetStripLayout.rowCount(durationSecs: 100, pxPerSecond: 8, availWidth: 300), 3)
+    }
+
+    func testRowCountExactMultiple() {
+        // 600px / 300 = 2 行
+        XCTAssertEqual(AssetStripLayout.rowCount(durationSecs: 60, pxPerSecond: 10, availWidth: 300), 2)
+    }
 }
