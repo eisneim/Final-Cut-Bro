@@ -33,8 +33,14 @@ final class CoreImageCompositor: NSObject, AVVideoCompositing {
             var acc: CIImage = CIImage(color: .clear).cropped(
                 to: CGRect(origin: .zero, size: renderSize))
             for layer in instruction.layers {
-                guard let pb = request.sourceFrame(byTrackID: layer.trackID) else { continue }
-                let src = CIImage(cvPixelBuffer: pb)
+                let src: CIImage
+                if let cg = layer.image {
+                    src = CIImage(cgImage: cg)                       // 图片静帧层
+                } else if let pb = request.sourceFrame(byTrackID: layer.trackID) {
+                    src = CIImage(cvPixelBuffer: pb)                 // 视频源轨层
+                } else {
+                    continue
+                }
                 // 源 y-up → 左上原点 y-down,使 layer.transform 的垂直语义(position.y)与裁剪正确。
                 let flipSrc = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: src.extent.height)
                 var img = src.transformed(by: flipSrc)

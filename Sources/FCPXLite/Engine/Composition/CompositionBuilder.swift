@@ -1,5 +1,6 @@
 import AVFoundation
 import CoreGraphics
+import AppKit
 
 /// 文档 → 可播放合成。每个 clip(主轴或连接)各自一条视频轨 + 音频轨:
 /// - AVMutableVideoComposition 挂 CoreImageCompositor,按 lane 升序叠加(低 lane 在底,高 lane 在顶),
@@ -14,20 +15,33 @@ enum CompositionBuilder {
         let composition = AVMutableComposition()
         let library = Dictionary(uniqueKeysWithValues: document.assetLibrary.map { ($0.id, $0) })
         var inserted = false
-        // 每段:轨 + lane + adjust + 在合成时间轴上的 [start,end) + 源视频原生尺寸/方向 + clip effects
-        var segments: [(track: AVMutableCompositionTrack, lane: Int, adjust: Adjustments, start: CMTime, end: CMTime, natural: CGSize, pref: CGAffineTransform, effects: [Effect])] = []
+        // 每段:轨ID(图片段为 invalid)+ 可选静帧图 + lane + adjust + [start,end) + 原生尺寸/方向 + effects
+        var segments: [(trackID: CMPersistentTrackID, image: CGImage?, lane: Int, adjust: Adjustments, start: CMTime, end: CMTime, natural: CGSize, pref: CGAffineTransform, effects: [Effect])] = []
         var audioParams: [AVMutableAudioMixInputParameters] = []
+        var totalEnd = CMTime.zero
 
         func place(_ clip: Clip, at start: CMTime, lane: Int) {
             guard clip.enabled else { return }   // 停用片段不参与预览/导出(时间线仍显示,只是变暗)
-            guard let asset = library[clip.assetID], asset.kind != .image else { return }
+            guard let asset = library[clip.assetID] else { return }
+            let end = start + cm(clip.duration)
+            if end > totalEnd { totalEnd = end }
+            // 图片:作为静帧层直接交给合成器(无轨),不走 AVAsset 轨道。
+            if asset.kind == .image {
+                guard let cg = NSImage(contentsOf: asset.url)?
+                        .cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+                inserted = true
+                let natural = CGSize(width: cg.width, height: cg.height)
+                segments.append((kCMPersistentTrackID_Invalid, cg, lane, clip.adjust, start, end,
+                                 natural, .identity, clip.effects))
+                return
+            }
             let av = AVURLAsset(url: asset.url)
             let range = CMTimeRange(start: cm(clip.sourceIn), duration: cm(clip.duration))
             if let v = av.tracks(withMediaType: .video).first,
                let track = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) {
                 do { try track.insertTimeRange(range, of: v, at: start)
                      inserted = true
-                     segments.append((track, lane, clip.adjust, start, start + cm(clip.duration),
+                     segments.append((track.trackID, nil, lane, clip.adjust, start, start + cm(clip.duration),
                                       v.naturalSize, v.preferredTransform, clip.effects))
                 } catch { print("[CompositionBuilder] video: \(error)") }
             }
@@ -91,6 +105,22 @@ enum CompositionBuilder {
 
         guard inserted else { return nil }   // 有任何视频或音频内容即可(纯音频不需要 videoComposition)
 
+        // 全是图片(无任何真实音视频轨)→ composition 时长为 0,AVPlayer 无法播放。
+        // 插一条真实的 1 帧透明视频(scaleTimeRange 拉伸到总时长)撑起时长,让合成器在这段时间内绘制静帧。
+        let hasRealTrack = !composition.tracks(withMediaType: .video).isEmpty
+            || !composition.tracks(withMediaType: .audio).isEmpty
+        if !hasRealTrack, totalEnd > .zero,
+           let blank = blankVideoURL() {
+            let blankAsset = AVURLAsset(url: blank)
+            if let v = blankAsset.tracks(withMediaType: .video).first,
+               blankAsset.duration > .zero,
+               let track = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid) {
+                let srcRange = CMTimeRange(start: .zero, duration: blankAsset.duration)
+                try? track.insertTimeRange(srcRange, of: v, at: .zero)
+                track.scaleTimeRange(srcRange, toDuration: totalEnd)   // 拉伸 1 帧到整条时间线
+            }
+        }
+
         let item = AVPlayerItem(asset: composition)
         let renderSize = CGSize(width: document.formatWidth, height: document.formatHeight)
 
@@ -112,7 +142,8 @@ enum CompositionBuilder {
             let layers = active.map { seg -> CompositorLayer in
                 let xf = fullTransform(adjust: seg.adjust, natural: seg.natural,
                                        pref: seg.pref, renderSize: renderSize)
-                return CompositorLayer(trackID: seg.track.trackID,
+                return CompositorLayer(trackID: seg.trackID,
+                                       image: seg.image,
                                        transform: xf,
                                        opacity: Float(seg.adjust.opacity),
                                        crop: seg.adjust.crop,
@@ -171,6 +202,39 @@ enum CompositionBuilder {
         t = t.concatenating(CGAffineTransform(translationX: cx + adj.transform.position.x,
                                               y: cy + adj.transform.position.y))
         return t
+    }
+
+    // 缓存的 1 帧黑视频(供纯图片时间线撑时长)。
+    private static var cachedBlankURL: URL?
+    private static func blankVideoURL() -> URL? {
+        if let u = cachedBlankURL, FileManager.default.fileExists(atPath: u.path) { return u }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("fcpxlite-blank.mov")
+        try? FileManager.default.removeItem(at: url)
+        guard let writer = try? AVAssetWriter(outputURL: url, fileType: .mov) else { return nil }
+        let settings: [String: Any] = [AVVideoCodecKey: AVVideoCodecType.h264,
+                                       AVVideoWidthKey: 16, AVVideoHeightKey: 16]
+        let input = AVAssetWriterInput(mediaType: .video, outputSettings: settings)
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: nil)
+        guard writer.canAdd(input) else { return nil }
+        writer.add(input); writer.startWriting(); writer.startSession(atSourceTime: .zero)
+        var pb: CVPixelBuffer?
+        CVPixelBufferCreate(nil, 16, 16, kCVPixelFormatType_32ARGB, nil, &pb)
+        if let pb {
+            CVPixelBufferLockBaseAddress(pb, [])
+            if let base = CVPixelBufferGetBaseAddress(pb) {
+                memset(base, 0, CVPixelBufferGetBytesPerRow(pb) * 16)
+            }
+            CVPixelBufferUnlockBaseAddress(pb, [])
+            while !input.isReadyForMoreMediaData { usleep(500) }
+            adaptor.append(pb, withPresentationTime: .zero)
+        }
+        input.markAsFinished()
+        writer.endSession(atSourceTime: CMTime(value: 1, timescale: 1))   // 视频长度 = 1s(便于按比例拉伸)
+        let sem = DispatchSemaphore(value: 0)
+        writer.finishWriting { sem.signal() }
+        sem.wait()
+        cachedBlankURL = url
+        return url
     }
 
     private static func collectConnected(_ seq: Sequence) -> [ClipID: Clip] {
