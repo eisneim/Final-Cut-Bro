@@ -97,6 +97,10 @@ enum MovieExporter {
         }
 
         guard reader.startReading() else {
+            // 主路径(AVAssetReader+Writer,支持自定义合成器)起不来 → 记录原因再退回。
+            // 退回用的 AVAssetExportSession 对【自定义 AVVideoCompositing】支持不可靠,长复杂时间线易 -11841,
+            // 所以这里必须留诊断:下次 live 失败能看到主路径到底为何起不来。
+            NSLog("[MovieExporter] 主路径 startReading 失败,退回 AVAssetExportSession。reader.error=\(String(describing: reader.error))")
             fallbackExport(document: document, to: url, settings: settings,
                            hasVideo: hasVideo, progress: progress, completion: completion); return
         }
@@ -131,6 +135,11 @@ enum MovieExporter {
         writer.startSession(atSourceTime: .zero)
 
         let totalDuration = CMTimeGetSeconds(composition.duration)
+        // 视频实际内容到哪结束(音频可能更长 = 纯音乐尾巴)。超过这里就停止拉视频帧:
+        // 否则 AVFoundation 对"音频更长、视频已无内容"的尾部逐帧空转,慢到像卡死。
+        // 视频在此截止,音频继续 → 成片末尾是黑屏 + 音乐(标准做法),且导出飞快。
+        let videoContentEnd = composition.tracks(withMediaType: .video)
+            .map { CMTimeGetSeconds($0.timeRange.end) }.max() ?? totalDuration
         var doneCalled = false
         let q = DispatchQueue(label: "fcpxlite.export")
 
@@ -164,8 +173,15 @@ enum MovieExporter {
             vInput.requestMediaDataWhenReady(on: q) {
                 while vInput.isReadyForMoreMediaData {
                     if let buf = vOut.copyNextSampleBuffer() {
-                        vInput.append(buf)
                         let pts = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(buf))
+                        // 视频内容已结束(后面只有更长的音频)→ 停止写视频帧,不渲染慢吞吞的黑尾。
+                        if pts > videoContentEnd + 0.001 {
+                            CMSampleBufferInvalidate(buf)
+                            videoFinished = true
+                            checkDone()
+                            return
+                        }
+                        vInput.append(buf)
                         if totalDuration > 0 {
                             DispatchQueue.main.async { progress(Float(pts / totalDuration) * 0.9) }
                         }
@@ -237,7 +253,9 @@ enum MovieExporter {
                 switch session.status {
                 case .completed: progress(1); completion(.success(url))
                 case .cancelled: completion(.failure(MovieExportError.sessionFailed("已取消")))
-                default: completion(.failure(session.error ?? MovieExportError.sessionFailed("status=\(session.status.rawValue)")))
+                default:
+                    NSLog("[MovieExporter] fallback AVAssetExportSession 失败 status=\(session.status.rawValue) error=\(String(describing: session.error)) — 自定义合成器在 ExportSession 下不被支持是常见原因")
+                    completion(.failure(session.error ?? MovieExportError.sessionFailed("status=\(session.status.rawValue)")))
                 }
             }
         }

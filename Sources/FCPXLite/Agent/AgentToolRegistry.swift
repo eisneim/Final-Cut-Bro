@@ -69,6 +69,12 @@ final class AgentToolRegistry {
 
     /// 执行一个工具,返回给 LLM 的结果文本(成功摘要或错误)。
     func execute(name: String, args: [String: Any]) -> String {
+        let result = executeInner(name: name, args: args)
+        NSLog("[AgentTool] \(name) args=\(args) → \(result)")   // DEBUG: 诊断 LLM 实际调用
+        return result
+    }
+
+    private func executeInner(name: String, args: [String: Any]) -> String {
         if name == "query_timeline" { return timelineSummary() }
         // 三个 dispatch 工具:取 type 查 catalog,domain 须匹配工具。
         guard let type = args["type"] as? String else { return "错误:缺 type" }

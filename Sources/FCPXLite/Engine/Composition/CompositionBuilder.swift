@@ -130,8 +130,12 @@ enum CompositionBuilder {
 
         guard inserted else { return nil }   // 有任何视频或音频内容即可(纯音频不需要 videoComposition)
 
-        // 全是图片(无任何真实音视频轨)→ composition 时长为 0,AVPlayer 无法播放。
-        // 插一条真实的 1 帧透明视频(scaleTimeRange 拉伸到总时长)撑起时长,让合成器在这段时间内绘制静帧。
+        // 视频轨必须覆盖到 composition 总时长。两种情况会出现尾部/全程没有视频轨:
+        //  (1) 纯图片时间线(无任何真实音视频轨)→ composition.duration=0,AVPlayer 无法播放;
+        //  (2) 背景音乐比最后一个视频段长(纯音乐拖到尾部)→ 尾部 [maxVideoEnd, totalEnd] 没有视频轨。
+        // 两种都补一条【1 帧透明视频 scaleTimeRange 拉伸到 totalEnd】的轨:撑起时长 + 让合成器对尾部空洞
+        // 有连续视频轨可合成(否则导出时 AVFoundation 对"无视频轨的区间"逐帧空转,慢到像卡死 + -11841)。
+        // 纯图片(无任何真实音视频轨)→ composition.duration=0,补 1 帧透明视频撑时长(让静帧能播)。
         let hasRealTrack = !composition.tracks(withMediaType: .video).isEmpty
             || !composition.tracks(withMediaType: .audio).isEmpty
         if !hasRealTrack, totalEnd > .zero,
@@ -153,8 +157,17 @@ enum CompositionBuilder {
         // 单条覆盖全程的 instruction 在 clip 时间错开时会让变换串掉(bug6),故必须分段。
         // bounds 必须从 0 起,且空洞(gap/前导空白)也要发空 instruction —— 否则 AVFoundation
         // 的 videoComposition 出现未覆盖的时间区间会整体黑屏(只剩声音)。
+        // 关键:instruction 必须覆盖【整条 composition 时长】。当音频比最后一个视频段长(纯背景乐拖到尾部),
+        // composition.duration 由音频决定,但视频段只到 lastVideoEnd → 末尾 [lastVideoEnd, totalEnd] 无 instruction
+        // → AVAssetReader 导出报 -11841 "could not be composed"。补一个到 totalEnd 的空 instruction(黑帧)修复。
+        // instruction 必须覆盖整条 composition 时长。背景乐比最后一个视频段长时,composition.duration 由音频
+        // 决定,但视频段只到 lastVideoEnd → 末尾无 instruction → 导出 -11841 "could not be composed"。
+        // 补到 totalEnd 的空 instruction(黑帧)。导出侧再用 videoContentEnd 截断不渲染黑尾(MovieExporter)。
         var bounds = Set<CMTime>([.zero])
         for s in segments { bounds.insert(s.start); bounds.insert(s.end) }
+        let compDuration = composition.duration
+        if compDuration > .zero { bounds.insert(compDuration) }
+        if totalEnd > .zero { bounds.insert(totalEnd) }
         let sorted = bounds.sorted { $0 < $1 }
         var instructions: [CompositorInstruction] = []
         for i in 0..<max(0, sorted.count - 1) {

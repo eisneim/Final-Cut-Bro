@@ -66,26 +66,31 @@ def wait_for(pred, timeout=70, poll=1.0):
     return False, last
 
 # ---- 测试步骤:(标签, 指令, 断言) ----
+# 顺序讲究:先 append 视频做 clip0,再跑【不改结构的画面/音频调整】(clip0 始终是视频,索引稳定),
+# 最后才做会改片段数/顺序的结构操作,避免 clip0 漂移成音频导致"画面"操作被 agent 正确拒绝。
 STEPS = [
     ("import 视频", f"导入这个视频文件 {VIDEO}", lambda s: assetN(s) >= 1),
     ("import 音乐", f"再导入这首音乐 {MUSIC}", lambda s: assetN(s) >= 2),
-    ("append", "把素材0加到时间线末尾", lambda s: nclips(s) == 1),
-    ("insert", "在时间线最前面插入素材1", lambda s: nclips(s) == 2),
-    ("connect", "把素材0叠加到3秒处的上一层轨道", lambda s: any(e.get("clip", {}).get("_0", {}).get("connected") for e in spine(s))),
-    ("blade", "在主轴第0段的4秒处切一刀", lambda s: nclips(s) >= 3),
+    ("append 视频", "把素材库第0个视频素材加到时间线末尾", lambda s: nclips(s) == 1),
+    # --- 画面/音频调整(clip0=视频,结构不变) ---
     ("scale", "把主轴第0段画面放大到2倍", lambda s: abs(clip(s,0)["adjust"]["transform"]["scaleWidth"] - 2) < 0.01),
     ("crop", "把主轴第0段左边裁掉15%", lambda s: clip(s,0)["adjust"]["crop"]["left"] > 1),
     ("opacity", "把主轴第0段设成半透明", lambda s: clip(s,0)["adjust"]["opacity"] < 0.95),
     ("volume", "把主轴第0段的音量压到20%", lambda s: clip(s,0)["adjust"]["volume"] < 0.5),
     ("position", "把主轴第0段画面向右移动100像素", lambda s: clip(s,0)["adjust"]["transform"]["positionX"] > 50),
     ("add_effect", "给主轴第0段加高斯模糊特效", lambda s: any(fx.get("kind") == "blur" for fx in clip(s,0).get("effects", []))),
-    ("add_keyframe", "给主轴第1段在第2秒加一个画面放大到1.5倍的变换关键帧", lambda s: len(clip(s,1).get("transformKeyframes", [])) >= 1),
-    ("transition", "在主轴第1段和它前面那段之间加1秒的交叉叠化转场", lambda s: clip(s,1).get("crossfadeIn", {"value":0,"timescale":1})["value"] > 0),
+    ("add_keyframe", "给主轴第0段在第2秒加一个画面放大到1.5倍的变换关键帧", lambda s: len(clip(s,0).get("transformKeyframes", [])) >= 1),
+    # --- 结构操作 ---
+    ("append 音乐", "把素材库第1个音乐素材也加到时间线末尾", lambda s: nclips(s) == 2),
+    ("connect", "把素材0叠加到3秒处的上一层轨道", lambda s: any(e.get("clip", {}).get("_0", {}).get("connected") for e in spine(s))),
+    ("blade", "在主轴第0段的2秒处切一刀", lambda s: nclips(s) >= 3),
+    ("transition", "在主轴第1段和它前面那段之间加1秒交叉叠化转场", lambda s: clip(s,1).get("crossfadeIn", {"value":0,"timescale":1})["value"] > 0),
     ("duplicate", "把主轴第0段复制一份粘贴到时间线末尾", lambda s: nclips(s) >= 4),
+    # --- 导航 ---
     ("playhead", "把播放头跳到3秒", lambda s: abs(secs(ui(s)["playhead"]) - 3) < 0.2),
     ("zoom", "把时间线缩放设成每秒120像素", lambda s: abs(ui(s)["pxPerSecond"] - 120) < 1),
     ("tool", "切换到切割工具", lambda s: ui(s)["currentTool"] == "blade"),
-    ("select", "选中主轴第0段", lambda s: ui(s).get("selectedClipID") is not None or proj(s) is not None),
+    ("select", "选中主轴第0段", lambda s: ui(s).get("selectedClipID") is not None),
 ]
 
 def main():
