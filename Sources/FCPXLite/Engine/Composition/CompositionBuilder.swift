@@ -94,10 +94,34 @@ enum CompositionBuilder {
             }
         }
 
+        // 主轴顺序铺片。若某片段有 crossfadeIn>0,则其头部与【前一主轴片段】尾部重叠该时长,
+        // 并给两段注入不透明度斜坡(前段尾 1→0 淡出,本段头 0→1 淡入)→ 合成器逐帧叠化(dissolve)。
         var cursor = CMTime.zero
+        var prevVideoSegIdx: Int? = nil
         for el in document.sequence.spine {
-            let dur = cm(el.duration); defer { cursor = cursor + dur }
-            if case .clip(let c) = el { place(c, at: cursor, lane: 0) }
+            guard case .clip(let c) = el else {
+                cursor = cursor + cm(el.duration); prevVideoSegIdx = nil; continue
+            }
+            let clipDur = cm(c.duration)
+            // 叠化仅在:有 crossfadeIn、有前邻视频段、且本段没有用户自定义变换关键帧(避免冲突)时启用。
+            let doFade = c.crossfadeIn > .zero && prevVideoSegIdx != nil && c.transformKeyframes.isEmpty
+            let start = doFade ? cursor - cm(c.crossfadeIn) : cursor
+            let before = segments.count
+            place(c, at: start, lane: 0)
+            let thisSeg = (before < segments.count) ? before : nil   // 本片段的(首个)视频/图片段
+            if doFade, let bi = thisSeg {
+                let xs = c.crossfadeIn.seconds
+                segments[bi].tkf = [TransformKeyframe(time: .seconds(0), opacity: 0),
+                                    TransformKeyframe(time: .seconds(xs), opacity: 1)]   // 淡入
+                if let pi = prevVideoSegIdx {
+                    let aDur = (segments[pi].end - segments[pi].start).seconds
+                    let x = min(xs, aDur)
+                    segments[pi].tkf = [TransformKeyframe(time: .seconds(max(0, aDur - x)), opacity: 1),
+                                        TransformKeyframe(time: .seconds(aDur), opacity: 0)]   // 淡出
+                }
+            }
+            cursor = start + clipDur
+            prevVideoSegIdx = thisSeg
         }
         let connected = collectConnected(document.sequence)
         for p in Layout.compute(document.sequence).filter({ $0.isConnected }) {

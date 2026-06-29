@@ -54,6 +54,7 @@ enum EditorAction: Codable, Equatable {
     case setTransformKeyframes(ClipID, [TransformKeyframe])
     case slip(at: Int, delta: Time, assetDuration: Time)
     case slide(at: Int, delta: Time, prevAssetDuration: Time, nextAssetDuration: Time)
+    case setCrossfade(at: Int, duration: Time)
     case setEnabled(ClipID, Bool)
 }
 

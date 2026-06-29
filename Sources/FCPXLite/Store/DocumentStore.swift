@@ -293,6 +293,7 @@ import Observation
         case let .setTransformKeyframes(id, kfs): apply { Mutations.setTransformKeyframes(clipID: id, kfs, in: $0) }
         case let .slip(i, delta, assetDur): apply { Mutations.slip(at: i, delta: delta, assetDuration: assetDur, in: $0) }
         case let .slide(i, delta, prevDur, nextDur): apply { Mutations.slide(at: i, delta: delta, prevAssetDuration: prevDur, nextAssetDuration: nextDur, in: $0) }
+        case let .setCrossfade(i, dur): apply { Mutations.setCrossfade(at: i, duration: dur, in: $0) }
         case let .setEnabled(id, on):    apply { Mutations.setEnabled(clipID: id, on, in: $0) }
         }
     }

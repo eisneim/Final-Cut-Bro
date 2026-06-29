@@ -206,6 +206,19 @@ enum AgentActionCatalog {
                                   prevAssetDuration: prevDur, nextAssetDuration: nextDur))
             return "已滑动片段 \(intArg(a, "clipIndex")!)"
         },
+        AgentAction(type: "add_transition", domain: .timeline,
+                    doc: "在主轴第 clipIndex 个片段【头部】与前一片段之间加交叉叠化转场(crossfade/dissolve),时长 seconds 秒(0=移除)。要求 clipIndex≥1。本片段头部与前片段尾部重叠该时长。",
+                    params: [ParamSpec(name: "clipIndex", kind: .int, required: true, doc: "片段索引(≥1)"),
+                             ParamSpec(name: "seconds", kind: .number, required: false, doc: "转场时长(秒),默认1,0=移除")]) { store, a in
+            guard let ei = spineElementIndex(store, clipIndex: intArg(a, "clipIndex") ?? -1) else { return "错误:clipIndex 无效" }
+            let spine = store.document.sequence.spine
+            guard ei >= 1, spine.indices.contains(ei - 1), case .clip = spine[ei - 1] else {
+                return "错误:转场需要前面有一个相邻片段(clipIndex≥1)"
+            }
+            let secs = numArg(a, "seconds") ?? 1
+            store.dispatch(.setCrossfade(at: ei, duration: .seconds(secs)))
+            return secs > 0 ? "已加 \(secs)s 叠化转场" : "已移除转场"
+        },
     ]
 
     /// 改某 clip 的 effects(走命令层,可撤销)。返回 false=clipIndex 无效。

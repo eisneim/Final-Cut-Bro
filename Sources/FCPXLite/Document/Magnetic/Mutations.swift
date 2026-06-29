@@ -621,6 +621,16 @@ enum Mutations {
         return s
     }
 
+    /// 设置主轴第 index 个片段的交叉叠化时长(与前一片段 dissolve)。0=取消。
+    static func setCrossfade(at index: Int, duration: Time, in seq: Sequence) -> Sequence {
+        var s = seq
+        guard s.spine.indices.contains(index), case .clip(var c) = s.spine[index] else { return s }
+        c.crossfadeIn = duration < .zero ? .zero : duration
+        s.spine[index] = .clip(c)
+        assertInvariants(s)
+        return s
+    }
+
     /// 设置某 clip(主轴或连接子项)的启用状态(V 键停用/启用)。纯函数,调用方负责 commit。
     static func setEnabled(clipID: ClipID, _ enabled: Bool, in seq: Sequence) -> Sequence {
         var s = seq
