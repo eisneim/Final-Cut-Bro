@@ -33,19 +33,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var debugServer: DebugControlServer?
     #endif
 
-    /// 标准菜单栏(裸 NSApplication 默认没有)→ ⌘C/V/X/A/Z 在文本框里才能工作。
+    /// 标准菜单栏:App / 文件 / 编辑 / 显示 / 窗口 / 帮助。
     private func installMenu() {
         let mainMenu = NSMenu()
-        // App 菜单
+
+        // ── App 菜单 ──
         let appItem = NSMenuItem(); mainMenu.addItem(appItem)
-        let appMenu = NSMenu()
+        let appMenu = NSMenu(title: "Final Cut Bro")
+        appMenu.addItem(aboutItem("Final Cut Bro"))
+        appMenu.addItem(.separator())
+        let settingsItem = NSMenuItem(title: "设置…", action: #selector(showSettingsMenu), keyEquivalent: ",")
+        settingsItem.target = self; appMenu.addItem(settingsItem)
+        appMenu.addItem(.separator())
         appMenu.addItem(NSMenuItem(title: "隐藏 Final Cut Bro", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h"))
+        let hideOthers = NSMenuItem(title: "隐藏其他", action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
+        hideOthers.keyEquivalentModifierMask = [.command, .option]; appMenu.addItem(hideOthers)
+        appMenu.addItem(NSMenuItem(title: "显示全部", action: #selector(NSApplication.unhideAllApplications(_:)), keyEquivalent: ""))
+        appMenu.addItem(.separator())
         appMenu.addItem(NSMenuItem(title: "退出 Final Cut Bro", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
-        let exportItem = NSMenuItem(title: "导出…", action: #selector(showExportMenu), keyEquivalent: "e")
-        exportItem.target = self
-        appMenu.addItem(exportItem)
         appItem.submenu = appMenu
-        // 编辑菜单(复制/粘贴等走响应链)
+
+        // ── 文件 ──
+        let fileItem = NSMenuItem(); mainMenu.addItem(fileItem)
+        let fileMenu = NSMenu(title: "文件")
+        let newProj = NSMenuItem(title: "新建项目…", action: #selector(newProjectMenu), keyEquivalent: "n")
+        newProj.keyEquivalentModifierMask = [.command, .shift]; newProj.target = self; fileMenu.addItem(newProj)
+        let importItem = NSMenuItem(title: "导入素材…", action: #selector(importMenu), keyEquivalent: "i")
+        importItem.target = self; fileMenu.addItem(importItem)
+        fileMenu.addItem(.separator())
+        let exportItem = NSMenuItem(title: "导出成片…", action: #selector(showExportMenu), keyEquivalent: "e")
+        exportItem.target = self; fileMenu.addItem(exportItem)
+        let exportFCP = NSMenuItem(title: "导出 FCPXML…", action: #selector(exportFCPXMLMenu), keyEquivalent: "e")
+        exportFCP.keyEquivalentModifierMask = [.command, .shift]; exportFCP.target = self; fileMenu.addItem(exportFCP)
+        fileItem.submenu = fileMenu
+
+        // ── 编辑 ──
         let editItem = NSMenuItem(); mainMenu.addItem(editItem)
         let editMenu = NSMenu(title: "编辑")
         editMenu.addItem(NSMenuItem(title: "撤销", action: Selector(("undo:")), keyEquivalent: "z"))
@@ -57,7 +79,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         editMenu.addItem(NSMenuItem(title: "粘贴", action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
         editMenu.addItem(NSMenuItem(title: "全选", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
         editItem.submenu = editMenu
+
+        // ── 显示 ──
+        let viewItem = NSMenuItem(); mainMenu.addItem(viewItem)
+        let viewMenu = NSMenu(title: "显示")
+        let inspItem = NSMenuItem(title: "显示/隐藏检查器", action: #selector(toggleInspectorMenu), keyEquivalent: "4")
+        inspItem.target = self; viewMenu.addItem(inspItem)
+        let fxItem = NSMenuItem(title: "显示/隐藏效果面板", action: #selector(toggleEffectsMenu), keyEquivalent: "5")
+        fxItem.target = self; viewMenu.addItem(fxItem)
+        let snapItem = NSMenuItem(title: "切换磁吸吸附", action: #selector(toggleSnappingMenu), keyEquivalent: "n")
+        snapItem.target = self; viewMenu.addItem(snapItem)
+        viewMenu.addItem(.separator())
+        let zoomIn = NSMenuItem(title: "放大时间线", action: #selector(zoomInMenu), keyEquivalent: "=")
+        zoomIn.target = self; viewMenu.addItem(zoomIn)
+        let zoomOut = NSMenuItem(title: "缩小时间线", action: #selector(zoomOutMenu), keyEquivalent: "-")
+        zoomOut.target = self; viewMenu.addItem(zoomOut)
+        viewItem.submenu = viewMenu
+
+        // ── 窗口 ──
+        let windowItem = NSMenuItem(); mainMenu.addItem(windowItem)
+        let windowMenu = NSMenu(title: "窗口")
+        windowMenu.addItem(NSMenuItem(title: "最小化", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m"))
+        windowMenu.addItem(NSMenuItem(title: "缩放", action: #selector(NSWindow.performZoom(_:)), keyEquivalent: ""))
+        windowMenu.addItem(.separator())
+        windowMenu.addItem(NSMenuItem(title: "前置全部窗口", action: #selector(NSApplication.arrangeInFront(_:)), keyEquivalent: ""))
+        windowItem.submenu = windowMenu
+        NSApp.windowsMenu = windowMenu
+
+        // ── 帮助 ──
+        let helpItem = NSMenuItem(); mainMenu.addItem(helpItem)
+        let helpMenu = NSMenu(title: "帮助")
+        let helpMain = NSMenuItem(title: "Final Cut Bro 帮助", action: #selector(showHelpMenu), keyEquivalent: "?")
+        helpMain.target = self; helpMenu.addItem(helpMain)
+        helpItem.submenu = helpMenu
+        NSApp.helpMenu = helpMenu
+
         NSApp.mainMenu = mainMenu
+    }
+
+    /// 标准"关于"菜单项(用 NSApp orderFrontStandardAboutPanel)。
+    private func aboutItem(_ name: String) -> NSMenuItem {
+        let item = NSMenuItem(title: "关于 \(name)", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        item.target = NSApp
+        return item
     }
 
     /// 是否正在文本框里编辑(此时所有快捷键放行,让打字/复制粘贴正常)。
@@ -174,5 +238,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    // MARK: - 菜单动作
+
     @objc private func showExportMenu() { store.dispatch(.setShowExport(true)) }
+    @objc private func showSettingsMenu() { store.dispatch(.setShowSettings(true)) }
+    @objc private func newProjectMenu() { store.dispatch(.setShowProjectModal(true)) }
+    @objc private func importMenu() { ImportPanel.present(into: store) }
+    @objc private func exportFCPXMLMenu() {
+        let panel = NSSavePanel(); panel.allowedContentTypes = [.init(filenameExtension: "fcpxml")!]
+        panel.nameFieldStringValue = "Final Cut Bro.fcpxml"
+        panel.begin { resp in
+            if resp == .OK, let url = panel.url {
+                _ = try? self.store.exportFCPXML(to: url)
+            }
+        }
+    }
+    @objc private func toggleInspectorMenu() { store.dispatch(.setInspector(!store.ui.showInspector)) }
+    @objc private func toggleEffectsMenu() { store.dispatch(.setShowEffects(!store.ui.showEffects)) }
+    @objc private func toggleSnappingMenu() { store.dispatch(.toggleSnapping) }
+    @objc private func zoomInMenu() { store.dispatch(.setZoom(store.ui.pxPerSecond * 1.5)) }
+    @objc private func zoomOutMenu() { store.dispatch(.setZoom(store.ui.pxPerSecond / 1.5)) }
+    @objc private func showHelpMenu() {
+        // 打开项目 README(简单有效,后续可换成内置帮助页)
+        if let url = URL(string: "https://github.com") { NSWorkspace.shared.open(url) }
+    }
 }

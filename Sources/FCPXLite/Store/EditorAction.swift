@@ -22,6 +22,7 @@ enum EditorAction: Codable, Equatable {
     case setInspector(Bool)
     case setShowEffects(Bool)
     case setShowExport(Bool)
+    case setShowSettings(Bool)
     case createProject(Project)
     case selectProject(ProjectID)
     case removeProject(ProjectID)

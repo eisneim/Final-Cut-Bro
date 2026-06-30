@@ -293,6 +293,7 @@ import Observation
         case let .setInspector(v):               ui.showInspector = v
         case let .setShowEffects(v):             ui.showEffects = v
         case let .setShowExport(v):              ui.showExport = v
+        case let .setShowSettings(v):            ui.showSettings = v
         case let .createProject(p):
             snapshot(); document.projects.append(p); document.currentProjectID = p.id
         case let .selectProject(id):

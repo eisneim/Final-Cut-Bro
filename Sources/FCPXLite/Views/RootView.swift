@@ -22,6 +22,9 @@ struct RootView: View {
         .sheet(isPresented: Binding(get: { store.ui.showExport }, set: { store.dispatch(.setShowExport($0)) })) {
             ExportPanel(store: store)
         }
+        .sheet(isPresented: Binding(get: { store.ui.showSettings }, set: { store.dispatch(.setShowSettings($0)) })) {
+            SettingsView(store: store)
+        }
         .sheet(isPresented: Binding(get: { store.ui.showProjectModal }, set: { store.dispatch(.setShowProjectModal($0)) })) {
             ProjectCreationModal(store: store)
         }
