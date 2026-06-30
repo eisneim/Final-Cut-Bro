@@ -351,6 +351,20 @@ final class TimelineContentView: NSView {
         // 裁剪到 clip 区域,画 filmstrip(上)+ 波形(下),按 vaRatio 分。
         NSGraphicsContext.current?.saveGraphicsState()
         path.addClip()
+        if let clip = clipByID(p.clipID), !clip.isTitle, assetLibrary.first(where: { $0.id == clip.assetID }) == nil {
+            // 素材已从素材库删除 → 红色背景 + "素材丢失" 提示
+            NSGraphicsContext.current?.restoreGraphicsState()
+            NSColor.systemRed.withAlphaComponent(0.3).setFill(); path.fill()
+            let miss = NSAttributedString(string: "素材丢失", attributes: [
+                .font: NSFont.systemFont(ofSize: 11, weight: .medium),
+                .foregroundColor: NSColor.white
+            ])
+            miss.draw(at: CGPoint(x: rect.minX + 6, y: rect.midY - 7))
+            // 2pt 红色边框
+            let red = NSBezierPath(roundedRect: rect.insetBy(dx: 1, dy: 1), xRadius: 3, yRadius: 3)
+            NSColor.systemRed.setStroke(); red.lineWidth = 2; red.stroke()
+            return
+        }
         if let clip = clipByID(p.clipID), let asset = assetLibrary.first(where: { $0.id == clip.assetID }) {
             // 只显示本 clip 的源区间 [sourceIn, sourceIn+duration) 对应的那段缩略图/波形(blade 后各段不同)。
             let assetDur = max(0.0001, asset.duration.seconds)

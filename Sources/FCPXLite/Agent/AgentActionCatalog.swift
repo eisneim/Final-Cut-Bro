@@ -282,6 +282,53 @@ enum AgentActionCatalog {
             let at = store.appendSourceRange(assetID: store.document.assetLibrary[i].id, from: from, to: to)
             return "已追加源[\(from)–\(to)]s 到时间线 \(String(format: "%.2f", at))s 起(播放头已移到此)"
         },
+        AgentAction(type: "blade_at", domain: .timeline,
+                    doc: "在 atSeconds 处直接切割(自动找到该时间点所在的片段并切)。用于【每隔 N 秒切一刀】等批量切割场景,比逐个调 blade(需指定 clipIndex)更高效。",
+                    params: [ParamSpec(name: "atSeconds", kind: .number, required: true, doc: "切割时间(秒,绝对时间线)")]) { store, a in
+            let at = numArg(a, "atSeconds") ?? 0
+            // 找包含 at 的主轴片段
+            var acc = 0.0
+            for (i, el) in store.document.sequence.spine.enumerated() {
+                if case .clip(let c) = el {
+                    let local = at - acc
+                    if local > 0.001, local < c.duration.seconds - 0.001 {
+                        store.dispatch(.setPlayhead(.seconds(at)))
+                        store.dispatch(.blade(at: i, localTime: .seconds(local)))
+                        return "已在 \(at)s 切割"
+                    }
+                }
+                acc += el.duration.seconds
+            }
+            return "错误:\(at)s 处无片段可切"
+        },
+        AgentAction(type: "batch_blade", domain: .timeline,
+                    doc: "每隔 intervalSeconds 秒切一刀(从头到尾)。一次调用完成全部切割,适合「每 2 秒剪一刀」等批量场景。",
+                    params: [ParamSpec(name: "intervalSeconds", kind: .number, required: true, doc: "切割间隔(秒),如 2")]) { store, a in
+            let interval = numArg(a, "intervalSeconds") ?? 2
+            guard interval > 0.1 else { return "错误:间隔太小" }
+            store.transaction {
+                var total = 0.0
+                for el in store.document.sequence.spine { total += el.duration.seconds }
+                var t = interval
+                while t < total - 0.01 {
+                    var acc = 0.0
+                    for (i, el) in store.document.sequence.spine.enumerated() {
+                        if case .clip(let c) = el {
+                            let local = t - acc
+                            if local > 0.001, local < c.duration.seconds - 0.001 {
+                                store.dispatch(.blade(at: i, localTime: .seconds(local)))
+                                break
+                            }
+                        }
+                        acc += el.duration.seconds
+                    }
+                    t += interval
+                }
+            }
+            var cnt = 0
+            for el in store.document.sequence.spine { if case .clip = el { cnt += 1 } }
+            return "已每隔 \(interval)s 切割,共 \(cnt) 段"
+        },
         AgentAction(type: "build_subtitle_cut", domain: .timeline,
                     doc: "【字幕剪辑一键成片 —— 处理 ASR/字幕剪辑请【只用这一个】动作,不要用几十次 append_clip/add_title】。你先在脑子里根据字幕【规划】要保留哪些句子(丢掉口误/重拍/思考废话/和别的句子重复的),然后把保留的句子【一次性】作为 segments 数组全部传进来。本动作会按顺序:逐段从源视频提取该时间区间拼到时间线 + 给该段加屏幕下方字幕,(若给了 exportPath)最后直接导出成片。一次调用完成全部工作。\n  segments: 保留段数组,每项 {from:源起始秒, to:源结束秒, text:该段字幕文字};按成片先后顺序排列。\n  assetIndex: 源视频在素材库的索引(默认0)。fontSize 字号(默认56)。y 字幕垂直位置(默认380=屏幕下方)。colorHex 颜色(默认#FFFFFF)。exportPath 给了就剪完导出到该绝对路径。",
                     params: [ParamSpec(name: "segments", kind: .objectArray([

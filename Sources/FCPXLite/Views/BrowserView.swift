@@ -113,6 +113,11 @@ struct BrowserView: View {
                            if let s = secs { store.setSkim(asset.id, seconds: s) }
                            else { store.setSkim(nil, seconds: 0) }
                        })
+            .contextMenu {
+                Button("删除素材", role: .destructive) {
+                    store.dispatch(.removeAsset(asset.id))
+                }
+            }
             .onTapGesture {
                 let mods = NSEvent.modifierFlags
                 if mods.contains(.command) { store.dispatch(.toggleAssetSelected(asset.id)) }

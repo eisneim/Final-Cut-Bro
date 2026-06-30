@@ -314,6 +314,7 @@ import Observation
             }
         case let .setShowProjectModal(v):        ui.showProjectModal = v
         case let .importAsset(a):                snapshot(); document.assetLibrary.append(a)
+        case let .removeAsset(id):               snapshot(); document.assetLibrary.removeAll { $0.id == id }; ui.selectedAssetIDs.remove(id); if ui.selectedAssetID == id { ui.selectedAssetID = nil }
         case let .selectClip(id):                ui.selectedClipID = id; ui.selectedClipIDs = id.map { [$0] } ?? []; ui.selectedGapID = nil; ui.selectedTransitionClipID = nil
         case let .selectClips(ids, anchor):      ui.selectedClipIDs = ids; ui.selectedClipID = anchor ?? ids.first; ui.selectedGapID = nil; ui.selectedTransitionClipID = nil
         case let .selectGap(id):                 ui.selectedGapID = id; ui.selectedClipID = nil; ui.selectedTransitionClipID = nil

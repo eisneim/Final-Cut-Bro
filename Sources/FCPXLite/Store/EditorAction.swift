@@ -28,6 +28,7 @@ enum EditorAction: Codable, Equatable {
     case renameProject(ProjectID, String)
     case setShowProjectModal(Bool)
     case importAsset(Asset)
+    case removeAsset(AssetID)     // 从素材库删除(时间线上引用该素材的片段会标红"素材丢失")
     case selectClip(ClipID?)
     case selectClips(Set<ClipID>, anchor: ClipID?)   // 框选多选:整组选中,anchor 供 inspector 显示
     case selectGap(GapID?)

@@ -154,7 +154,8 @@ extension TimelineContentView {
                 scrubbingPlayhead = true
                 dispatch?(.setPlayhead(Time.seconds(t)))            // 播放头线上:擦洗
             } else {
-                marqueeStart = pt; marqueeCurrent = pt              // 空白:开始框选(松手若没拖动则取消选择)
+                dispatch?(.setPlayhead(Time.seconds(t)))            // 空白:立即移播放头(响应点击)
+                marqueeStart = pt; marqueeCurrent = pt              // 同时准备框选(拖动才生效)
             }
         }
     }
