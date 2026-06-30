@@ -236,6 +236,15 @@ enum AgentActionCatalog {
             }
             return "已加标题「\(text)」"
         },
+        AgentAction(type: "overwrite", domain: .timeline,
+                    doc: "覆盖(FCP D):用素材库第 assetIndex 个素材覆盖 atSeconds(省略=播放头)处的区间,裁掉/分割被覆盖内容,总时长不变。",
+                    params: [ParamSpec(name: "assetIndex", kind: .int, required: true, doc: "素材库索引"),
+                             ParamSpec(name: "atSeconds", kind: .number, required: false, doc: "覆盖起点(秒),省略=播放头")]) { store, a in
+            guard let clip = clipFromAsset(store, intArg(a, "assetIndex") ?? -1) else { return "错误:assetIndex 无效" }
+            let at = numArg(a, "atSeconds").map { Time.seconds($0) } ?? store.ui.playhead
+            store.dispatch(.overwrite(clip, atTime: at))
+            return "已覆盖 @\(at.seconds)s"
+        },
     ]
     @MainActor static func mutateEffects(_ store: DocumentStore, clipIndex: Int, _ f: (inout [Effect]) -> Void) -> Bool {
         guard let id = clipID(store, clipIndex), let ei = spineElementIndex(store, clipIndex: clipIndex),
@@ -363,6 +372,21 @@ enum AgentActionCatalog {
             return mutateTransformKeyframes(store, clipIndex: intArg(a, "clipIndex") ?? -1) { $0.removeAll() }
                 ? "已清除变换关键帧" : "错误:clipIndex 无效"
         },
+        AgentAction(type: "add_volume_keyframe", domain: .adjust,
+                    doc: "给主轴第 clipIndex 个片段在 atSeconds(相对片段起点)加音量关键帧做【音量包络】(淡入淡出/局部压低)。value 0–2(1=原始,0=静音)。多次不同 atSeconds 调用形成包络。同时间覆盖。",
+                    params: [ParamSpec(name: "clipIndex", kind: .int, required: true, doc: "片段索引"),
+                             ParamSpec(name: "atSeconds", kind: .number, required: true, doc: "相对片段起点(秒)"),
+                             ParamSpec(name: "value", kind: .number, required: true, doc: "音量 0–2")]) { store, a in
+            let ci = intArg(a, "clipIndex") ?? -1
+            guard let id = clipID(store, ci), let ei = spineElementIndex(store, clipIndex: ci),
+                  case .clip(let c) = store.document.sequence.spine[ei] else { return "错误:clipIndex 无效" }
+            let t = numArg(a, "atSeconds") ?? 0
+            var kfs = c.volumeKeyframes.filter { abs($0.time.seconds - t) > 0.001 }
+            kfs.append(VolumeKeyframe(time: .seconds(t), value: numArg(a, "value") ?? 1))
+            kfs.sort { $0.time < $1.time }
+            store.dispatch(.setVolumeKeyframes(id, kfs))
+            return "已加音量关键帧 @\(t)s"
+        },
     ]
     static let navigate: [AgentAction] = [
         AgentAction(type: "playhead", domain: .navigate, doc: "把播放头移到 atSeconds 秒。",
@@ -407,6 +431,24 @@ enum AgentActionCatalog {
                     params: [ParamSpec(name: "path", kind: .string, required: true, doc: "目标文件绝对路径")]) { store, a in
             guard let p = strArg(a, "path") else { return "错误:缺 path" }
             store.exportMovie(to: URL(fileURLWithPath: p), settings: ExportSettings()); return "已开始导出成片到 \(p)(渲染中)"
+        },
+        AgentAction(type: "create_project", domain: .navigate,
+                    doc: "新建一个项目(对应 FCP 的 Project,自带分辨率/帧率与独立时间线),并切到它。无项目时必须先建。",
+                    params: [ParamSpec(name: "name", kind: .string, required: true, doc: "项目名"),
+                             ParamSpec(name: "width", kind: .int, required: false, doc: "宽,默认1920"),
+                             ParamSpec(name: "height", kind: .int, required: false, doc: "高,默认1080"),
+                             ParamSpec(name: "fps", kind: .number, required: false, doc: "帧率,默认25")]) { store, a in
+            let p = Project(name: strArg(a, "name") ?? "项目",
+                            formatWidth: intArg(a, "width") ?? 1920,
+                            formatHeight: intArg(a, "height") ?? 1080,
+                            frameRate: numArg(a, "fps") ?? 25)
+            store.dispatch(.createProject(p))
+            return "已新建项目「\(p.name)」\(p.formatWidth)×\(p.formatHeight)"
+        },
+        AgentAction(type: "toggle_snapping", domain: .navigate,
+                    doc: "切换磁吸编辑(snapping)开/关。开时切割/修剪/平移会吸附到邻近编辑点。", params: []) { store, _ in
+            store.dispatch(.toggleSnapping)
+            return store.ui.snappingEnabled ? "磁吸已开" : "磁吸已关"
         },
     ]
 }
