@@ -178,6 +178,8 @@ struct ViewerView: View {
                         }
                         .allowsHitTesting(false)
                 }
+                // 标题 on-screen 控制:选中标题时,画面内可拖动+双击改文字。
+                TitleOverlay(store: store)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             // skim 状态变化 → 请求该帧(asset+seconds 任一变都重算)。
