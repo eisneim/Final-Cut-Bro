@@ -99,6 +99,7 @@ struct BrowserView: View {
                         cell(assets[idx], width: widths[idx], rows: rowCounts[idx])
                     }
                 }
+                .fixedSize(horizontal: true, vertical: false)   // 防止 SwiftUI 把单元格拉伸撑满行宽(吃掉 padding)
             }
         }
         .padding(pad)
