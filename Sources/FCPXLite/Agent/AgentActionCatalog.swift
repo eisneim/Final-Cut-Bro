@@ -28,6 +28,27 @@ enum AgentActionCatalog {
         for el in store.document.sequence.spine { if case .clip(let c) = el { if n == clipIndex { return c.id }; n += 1 } }
         return nil
     }
+    /// 第 n 个标题片段的 id(主轴+连接,文档顺序)。供编辑已有标题用。
+    static func titleClipID(_ store: DocumentStore, _ n: Int) -> ClipID? {
+        var titles: [ClipID] = []
+        for el in store.document.sequence.spine {
+            if case .clip(let c) = el {
+                if c.isTitle { titles.append(c.id) }
+                for ch in c.connected where ch.isTitle { titles.append(ch.id) }
+            }
+        }
+        return titles.indices.contains(n) ? titles[n] : nil
+    }
+    /// 按 id 找 clip(主轴或连接子项)。
+    static func findClip(_ store: DocumentStore, _ id: ClipID) -> Clip? {
+        for el in store.document.sequence.spine {
+            if case .clip(let c) = el {
+                if c.id == id { return c }
+                for ch in c.connected where ch.id == id { return ch }
+            }
+        }
+        return nil
+    }
     static func spineElementIndex(_ store: DocumentStore, clipIndex: Int) -> Int? {
         var n = 0
         for (i, el) in store.document.sequence.spine.enumerated() { if case .clip = el { if n == clipIndex { return i }; n += 1 } }
@@ -245,6 +266,24 @@ enum AgentActionCatalog {
             store.dispatch(.overwrite(clip, atTime: at))
             return "已覆盖 @\(at.seconds)s"
         },
+        AgentAction(type: "move_to_lane", domain: .timeline,
+                    doc: "把主轴第 clipIndex 个片段移到第 lane 层(0=主轴,>0=上层叠加,<0=下层),起点 atSeconds。用于把片段挪到画中画轨道。",
+                    params: [ParamSpec(name: "clipIndex", kind: .int, required: true, doc: "片段索引"),
+                             ParamSpec(name: "lane", kind: .int, required: true, doc: "目标层:0主轴,>0上,<0下"),
+                             ParamSpec(name: "atSeconds", kind: .number, required: true, doc: "起点(秒)")]) { store, a in
+            guard let id = clipID(store, intArg(a, "clipIndex") ?? -1) else { return "错误:clipIndex 无效" }
+            store.dispatch(.relocateClip(id, lane: intArg(a, "lane") ?? 1, time: .seconds(numArg(a, "atSeconds") ?? 0)))
+            return "已移到 lane\(intArg(a, "lane") ?? 1)"
+        },
+        AgentAction(type: "remove_gap", domain: .timeline,
+                    doc: "删除主轴上第 spineIndex 个【间隙(gap)】元素(后续片段合拢)。spineIndex 必须指向一个间隙。",
+                    params: [ParamSpec(name: "spineIndex", kind: .int, required: true, doc: "spine 元素索引(须为间隙)")]) { store, a in
+            let i = intArg(a, "spineIndex") ?? -1
+            guard store.document.sequence.spine.indices.contains(i),
+                  case .gap(let gid, _) = store.document.sequence.spine[i] else { return "错误:spineIndex 不是间隙" }
+            store.dispatch(.removeGap(gid))
+            return "已删间隙"
+        },
     ]
     @MainActor static func mutateEffects(_ store: DocumentStore, clipIndex: Int, _ f: (inout [Effect]) -> Void) -> Bool {
         guard let id = clipID(store, clipIndex), let ei = spineElementIndex(store, clipIndex: clipIndex),
@@ -387,6 +426,35 @@ enum AgentActionCatalog {
             store.dispatch(.setVolumeKeyframes(id, kfs))
             return "已加音量关键帧 @\(t)s"
         },
+        AgentAction(type: "rotate", domain: .adjust, doc: "旋转主轴第 clipIndex 个片段画面 degrees 度(-180~180,正=顺时针)。",
+                    params: [ParamSpec(name: "clipIndex", kind: .int, required: true, doc: "片段索引"),
+                             ParamSpec(name: "degrees", kind: .number, required: true, doc: "角度 -180~180")]) { store, a in
+            let d = numArg(a, "degrees") ?? 0
+            return mutateAdjust(store, clipIndex: intArg(a, "clipIndex") ?? -1) { $0.transform.rotation = d }
+                ? "已旋转到 \(d)°" : "错误:clipIndex 无效"
+        },
+        AgentAction(type: "set_title", domain: .adjust,
+                    doc: "编辑【已存在】的第 titleIndex 个标题(0基,主轴+连接按文档顺序)。可改 text/fontSize/colorHex(#RRGGBB)/bold(true/false)/align(0左1中2右)/x/y。只传想改的字段。",
+                    params: [ParamSpec(name: "titleIndex", kind: .int, required: true, doc: "标题索引,0基"),
+                             ParamSpec(name: "text", kind: .string, required: false, doc: "新文字"),
+                             ParamSpec(name: "fontSize", kind: .number, required: false, doc: "字号"),
+                             ParamSpec(name: "colorHex", kind: .string, required: false, doc: "颜色 #RRGGBB"),
+                             ParamSpec(name: "bold", kind: .string, required: false, doc: "true/false"),
+                             ParamSpec(name: "align", kind: .int, required: false, doc: "0左1中2右"),
+                             ParamSpec(name: "x", kind: .number, required: false, doc: "水平位置px"),
+                             ParamSpec(name: "y", kind: .number, required: false, doc: "垂直位置px")]) { store, a in
+            guard let id = titleClipID(store, intArg(a, "titleIndex") ?? -1),
+                  var spec = findClip(store, id)?.title else { return "错误:titleIndex 无效(没有那个标题)" }
+            if let t = strArg(a, "text") { spec.text = t }
+            if let fs = numArg(a, "fontSize") { spec.fontSize = fs }
+            if let c = strArg(a, "colorHex") { spec.colorHex = c }
+            if let b = boolArg(a, "bold") { spec.bold = b }
+            if let al = intArg(a, "align") { spec.align = max(0, min(2, al)) }
+            if let x = numArg(a, "x") { spec.position.x = x }
+            if let y = numArg(a, "y") { spec.position.y = y }
+            store.dispatch(.setTitle(id, spec))
+            return "已编辑标题「\(spec.text)」"
+        },
     ]
     static let navigate: [AgentAction] = [
         AgentAction(type: "playhead", domain: .navigate, doc: "把播放头移到 atSeconds 秒。",
@@ -449,6 +517,36 @@ enum AgentActionCatalog {
                     doc: "切换磁吸编辑(snapping)开/关。开时切割/修剪/平移会吸附到邻近编辑点。", params: []) { store, _ in
             store.dispatch(.toggleSnapping)
             return store.ui.snappingEnabled ? "磁吸已开" : "磁吸已关"
+        },
+        AgentAction(type: "rename_project", domain: .navigate,
+                    doc: "重命名当前项目(或第 index 个项目)。",
+                    params: [ParamSpec(name: "name", kind: .string, required: true, doc: "新名字"),
+                             ParamSpec(name: "index", kind: .int, required: false, doc: "项目索引,省略=当前")]) { store, a in
+            guard let name = strArg(a, "name") else { return "错误:缺 name" }
+            let pid: ProjectID?
+            if let i = intArg(a, "index"), store.document.projects.indices.contains(i) { pid = store.document.projects[i].id }
+            else { pid = store.document.currentProjectID }
+            guard let id = pid else { return "错误:没有项目" }
+            store.dispatch(.renameProject(id, name))
+            return "已重命名为「\(name)」"
+        },
+        AgentAction(type: "select_project", domain: .navigate,
+                    doc: "切换到第 index 个项目(0基),换出它的时间线。",
+                    params: [ParamSpec(name: "index", kind: .int, required: true, doc: "项目索引,0基")]) { store, a in
+            let i = intArg(a, "index") ?? -1
+            guard store.document.projects.indices.contains(i) else { return "错误:index 无效" }
+            store.dispatch(.selectProject(store.document.projects[i].id))
+            return "已切到项目「\(store.document.projects[i].name)」"
+        },
+        AgentAction(type: "remove_project", domain: .navigate,
+                    doc: "删除第 index 个项目(省略=当前)。删当前会切到剩下的项目或回到无项目门控。",
+                    params: [ParamSpec(name: "index", kind: .int, required: false, doc: "项目索引,省略=当前")]) { store, a in
+            let pid: ProjectID?
+            if let i = intArg(a, "index"), store.document.projects.indices.contains(i) { pid = store.document.projects[i].id }
+            else { pid = store.document.currentProjectID }
+            guard let id = pid else { return "错误:没有项目" }
+            store.dispatch(.removeProject(id))
+            return "已删除项目"
         },
     ]
 }

@@ -48,14 +48,16 @@ final class AgentAllActionsSmokeTest: XCTestCase {
         s = base(); ok(s, "add_transition", ["clipIndex": 1, "seconds": 1])
         s = base(); ok(s, "add_title", ["text": "标题", "fontSize": 80, "colorHex": "#FFCC00", "y": 300])
         s = base(); ok(s, "overwrite", ["assetIndex": 0, "atSeconds": 2])
-        // set_gap:先 position_move 制造间隙,再调它
+        s = base(); ok(s, "move_to_lane", ["clipIndex": 1, "lane": 1, "atSeconds": 3])
+        // set_gap / remove_gap:先 position_move 制造间隙
         s = base()
         _ = run(s, "position_move", ["clipIndex": 0, "atSeconds": 20])
-        // 找到 gap 的 spineIndex(第一个非 clip 元素)
         var gapIdx = -1
         for (i, el) in s.document.sequence.spine.enumerated() { if case .gap = el { gapIdx = i; break } }
-        if gapIdx >= 0 { ok(s, "set_gap", ["spineIndex": gapIdx, "seconds": 3]) }
-        else { XCTFail("position_move 未产生 gap,无法测 set_gap") }
+        if gapIdx >= 0 {
+            ok(s, "set_gap", ["spineIndex": gapIdx, "seconds": 3])
+            ok(s, "remove_gap", ["spineIndex": gapIdx])
+        } else { XCTFail("position_move 未产生 gap") }
     }
 
     // MARK: - adjust 域
@@ -74,6 +76,10 @@ final class AgentAllActionsSmokeTest: XCTestCase {
         ok(s, "add_transform_keyframe", ["clipIndex": 0, "atSeconds": 1, "scale": 1.5])
         ok(s, "clear_transform_keyframes", ["clipIndex": 0])
         ok(s, "add_volume_keyframe", ["clipIndex": 0, "atSeconds": 1, "value": 0.5])
+        ok(s, "rotate", ["clipIndex": 0, "degrees": 30])
+        // set_title:先加一个标题再编辑它
+        _ = run(s, "add_title", ["text": "原文字"])
+        ok(s, "set_title", ["titleIndex": 0, "text": "新文字", "fontSize": 72, "colorHex": "#00FF00", "bold": "false", "align": 0, "x": 10, "y": 200])
     }
 
     // MARK: - navigate 域
@@ -89,6 +95,9 @@ final class AgentAllActionsSmokeTest: XCTestCase {
         ok(s, "undo", [:])
         ok(s, "redo", [:])
         ok(s, "create_project", ["name": "新项目", "width": 1080, "height": 1920, "fps": 30])
+        ok(s, "rename_project", ["name": "改名了"])
+        ok(s, "select_project", ["index": 0])
+        ok(s, "remove_project", ["index": 1])
         ok(s, "toggle_snapping", [:])
         ok(s, "export_fcpxml", ["path": NSTemporaryDirectory() + "smoke.fcpxml"])
         ok(s, "export_movie", ["path": NSTemporaryDirectory() + "smoke.mp4"])   // 异步,返回"已开始"即算可调
@@ -102,10 +111,12 @@ final class AgentAllActionsSmokeTest: XCTestCase {
     func testEveryActionIsCovered() {
         let tested: Set<String> = [
             "insert","append","connect","delete","move","blade","trim","position_move","duplicate_clip",
-            "slip","slide","add_transition","add_title","overwrite","set_gap",
+            "slip","slide","add_transition","add_title","overwrite","set_gap","move_to_lane","remove_gap",
             "scale","position","crop","opacity","volume","add_effect","set_effect_param","remove_effect",
             "toggle_enabled","add_transform_keyframe","clear_transform_keyframes","add_volume_keyframe",
+            "rotate","set_title",
             "playhead","zoom","tool","select","select_asset","undo","redo","create_project","toggle_snapping",
+            "rename_project","select_project","remove_project",
             "export_fcpxml","export_movie","import",
         ]
         let all = Set(AgentActionCatalog.all.map { $0.type })
