@@ -320,6 +320,7 @@ import Observation
             case .browser:   ui.browserWidth = cw
             case .inspector: ui.inspectorWidth = cw
             case .chat:      ui.chatWidth = cw
+            case .effects:   ui.effectsWidth = cw
             }
         case let .setClipHeight(h):      ui.clipHeight = max(40, min(160, h))
         case let .setVideoAudioRatio(r): ui.videoAudioRatio = max(0.1, min(0.9, r))

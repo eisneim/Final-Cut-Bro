@@ -62,5 +62,5 @@ enum EditorAction: Codable, Equatable {
 
 /// 可调宽度的面板。
 enum PanelKind: String, Codable {
-    case sidebar, browser, inspector, chat
+    case sidebar, browser, inspector, chat, effects
 }

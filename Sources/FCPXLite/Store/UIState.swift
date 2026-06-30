@@ -20,6 +20,7 @@ struct UIState: Codable, Equatable {
     var browserWidth: Double = 280
     var inspectorWidth: Double = 320
     var chatWidth: Double = 320
+    var effectsWidth: Double = 288   // 效果/转场面板宽(默认比原 360 窄 20%);可拖拽调整
     var clipHeight: Double = 72
     var videoAudioRatio: Double = 0.6
     var assetStripZoom: Double = 6   // 素材池 strip 外观缩放(px/秒);小=网格小方块,大=长胶片条

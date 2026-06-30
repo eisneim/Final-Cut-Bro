@@ -58,7 +58,7 @@ struct EffectsPanel: View {
                     .background(Tokens.Palette.clipBlue.opacity(0.85))
             }
         }
-        .frame(width: Tokens.Metric.effectsWidth)
+        .frame(width: CGFloat(store.ui.effectsWidth))
         .background(Tokens.Palette.effectsPanel)
     }
 

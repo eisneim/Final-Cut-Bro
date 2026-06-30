@@ -67,7 +67,9 @@ struct RootView: View {
                             HStack(spacing: 0) {
                                 TimelineView(store: store)
                                 if store.ui.showEffects {
-                                    Divider().overlay(Tokens.Palette.divider)
+                                    WidthDragHandle(width: store.ui.effectsWidth, sign: -1) {
+                                        store.dispatch(.setPanelWidth(.effects, $0))
+                                    }
                                     EffectsPanel(store: store)
                                 }
                             }
