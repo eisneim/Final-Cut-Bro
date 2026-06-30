@@ -47,6 +47,7 @@ final class AgentAllActionsSmokeTest: XCTestCase {
         s = base(); ok(s, "slide", ["clipIndex": 1, "deltaSeconds": 1])
         s = base(); ok(s, "add_transition", ["clipIndex": 1, "seconds": 1])
         s = base(); ok(s, "add_title", ["text": "标题", "fontSize": 80, "colorHex": "#FFCC00", "y": 300])
+        s = base(); ok(s, "append_clip", ["assetIndex": 0, "fromSeconds": 2, "toSeconds": 6])
         s = base(); ok(s, "overwrite", ["assetIndex": 0, "atSeconds": 2])
         s = base(); ok(s, "move_to_lane", ["clipIndex": 1, "lane": 1, "atSeconds": 3])
         // set_gap / remove_gap:先 position_move 制造间隙
@@ -111,7 +112,7 @@ final class AgentAllActionsSmokeTest: XCTestCase {
     func testEveryActionIsCovered() {
         let tested: Set<String> = [
             "insert","append","connect","delete","move","blade","trim","position_move","duplicate_clip",
-            "slip","slide","add_transition","add_title","overwrite","set_gap","move_to_lane","remove_gap",
+            "slip","slide","add_transition","add_title","overwrite","set_gap","move_to_lane","remove_gap","append_clip",
             "scale","position","crop","opacity","volume","add_effect","set_effect_param","remove_effect",
             "toggle_enabled","add_transform_keyframe","clear_transform_keyframes","add_volume_keyframe",
             "rotate","set_title",

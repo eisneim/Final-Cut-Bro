@@ -141,13 +141,19 @@ enum AgentActionCatalog {
                     params: [ParamSpec(name: "clipIndex", kind: .int, required: true, doc: "片段索引"),
                              ParamSpec(name: "atSeconds", kind: .number, required: true, doc: "切割时间(秒)")]) { store, a in
             guard let ei = spineElementIndex(store, clipIndex: intArg(a, "clipIndex") ?? -1),
-                  case .clip = store.document.sequence.spine[ei] else { return "错误:clipIndex 无效" }
+                  case .clip(let c) = store.document.sequence.spine[ei] else { return "错误:clipIndex 无效" }
             // localTime = at - 片段起点
             var acc = 0.0
             for (i, el) in store.document.sequence.spine.enumerated() { if i == ei { break }; acc += el.duration.seconds }
             let at = numArg(a, "atSeconds") ?? 0
-            store.dispatch(.blade(at: ei, localTime: .seconds(at - acc)))
-            return "已在 \(at)s 切割片段 \(intArg(a, "clipIndex")!)"
+            let local = at - acc
+            // 越界(切点不在该片段内)→ 明确报错,不能静默"成功"(否则会把 agent 带偏)。
+            guard local > 0.001, local < c.duration.seconds - 0.001 else {
+                return "错误:切点 \(at)s 不在片段范围内(该片段时间线 \(String(format: "%.2f", acc))–\(String(format: "%.2f", acc + c.duration.seconds))s)"
+            }
+            let before = store.document.sequence.spine.count
+            store.dispatch(.blade(at: ei, localTime: .seconds(local)))
+            return store.document.sequence.spine.count > before ? "已在 \(at)s 切割片段 \(intArg(a, "clipIndex")!)" : "错误:切割未生效"
         },
         AgentAction(type: "trim", domain: .timeline,
                     doc: "修剪主轴第 clipIndex 个片段。edge=head 改入点(seconds=入点偏移),edge=tail 改时长(seconds=新时长)。",
@@ -241,21 +247,34 @@ enum AgentActionCatalog {
             return secs > 0 ? "已加 \(secs)s 叠化转场" : "已移除转场"
         },
         AgentAction(type: "add_title", domain: .timeline,
-                    doc: "在 atSeconds(省略=播放头)加一个文字标题(Title),叠在视频上层。text 必填;fontSize 字号(默认96);colorHex 颜色如 #FFCC00;y 垂直位置(正=下移,屏幕下方字幕用 ~380);默认时长 5s。",
-                    params: [ParamSpec(name: "text", kind: .string, required: true, doc: "标题文字"),
+                    doc: "在 atSeconds(省略=播放头)加一个文字标题/字幕(叠在视频上层)。text 必填;duration 时长秒(默认5);fontSize 字号(默认96,字幕常用56);colorHex 颜色#RRGGBB;y 垂直位置(正=下移,屏幕下方字幕用~380)。",
+                    params: [ParamSpec(name: "text", kind: .string, required: true, doc: "标题/字幕文字"),
                              ParamSpec(name: "atSeconds", kind: .number, required: false, doc: "起始时间(秒),省略=播放头"),
+                             ParamSpec(name: "duration", kind: .number, required: false, doc: "时长(秒),默认5"),
                              ParamSpec(name: "fontSize", kind: .number, required: false, doc: "字号,默认96"),
                              ParamSpec(name: "colorHex", kind: .string, required: false, doc: "颜色 #RRGGBB,默认白"),
                              ParamSpec(name: "y", kind: .number, required: false, doc: "垂直位置px,正=下移")]) { store, a in
             if let at = numArg(a, "atSeconds") { store.dispatch(.setPlayhead(.seconds(at))) }
             let text = strArg(a, "text") ?? "标题"
-            _ = store.addTitleAtPlayhead(text: text)
+            _ = store.addTitleAtPlayhead(text: text, duration: .seconds(numArg(a, "duration") ?? 5))
             store.updateSelectedTitle { spec in
                 if let fs = numArg(a, "fontSize") { spec.fontSize = fs }
                 if let c = strArg(a, "colorHex") { spec.colorHex = c }
                 if let y = numArg(a, "y") { spec.position.y = y }
             }
             return "已加标题「\(text)」"
+        },
+        AgentAction(type: "append_clip", domain: .timeline,
+                    doc: "把素材库第 assetIndex 个素材的【源区间 fromSeconds–toSeconds 秒】作为一个片段追加到主时间线末尾,并把播放头移到该片段起点。这是按 ASR/字幕时间戳【批量提取保留段拼成成片】的核心动作:先规划保留哪些段,再对每段调一次本动作;之后可紧跟 add_title 给该段加字幕(atSeconds 省略=刚追加段的起点)。",
+                    params: [ParamSpec(name: "assetIndex", kind: .int, required: true, doc: "素材库索引,0基"),
+                             ParamSpec(name: "fromSeconds", kind: .number, required: true, doc: "源区间起点(秒)"),
+                             ParamSpec(name: "toSeconds", kind: .number, required: true, doc: "源区间终点(秒)")]) { store, a in
+            let i = intArg(a, "assetIndex") ?? -1
+            guard store.document.assetLibrary.indices.contains(i) else { return "错误:assetIndex 无效" }
+            let from = numArg(a, "fromSeconds") ?? 0, to = numArg(a, "toSeconds") ?? 0
+            guard to > from else { return "错误:toSeconds 必须大于 fromSeconds" }
+            let at = store.appendSourceRange(assetID: store.document.assetLibrary[i].id, from: from, to: to)
+            return "已追加源[\(from)–\(to)]s 到时间线 \(String(format: "%.2f", at))s 起(播放头已移到此)"
         },
         AgentAction(type: "overwrite", domain: .timeline,
                     doc: "覆盖(FCP D):用素材库第 assetIndex 个素材覆盖 atSeconds(省略=播放头)处的区间,裁掉/分割被覆盖内容,总时长不变。",

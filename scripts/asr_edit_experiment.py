@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""ASR→Agent剪辑→导出 端到端实验。把字幕+视频任务丢给 FCPX-lite agent,看它能否剪掉废话并导出。"""
+"""ASR→Agent剪辑(带字幕)实验 v2。策略:让 agent 先按时间戳规划保留段,再用 append_clip 批量提取+add_title 加字幕。
+监控轻量:只 tail 日志(被动),低频(6s)查 agentBusy(/state 现已主线程外编码),不截图。"""
 import json, time, urllib.request, os
 
 BASE = "http://127.0.0.1:8765"
@@ -11,23 +12,30 @@ def cmd(op, **kw):
     req = urllib.request.Request(BASE + "/cmd", data=body, headers={"Content-Type": "application/json"})
     try: return json.loads(urllib.request.urlopen(req, timeout=120).read())
     except Exception as e: return {"_err": str(e)}
-
 def state():
     try: return json.loads(urllib.request.urlopen(BASE + "/state", timeout=10).read())
     except Exception as e: return {"_err": str(e)}
-
 def busy(): return bool(state().get("agentBusy", False))
-def wait_idle(timeout=300):
+def wait_idle(timeout=360):
     t0 = time.time()
     while time.time() - t0 < timeout:
         if not busy(): return True
-        time.sleep(2)
+        time.sleep(6)   # 低频,避免与流式抢主线程
     return False
-
-def spine(s):
-    try: return s["document"]["projects"][0]["sequence"]["spine"]
+def clips(s):
+    try: return [e["clip"]["_0"] for e in s["document"]["projects"][0]["sequence"]["spine"] if "clip" in e]
     except Exception: return []
-def clips(s): return [e["clip"]["_0"] for e in spine(s) if "clip" in e]
+def titles(s):
+    out = []
+    try:
+        for e in s["document"]["projects"][0]["sequence"]["spine"]:
+            if "clip" not in e: continue
+            c = e["clip"]["_0"]
+            if c.get("title"): out.append(c["title"].get("text"))
+            for ch in c.get("connected", []):
+                if ch.get("title"): out.append(ch["title"].get("text"))
+    except Exception: pass
+    return out
 
 TRANSCRIPT = """[0] 1.36-2.40 我认为人工智能
 [1] 2.48-4.00 绝对是未来发展的方向
@@ -48,37 +56,38 @@ TRANSCRIPT = """[0] 1.36-2.40 我认为人工智能
 
 INSTRUCTION = (
     "这是一段说话视频的字幕(每行: 序号 起始秒-结束秒 文字):\n" + TRANSCRIPT + "\n\n"
-    f"视频文件绝对路径: {VIDEO} ,总时长约 37.44 秒。\n"
-    "这段视频里说话人有【口误重来】和【废话】。请你作为剪辑师:\n"
-    "1) 新建一个 1920x1080 项目;\n"
-    "2) 把这个视频导入并加到主时间线;\n"
-    "3) 根据字幕判断哪些是口误/重来/思考废话(例如'等一下/这个说错了重新来'、'我认为这绝对是不对'这种没说完的、'呃/嗯让我想想'、'啊?差不多就这么'、以及把同一句话重复说的),"
-    "用切割(blade)+删除(delete)把这些段落剪掉,只保留连贯正确的内容;\n"
-    f"4) 最后把成片导出到 {OUT} 。\n"
-    "注意:每次删除后片段序号会变,删之前先 query_timeline 看清楚。请一步步做完。"
+    "视频已经导入为素材库第0个,项目也建好了(1920x1080)。\n"
+    "任务:做一个【剪掉废话+带字幕】的成片。请按这个【策略】做:\n"
+    "第一步【规划】:根据字幕判断要【保留】哪些句子、丢掉哪些。要丢的是口误/重来/思考废话——"
+    "例如 [2][3] '等一下/这个说错了重新来'、[4] '我认为这绝对是不对'(没说完的错句)、[12] '嗯让我想想'、[13] '啊?差不多就这么'、"
+    "以及和别的句子重复的(比如 [0][1] 和 [5][6] 是同一句的两遍,只留一遍;[14] 和 [15] 重复,只留 [15])。把保留的句子按时间先后列成一个计划。\n"
+    "第二步【批量提取+加字幕】:对计划里的【每一个】保留句,依次做两件事:\n"
+    "  (a) append_clip(assetIndex=0, fromSeconds=该句起始秒, toSeconds=该句结束秒) —— 把这句对应的视频片段提取拼到时间线;\n"
+    "  (b) add_title(text=该句文字, duration=该句时长秒, fontSize=56, y=380) —— 给这句加屏幕下方字幕(atSeconds 省略就会落在刚追加片段的起点)。\n"
+    "第三步【导出】:全部保留句处理完后,导出成片到 " + OUT + " 。\n"
+    "注意:用 append_clip 批量提取,不要用 blade/delete(会算错时间)。一步步做完。"
 )
 
 def main():
     if os.path.exists(OUT): os.remove(OUT)
-    print(">> 发送任务给 agent(真实 LLM,可能要几分钟)...", flush=True)
+    cmd("createProject", path="ASR剪辑", width=1920, seconds=1080)
+    cmd("importFile", path=VIDEO)
+    time.sleep(1)
+    print(">> 发送任务(真实 LLM,请耐心)...", flush=True)
     cmd("agentSend", path=INSTRUCTION)
-    time.sleep(3)
-    wait_idle(360)
-    # 导出是异步,再等产物
+    time.sleep(4)
+    wait_idle(420)
     for _ in range(40):
         if os.path.exists(OUT) and os.path.getsize(OUT) > 10000: break
-        time.sleep(3)
+        time.sleep(4)
     s = state()
-    cs = clips(s)
+    cs = clips(s); ts = titles(s)
     total = sum(c["duration"]["value"]/c["duration"]["timescale"] for c in cs)
     print(f"\n== 结果 ==", flush=True)
-    print(f"时间线片段数: {len(cs)}, 总时长: {total:.2f}s (原始37.44s)", flush=True)
-    for i, c in enumerate(cs):
-        d = c["duration"]["value"]/c["duration"]["timescale"]
-        si = c["sourceIn"]["value"]/c["sourceIn"]["timescale"]
-        print(f"  clip{i}: sourceIn={si:.2f} dur={d:.2f} → 源[{si:.2f},{si+d:.2f}]", flush=True)
+    print(f"主轴片段(视频段)数: {len([c for c in cs if not c.get('title')])}, 总时长 {total:.2f}s (原37.44s)", flush=True)
+    print(f"字幕条数: {len(ts)} -> {ts}", flush=True)
     sz = os.path.getsize(OUT) if os.path.exists(OUT) else 0
-    print(f"导出产物: {OUT} = {sz} bytes {'✅' if sz>10000 else '❌ 未生成'}", flush=True)
+    print(f"导出: {OUT} = {sz} bytes {'✅' if sz>10000 else '❌'}", flush=True)
 
 if __name__ == "__main__":
     main()

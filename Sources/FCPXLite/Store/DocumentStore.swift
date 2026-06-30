@@ -387,9 +387,9 @@ import Observation
 
     /// 在播放头处加一个标题(连接到上方 lane 1;无主轴片段则插主轴)。默认 5s。
     @discardableResult
-    func addTitleAtPlayhead(text: String = "标题") -> ClipID {
+    func addTitleAtPlayhead(text: String = "标题", duration: Time = .seconds(5)) -> ClipID {
         var spec = TitleSpec(); spec.text = text
-        let title = Clip(assetID: AssetID(), sourceIn: .zero, duration: .seconds(5), title: spec)
+        let title = Clip(assetID: AssetID(), sourceIn: .zero, duration: duration, title: spec)
         let host = spineIndexAtPlayhead()
         if host < document.sequence.spine.count {
             var acc = 0.0
@@ -401,6 +401,18 @@ import Observation
         }
         dispatch(.selectClip(title.id))
         return title.id
+    }
+
+    /// 把素材源区间 [from,to] 作为片段追加到主时间线末尾,并把播放头移到该片段起点。
+    /// 用于按 ASR 时间戳批量提取保留段拼成成片(不走 blade+delete,无时间漂移)。
+    @discardableResult
+    func appendSourceRange(assetID: AssetID, from: Double, to: Double) -> Double {
+        let clip = Clip(assetID: assetID, sourceIn: .seconds(max(0, from)), duration: .seconds(max(0.01, to - from)))
+        var acc = 0.0
+        for el in document.sequence.spine { acc += el.duration.seconds }   // 新片段时间线起点
+        dispatch(.insertClip(clip, at: document.sequence.spine.count))
+        dispatch(.setPlayhead(.seconds(acc)))
+        return acc
     }
 
     /// 改选中标题片段的规格(inspector / on-screen 编辑)。
