@@ -313,6 +313,11 @@ final class TimelineContentView: NSView {
 
     private func drawClip(_ p: Placed) {
         let rect = clipRect(p)
+        // 标题片段:画成【更矮】的紫色条(顶部对齐),显示文字 —— 像 FCP 的 title,不需要视频那么高。
+        if let clip = clipByID(p.clipID), clip.isTitle {
+            drawTitleClip(clip, in: rect, selected: p.clipID == selectedClipID)
+            return
+        }
         let path = NSBezierPath(roundedRect: rect, xRadius: 3, yRadius: 3)
         TimelineColors.clipBlue.setFill()
         path.fill()
@@ -363,6 +368,33 @@ final class TimelineContentView: NSView {
         NSColor.black.withAlphaComponent(0.35).setFill()
         NSRect(x: rect.minX, y: rect.minY, width: rect.width, height: 14).fill()
         label.draw(at: NSPoint(x: textRect.minX, y: textRect.minY), withAttributes: attrs)
+        NSGraphicsContext.current?.restoreGraphicsState()
+    }
+
+    /// 标题片段:矮条(顶部 ~40% 高度)+ 紫色 + 文字内容。lane>0 连接片段常见。
+    static let titleBarHeight: CGFloat = 26
+    private func drawTitleClip(_ clip: Clip, in rect: NSRect, selected: Bool) {
+        let h = min(Self.titleBarHeight, rect.height)
+        let bar = NSRect(x: rect.minX, y: rect.minY, width: rect.width, height: h)   // 顶部对齐
+        let path = NSBezierPath(roundedRect: bar, xRadius: 3, yRadius: 3)
+        TimelineColors.transition.withAlphaComponent(0.85).setFill(); path.fill()
+        TimelineColors.transition.setStroke(); path.lineWidth = 1; path.stroke()
+        if selected {
+            let sel = NSBezierPath(roundedRect: bar.insetBy(dx: 1, dy: 1), xRadius: 3, yRadius: 3)
+            TimelineColors.selectBorder.setStroke(); sel.lineWidth = 2; sel.stroke()
+        }
+        // 文字(标题内容)
+        let text = (clip.title?.text ?? "标题") as NSString
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 10, weight: .medium),
+            .foregroundColor: NSColor.white,
+        ]
+        NSGraphicsContext.current?.saveGraphicsState()
+        NSBezierPath(rect: bar).addClip()
+        // 图标 T + 文字
+        ("T " as NSString).draw(at: NSPoint(x: bar.minX + 5, y: bar.minY + (h - 12) / 2),
+                                withAttributes: [.font: NSFont.boldSystemFont(ofSize: 10), .foregroundColor: NSColor.white])
+        text.draw(at: NSPoint(x: bar.minX + 18, y: bar.minY + (h - 12) / 2), withAttributes: attrs)
         NSGraphicsContext.current?.restoreGraphicsState()
     }
 

@@ -219,9 +219,24 @@ enum AgentActionCatalog {
             store.dispatch(.setCrossfade(at: ei, duration: .seconds(secs)))
             return secs > 0 ? "已加 \(secs)s 叠化转场" : "已移除转场"
         },
+        AgentAction(type: "add_title", domain: .timeline,
+                    doc: "在 atSeconds(省略=播放头)加一个文字标题(Title),叠在视频上层。text 必填;fontSize 字号(默认96);colorHex 颜色如 #FFCC00;y 垂直位置(正=下移,屏幕下方字幕用 ~380);默认时长 5s。",
+                    params: [ParamSpec(name: "text", kind: .string, required: true, doc: "标题文字"),
+                             ParamSpec(name: "atSeconds", kind: .number, required: false, doc: "起始时间(秒),省略=播放头"),
+                             ParamSpec(name: "fontSize", kind: .number, required: false, doc: "字号,默认96"),
+                             ParamSpec(name: "colorHex", kind: .string, required: false, doc: "颜色 #RRGGBB,默认白"),
+                             ParamSpec(name: "y", kind: .number, required: false, doc: "垂直位置px,正=下移")]) { store, a in
+            if let at = numArg(a, "atSeconds") { store.dispatch(.setPlayhead(.seconds(at))) }
+            let text = strArg(a, "text") ?? "标题"
+            _ = store.addTitleAtPlayhead(text: text)
+            store.updateSelectedTitle { spec in
+                if let fs = numArg(a, "fontSize") { spec.fontSize = fs }
+                if let c = strArg(a, "colorHex") { spec.colorHex = c }
+                if let y = numArg(a, "y") { spec.position.y = y }
+            }
+            return "已加标题「\(text)」"
+        },
     ]
-
-    /// 改某 clip 的 effects(走命令层,可撤销)。返回 false=clipIndex 无效。
     @MainActor static func mutateEffects(_ store: DocumentStore, clipIndex: Int, _ f: (inout [Effect]) -> Void) -> Bool {
         guard let id = clipID(store, clipIndex), let ei = spineElementIndex(store, clipIndex: clipIndex),
               case .clip(let c) = store.document.sequence.spine[ei] else { return false }

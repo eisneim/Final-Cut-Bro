@@ -10,6 +10,7 @@ struct InspectorView: View {
             if let clip = store.selectedClip() {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
+                        if clip.isTitle { InspectorTitleSection(store: store) }
                         section("复合", reset: { store.updateSelectedAdjust { $0.opacity = 1 } }) {
                             sliderRow("不透明度", value: bind(\.opacity, scale: 100), range: 0...100, suffix: "%", display: clip.adjust.opacity * 100)
                         }
