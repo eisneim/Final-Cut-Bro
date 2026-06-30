@@ -375,7 +375,8 @@ final class TimelineContentView: NSView {
     static let titleBarHeight: CGFloat = 26
     private func drawTitleClip(_ clip: Clip, in rect: NSRect, selected: Bool) {
         let h = min(Self.titleBarHeight, rect.height)
-        let bar = NSRect(x: rect.minX, y: rect.minY, width: rect.width, height: h)   // 顶部对齐
+        // 底部对齐:让矮标题条的【下边缘紧贴下层主轨道】(lane 槽的底=下一层顶),不再悬空。
+        let bar = NSRect(x: rect.minX, y: rect.maxY - h, width: rect.width, height: h)
         let path = NSBezierPath(roundedRect: bar, xRadius: 3, yRadius: 3)
         TimelineColors.transition.withAlphaComponent(0.85).setFill(); path.fill()
         TimelineColors.transition.setStroke(); path.lineWidth = 1; path.stroke()
