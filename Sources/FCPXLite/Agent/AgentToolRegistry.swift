@@ -51,6 +51,7 @@ final class AgentToolRegistry {
                 case .number: props[p.name] = num(p.doc)
                 case .string: props[p.name] = str(p.doc)
                 case .enumString(let vals): props[p.name] = enm(vals, p.doc)
+                case .objectArray(let item): props[p.name] = arr(item, p.doc)
                 }
             }
         }
@@ -144,4 +145,22 @@ final class AgentToolRegistry {
     private func int(_ d: String) -> [String: Any] { ["type": "integer", "description": d] }
     private func num(_ d: String) -> [String: Any] { ["type": "number", "description": d] }
     private func enm(_ vals: [String], _ d: String) -> [String: Any] { ["type": "string", "enum": vals, "description": d] }
+    /// 对象数组 schema:items 为由 specs 构成的 object。供批量动作(如 build_subtitle_cut)用。
+    private func arr(_ specs: [ParamSpec], _ d: String) -> [String: Any] {
+        var itemProps: [String: Any] = [:]
+        var req: [String] = []
+        for p in specs {
+            switch p.kind {
+            case .int: itemProps[p.name] = int(p.doc)
+            case .number: itemProps[p.name] = num(p.doc)
+            case .string: itemProps[p.name] = str(p.doc)
+            case .enumString(let vals): itemProps[p.name] = enm(vals, p.doc)
+            case .objectArray(let inner): itemProps[p.name] = arr(inner, p.doc)
+            }
+            if p.required { req.append(p.name) }
+        }
+        var items: [String: Any] = ["type": "object", "properties": itemProps]
+        if !req.isEmpty { items["required"] = req }
+        return ["type": "array", "description": d, "items": items]
+    }
 }

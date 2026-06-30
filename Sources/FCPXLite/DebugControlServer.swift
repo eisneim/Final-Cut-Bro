@@ -311,6 +311,19 @@ final class DebugControlServer {
             if let id = spineClipID(at: cmd.index ?? 0) {
                 store.dispatch(.positionMove(id, time: .seconds(cmd.seconds ?? 0)))
             }
+        case "buildSubtitleCut":
+            // 自测:直接跑 build_subtitle_cut 批量动作(不经 LLM)。从原始 JSON body 取 segments 数组。
+            if let raw = try? JSONSerialization.jsonObject(with: body) as? [String: Any] {
+                var args: [String: Any] = ["type": "build_subtitle_cut"]
+                args["segments"] = raw["segments"]
+                if let ai = raw["assetIndex"] { args["assetIndex"] = ai }
+                if let fs = raw["fontSize"] { args["fontSize"] = fs }
+                if let yy = raw["y"] { args["y"] = yy }
+                if let ep = raw["exportPath"] { args["exportPath"] = ep }
+                if let action = AgentActionCatalog.find("build_subtitle_cut") {
+                    MainActor.assumeIsolated { NSLog("[DebugControlServer] buildSubtitleCut → \(action.apply(store, args))") }
+                }
+            }
         case "dispatchAction":
             // 自测:直接执行一个 catalog 动作,不经 LLM。type 走 path 字段,参数从通用字段组装。
             if let type = cmd.path {

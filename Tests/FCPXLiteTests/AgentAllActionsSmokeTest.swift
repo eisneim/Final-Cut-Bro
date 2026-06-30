@@ -48,6 +48,11 @@ final class AgentAllActionsSmokeTest: XCTestCase {
         s = base(); ok(s, "add_transition", ["clipIndex": 1, "seconds": 1])
         s = base(); ok(s, "add_title", ["text": "标题", "fontSize": 80, "colorHex": "#FFCC00", "y": 300])
         s = base(); ok(s, "append_clip", ["assetIndex": 0, "fromSeconds": 2, "toSeconds": 6])
+        // 批量字幕剪辑:一次传多段(提取+加字幕),断言主轴段数=保留段数。
+        s = base()
+        let segs: [[String: Any]] = [["from": 1.0, "to": 3.0, "text": "第一句"],
+                                     ["from": 5.0, "to": 7.5, "text": "第二句"]]
+        ok(s, "build_subtitle_cut", ["segments": segs, "assetIndex": 0, "fontSize": 56, "y": 380])
         s = base(); ok(s, "overwrite", ["assetIndex": 0, "atSeconds": 2])
         s = base(); ok(s, "move_to_lane", ["clipIndex": 1, "lane": 1, "atSeconds": 3])
         // set_gap / remove_gap:先 position_move 制造间隙
@@ -112,7 +117,7 @@ final class AgentAllActionsSmokeTest: XCTestCase {
     func testEveryActionIsCovered() {
         let tested: Set<String> = [
             "insert","append","connect","delete","move","blade","trim","position_move","duplicate_clip",
-            "slip","slide","add_transition","add_title","overwrite","set_gap","move_to_lane","remove_gap","append_clip",
+            "slip","slide","add_transition","add_title","overwrite","set_gap","move_to_lane","remove_gap","append_clip","build_subtitle_cut",
             "scale","position","crop","opacity","volume","add_effect","set_effect_param","remove_effect",
             "toggle_enabled","add_transform_keyframe","clear_transform_keyframes","add_volume_keyframe",
             "rotate","set_title",

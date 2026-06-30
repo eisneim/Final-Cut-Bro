@@ -59,9 +59,21 @@ import Observation
     private var undoStack: [Document] = []
     private var redoStack: [Document] = []
     private let undoLimit = 80
+    private var inTransaction = false
 
-    /// 文档变更前快照(供撤销)。清空重做栈。
+    /// 把内部多次 dispatch/apply 合成【一次】撤销(批量动作用,如 build_subtitle_cut)。
+    /// 开头快照一次,期间所有 snapshot() 被吞掉;结束后这一整批可被单次 undo 还原。
+    func transaction(_ body: () -> Void) {
+        if inTransaction { body(); return }   // 不嵌套
+        snapshot()
+        inTransaction = true
+        defer { inTransaction = false }
+        body()
+    }
+
+    /// 文档变更前快照(供撤销)。清空重做栈。事务内不再堆叠(已在事务开头快照过一次)。
     private func snapshot() {
+        if inTransaction { redoStack.removeAll(); return }
         undoStack.append(document)
         if undoStack.count > undoLimit { undoStack.removeFirst() }
         redoStack.removeAll()

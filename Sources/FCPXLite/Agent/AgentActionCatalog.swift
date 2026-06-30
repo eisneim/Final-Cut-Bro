@@ -4,8 +4,8 @@ import CoreGraphics
 /// LLM 可见的动作领域。
 enum ActionDomain: String { case timeline, adjust, navigate }
 
-/// 形参规格(供生成 JSON schema)。
-enum ParamKind { case int, number, string; case enumString([String]) }
+/// 形参规格(供生成 JSON schema)。objectArray 用于批量动作:一个由若干同构对象组成的数组。
+indirect enum ParamKind { case int, number, string; case enumString([String]); case objectArray([ParamSpec]) }
 struct ParamSpec { let name: String; let kind: ParamKind; let required: Bool; let doc: String }
 
 /// 一个 LLM 可发的扁平动作:type + 注释 + 形参 + 翻译执行闭包(index/秒 → EditorAction → dispatch)。
@@ -62,6 +62,12 @@ enum AgentActionCatalog {
     static func intArg(_ a: [String: Any], _ k: String) -> Int? { (a[k] as? Int) ?? (a[k] as? Double).map(Int.init) ?? (a[k] as? NSNumber)?.intValue }
     static func numArg(_ a: [String: Any], _ k: String) -> Double? { (a[k] as? Double) ?? (a[k] as? Int).map(Double.init) ?? (a[k] as? NSNumber)?.doubleValue }
     static func strArg(_ a: [String: Any], _ k: String) -> String? { a[k] as? String }
+    /// 取一个对象数组形参(批量动作用)。容忍 [[String:Any]] 或 [Any](内含字典)。
+    static func arrArg(_ a: [String: Any], _ k: String) -> [[String: Any]] {
+        if let arr = a[k] as? [[String: Any]] { return arr }
+        if let arr = a[k] as? [Any] { return arr.compactMap { $0 as? [String: Any] } }
+        return []
+    }
     static func boolArg(_ a: [String: Any], _ k: String) -> Bool? {
         if let b = a[k] as? Bool { return b }
         if let n = a[k] as? NSNumber { return n.boolValue }
@@ -275,6 +281,50 @@ enum AgentActionCatalog {
             guard to > from else { return "错误:toSeconds 必须大于 fromSeconds" }
             let at = store.appendSourceRange(assetID: store.document.assetLibrary[i].id, from: from, to: to)
             return "已追加源[\(from)–\(to)]s 到时间线 \(String(format: "%.2f", at))s 起(播放头已移到此)"
+        },
+        AgentAction(type: "build_subtitle_cut", domain: .timeline,
+                    doc: "【字幕剪辑一键成片 —— 处理 ASR/字幕剪辑请【只用这一个】动作,不要用几十次 append_clip/add_title】。你先在脑子里根据字幕【规划】要保留哪些句子(丢掉口误/重拍/思考废话/和别的句子重复的),然后把保留的句子【一次性】作为 segments 数组全部传进来。本动作会按顺序:逐段从源视频提取该时间区间拼到时间线 + 给该段加屏幕下方字幕,(若给了 exportPath)最后直接导出成片。一次调用完成全部工作。\n  segments: 保留段数组,每项 {from:源起始秒, to:源结束秒, text:该段字幕文字};按成片先后顺序排列。\n  assetIndex: 源视频在素材库的索引(默认0)。fontSize 字号(默认56)。y 字幕垂直位置(默认380=屏幕下方)。colorHex 颜色(默认#FFFFFF)。exportPath 给了就剪完导出到该绝对路径。",
+                    params: [ParamSpec(name: "segments", kind: .objectArray([
+                                ParamSpec(name: "from", kind: .number, required: true, doc: "源起始秒"),
+                                ParamSpec(name: "to", kind: .number, required: true, doc: "源结束秒"),
+                                ParamSpec(name: "text", kind: .string, required: true, doc: "该段字幕文字")]),
+                                required: true, doc: "保留段数组(按成片顺序)"),
+                             ParamSpec(name: "assetIndex", kind: .int, required: false, doc: "源视频索引,默认0"),
+                             ParamSpec(name: "fontSize", kind: .number, required: false, doc: "字号,默认56"),
+                             ParamSpec(name: "y", kind: .number, required: false, doc: "字幕垂直位置,默认380"),
+                             ParamSpec(name: "colorHex", kind: .string, required: false, doc: "颜色#RRGGBB,默认白"),
+                             ParamSpec(name: "exportPath", kind: .string, required: false, doc: "导出成片的绝对路径,省略=不导出")]) { store, a in
+            let segs = arrArg(a, "segments")
+            guard !segs.isEmpty else { return "错误:segments 为空,需先规划保留段再传入" }
+            let i = intArg(a, "assetIndex") ?? 0
+            guard store.document.assetLibrary.indices.contains(i) else { return "错误:assetIndex \(i) 无效" }
+            let assetID = store.document.assetLibrary[i].id
+            let fs = numArg(a, "fontSize") ?? 56
+            let yy = numArg(a, "y") ?? 380
+            let color = strArg(a, "colorHex") ?? "#FFFFFF"
+            var built = 0
+            var bad: [Int] = []
+            store.transaction {
+                for (k, seg) in segs.enumerated() {
+                    guard let from = numArg(seg, "from"), let to = numArg(seg, "to"), to > from else { bad.append(k); continue }
+                    _ = store.appendSourceRange(assetID: assetID, from: from, to: to)   // 拼接并把播放头移到该段起点
+                    let text = strArg(seg, "text") ?? ""
+                    if !text.isEmpty {
+                        _ = store.addTitleAtPlayhead(text: text, duration: .seconds(to - from))
+                        store.updateSelectedTitle { spec in spec.fontSize = fs; spec.colorHex = color; spec.position.y = yy }
+                    }
+                    built += 1
+                }
+            }
+            var total = 0.0
+            for el in store.document.sequence.spine { total += el.duration.seconds }
+            var msg = "已一键构建 \(built) 段(提取+字幕),成片时长 \(String(format: "%.2f", total))s"
+            if !bad.isEmpty { msg += ";跳过无效段 \(bad)" }
+            if let ep = strArg(a, "exportPath"), !ep.isEmpty {
+                store.exportMovie(to: URL(fileURLWithPath: ep), settings: ExportSettings())
+                msg += ";已开始导出成片到 \(ep)(渲染中,稍候完成)"
+            }
+            return msg
         },
         AgentAction(type: "overwrite", domain: .timeline,
                     doc: "覆盖(FCP D):用素材库第 assetIndex 个素材覆盖 atSeconds(省略=播放头)处的区间,裁掉/分割被覆盖内容,总时长不变。",

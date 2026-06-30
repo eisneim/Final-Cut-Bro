@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
-"""ASR→Agent剪辑(带字幕)实验 v2。策略:让 agent 先按时间戳规划保留段,再用 append_clip 批量提取+add_title 加字幕。
-监控轻量:只 tail 日志(被动),低频(6s)查 agentBusy(/state 现已主线程外编码),不截图。"""
+"""ASR→Agent 字幕剪辑实验 v3(程序化批量)。
+
+关键改进 vs v2:不再让 agent 逐段 append_clip+add_title(几十次 LLM 往返、还夹杂 undo,极低效)。
+现在 agent 只做【一件语义判断】——看字幕决定保留哪些句子(丢口误/重拍/思考废话/重复),
+然后【一次】调用 build_subtitle_cut(segments=[全部保留段], exportPath=...),
+由 Swift 在一个事务里批量:逐段提取源区间+加字幕+导出。一次工具调用完成全部机械工作。
+
+监控轻量:被动 tail 日志 + 低频(6s)查 agentBusy,不截图、不在流式时抢主线程。
+用完【必须】由用户关 server(本脚本不开关 server)。"""
 import json, time, urllib.request, os
 
 BASE = "http://127.0.0.1:8765"
@@ -16,11 +23,11 @@ def state():
     try: return json.loads(urllib.request.urlopen(BASE + "/state", timeout=10).read())
     except Exception as e: return {"_err": str(e)}
 def busy(): return bool(state().get("agentBusy", False))
-def wait_idle(timeout=360):
+def wait_idle(timeout=300):
     t0 = time.time()
     while time.time() - t0 < timeout:
         if not busy(): return True
-        time.sleep(6)   # 低频,避免与流式抢主线程
+        time.sleep(6)
     return False
 def clips(s):
     try: return [e["clip"]["_0"] for e in s["document"]["projects"][0]["sequence"]["spine"] if "clip" in e]
@@ -56,38 +63,40 @@ TRANSCRIPT = """[0] 1.36-2.40 我认为人工智能
 
 INSTRUCTION = (
     "这是一段说话视频的字幕(每行: 序号 起始秒-结束秒 文字):\n" + TRANSCRIPT + "\n\n"
-    "视频已经导入为素材库第0个,项目也建好了(1920x1080)。\n"
-    "任务:做一个【剪掉废话+带字幕】的成片。请按这个【策略】做:\n"
-    "第一步【规划】:根据字幕判断要【保留】哪些句子、丢掉哪些。要丢的是口误/重来/思考废话——"
-    "例如 [2][3] '等一下/这个说错了重新来'、[4] '我认为这绝对是不对'(没说完的错句)、[12] '嗯让我想想'、[13] '啊?差不多就这么'、"
-    "以及和别的句子重复的(比如 [0][1] 和 [5][6] 是同一句的两遍,只留一遍;[14] 和 [15] 重复,只留 [15])。把保留的句子按时间先后列成一个计划。\n"
-    "第二步【批量提取+加字幕】:对计划里的【每一个】保留句,依次做两件事:\n"
-    "  (a) append_clip(assetIndex=0, fromSeconds=该句起始秒, toSeconds=该句结束秒) —— 把这句对应的视频片段提取拼到时间线;\n"
-    "  (b) add_title(text=该句文字, duration=该句时长秒, fontSize=56, y=380) —— 给这句加屏幕下方字幕(atSeconds 省略就会落在刚追加片段的起点)。\n"
-    "第三步【导出】:全部保留句处理完后,导出成片到 " + OUT + " 。\n"
-    "注意:用 append_clip 批量提取,不要用 blade/delete(会算错时间)。一步步做完。"
+    "视频已导入为素材库第0个,项目已建好(1920x1080)。\n"
+    "任务:做一个【剪掉废话+带字幕】的成片。\n\n"
+    "【重要:只用一次 build_subtitle_cut 完成,不要逐段 append_clip/add_title】。步骤:\n"
+    "1) 先看字幕规划【保留】哪些句子。要丢:口误/重拍/没说完的错句/纯思考废话/和别的句子重复的(只留说得最完整的那一遍)。\n"
+    "   例如 [2][3] '等一下/这个说错了重新来'、[4] 没说完的错句、[12]'嗯让我想想'、[13]'啊?差不多就这么' 都丢;\n"
+    "   [0][1] 和 [5][6] 是同一句两遍,只留更完整的 [5][6](可把相邻两行合成一段);[14] 与 [15] 重复只留 [15]。\n"
+    "2) 把保留段【一次性】传给 build_subtitle_cut:segments=[{from:起始秒,to:结束秒,text:字幕},...](按时间先后),\n"
+    "   assetIndex=0, fontSize=56, y=380, exportPath=\"" + OUT + "\"。\n"
+    "相邻且连续的句子(如 [5]12.48 接 [6]起点)可合并为一段:from 取前句起点、to 取后句终点、text 拼接。一步到位。"
 )
 
 def main():
     if os.path.exists(OUT): os.remove(OUT)
+    print(">> 建项目 + 导入视频...", flush=True)
     cmd("createProject", path="ASR剪辑", width=1920, seconds=1080)
     cmd("importFile", path=VIDEO)
     time.sleep(1)
-    print(">> 发送任务(真实 LLM,请耐心)...", flush=True)
+    print(">> 发送任务(真实 LLM,只需一次工具调用,耐心等)...", flush=True)
     cmd("agentSend", path=INSTRUCTION)
     time.sleep(4)
-    wait_idle(420)
-    for _ in range(40):
+    wait_idle(300)
+    print(">> agent 空闲,等导出落盘...", flush=True)
+    for _ in range(45):
         if os.path.exists(OUT) and os.path.getsize(OUT) > 10000: break
         time.sleep(4)
     s = state()
     cs = clips(s); ts = titles(s)
-    total = sum(c["duration"]["value"]/c["duration"]["timescale"] for c in cs)
-    print(f"\n== 结果 ==", flush=True)
-    print(f"主轴片段(视频段)数: {len([c for c in cs if not c.get('title')])}, 总时长 {total:.2f}s (原37.44s)", flush=True)
+    vids = [c for c in cs if not c.get("title")]
+    total = sum(c["duration"]["value"] / c["duration"]["timescale"] for c in vids)
+    print("\n== 结果 ==", flush=True)
+    print(f"主轴视频段数: {len(vids)}, 总时长 {total:.2f}s (原37.44s)", flush=True)
     print(f"字幕条数: {len(ts)} -> {ts}", flush=True)
     sz = os.path.getsize(OUT) if os.path.exists(OUT) else 0
-    print(f"导出: {OUT} = {sz} bytes {'✅' if sz>10000 else '❌'}", flush=True)
+    print(f"导出: {OUT} = {sz} bytes {'OK' if sz > 10000 else 'FAIL'}", flush=True)
 
 if __name__ == "__main__":
     main()
