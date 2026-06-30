@@ -37,6 +37,13 @@ extension TimelineContentView {
         return nil
     }
 
+    /// 命中某 clip 边缘的 x 坐标(head=clip 左缘,tail=clip 右缘)。供抓取偏移用。
+    func trimEdgeX(_ clipID: ClipID, _ edge: TrimEdge) -> CGFloat {
+        guard let p = placed.first(where: { $0.clipID == clipID }) else { return 0 }
+        let r = clipRect(p)
+        return edge == .head ? r.minX : r.maxX
+    }
+
     /// 命中两片段间切点(lane 0 相邻 clip,尾紧接头,无 gap)→ roll 编辑。
     /// 若命中,优先使用 roll(不走单边 edge trim)。
     func rollHit(at pt: NSPoint) -> (leftIndex: Int, rightIndex: Int, leftClipID: ClipID, rightClipID: ClipID)? {
@@ -91,7 +98,7 @@ extension TimelineContentView {
         case .trim:
             if !inRuler, transitionMouseDown(at: pt) { return }   // 转场优先(选中/调宽)
             if let e = edgeHit(at: pt) {
-                trimDrag = e
+                trimDrag = (e.clipID, e.index, e.edge, pt.x - trimEdgeX(e.clipID, e.edge))
                 dispatch?(.selectClip(e.clipID))
                 return
             }
@@ -123,7 +130,7 @@ extension TimelineContentView {
                 }
                 // 2. 边缘 trim(select 工具也支持)
                 if currentTool == .select, let e = edgeHit(at: pt) {
-                    trimDrag = e
+                    trimDrag = (e.clipID, e.index, e.edge, pt.x - trimEdgeX(e.clipID, e.edge))
                     dispatch?(.selectClip(e.clipID))
                     return
                 }
@@ -227,7 +234,8 @@ extension TimelineContentView {
         if let td = trimDrag {
             guard let (clip, _) = spineClipAndIndex(td.clipID) else { return }
             let clipStartSec = (placed.first { $0.clipID == td.clipID }?.absStart.seconds) ?? 0
-            let cursorSec = snapSeconds(TimelineGeometry.seconds(forX: pt.x, pxPerSecond: pxPerSecond))
+            // 减去抓取偏移 → 边缘精确停在"指哪打哪"处(不跳到光标中心),完全跟手。
+            let cursorSec = snapSeconds(TimelineGeometry.seconds(forX: pt.x - td.grabDX, pxPerSecond: pxPerSecond))
             let assetDur = assetDuration(of: clip)
             if td.edge == .tail {
                 let newDur = max(0.04, cursorSec - clipStartSec)
