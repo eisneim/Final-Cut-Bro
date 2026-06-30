@@ -108,11 +108,35 @@ import Observation
         return nil
     }
 
-    /// 修改选中 clip 的 Adjustments(走命令层,可撤销)。
+    /// 按 id 集合取出 clip(主轴或连接子项),保持调用方传入顺序无关。
+    func clipsByIDs(_ ids: Set<ClipID>) -> [(id: ClipID, clip: Clip)] {
+        guard !ids.isEmpty else { return [] }
+        var out: [(ClipID, Clip)] = []
+        for el in document.sequence.spine {
+            if case .clip(let c) = el {
+                if ids.contains(c.id) { out.append((c.id, c)) }
+                for ch in c.connected where ids.contains(ch.id) { out.append((ch.id, ch)) }
+            }
+        }
+        return out
+    }
+
+    /// 当前多选集合(空则退回 anchor 单选)。
+    private func effectiveSelection() -> Set<ClipID> {
+        if !ui.selectedClipIDs.isEmpty { return ui.selectedClipIDs }
+        if let id = ui.selectedClipID { return [id] }
+        return []
+    }
+
+    /// 修改选中 clip 的 Adjustments(走命令层,可撤销)。多选时对【全部选中片段】施加同一闭包,合成单次 undo。
     func updateSelectedAdjust(_ f: (inout Adjustments) -> Void) {
-        guard let id = ui.selectedClipID, var clip = selectedClip() else { return }
-        f(&clip.adjust)
-        dispatch(.setAdjust(id, clip.adjust))
+        let targets = clipsByIDs(effectiveSelection())
+        guard !targets.isEmpty else { return }
+        transaction {
+            for (id, clip) in targets {
+                var adj = clip.adjust; f(&adj); dispatch(.setAdjust(id, adj))
+            }
+        }
     }
 
     /// 改选中 clip 的 effects(走命令层,可撤销)。
@@ -290,7 +314,8 @@ import Observation
             }
         case let .setShowProjectModal(v):        ui.showProjectModal = v
         case let .importAsset(a):                snapshot(); document.assetLibrary.append(a)
-        case let .selectClip(id):                ui.selectedClipID = id; ui.selectedGapID = nil; ui.selectedTransitionClipID = nil
+        case let .selectClip(id):                ui.selectedClipID = id; ui.selectedClipIDs = id.map { [$0] } ?? []; ui.selectedGapID = nil; ui.selectedTransitionClipID = nil
+        case let .selectClips(ids, anchor):      ui.selectedClipIDs = ids; ui.selectedClipID = anchor ?? ids.first; ui.selectedGapID = nil; ui.selectedTransitionClipID = nil
         case let .selectGap(id):                 ui.selectedGapID = id; ui.selectedClipID = nil; ui.selectedTransitionClipID = nil
         case let .selectTransition(id):          ui.selectedTransitionClipID = id; ui.selectedClipID = nil; ui.selectedGapID = nil
         case let .setGapDurationByID(id, dur):   apply { Mutations.setGapDurationByID(id, duration: dur, in: $0) }
@@ -427,11 +452,18 @@ import Observation
         return acc
     }
 
-    /// 改选中标题片段的规格(inspector / on-screen 编辑)。
+    /// 改选中标题片段的规格(inspector / on-screen 编辑)。多选时对【全部选中的标题】施加同一闭包(单次 undo)。
+    /// 同一闭包既支持绝对设值($0.fontSize = v → 全部设成 v),也支持相对增量($0.position.y += dy → 各自 bump)。
     func updateSelectedTitle(_ f: (inout TitleSpec) -> Void) {
-        guard let id = ui.selectedClipID, let clip = selectedClip(), var spec = clip.title else { return }
-        f(&spec)
-        dispatch(.setTitle(id, spec))
+        let titles = clipsByIDs(effectiveSelection()).filter { $0.clip.title != nil }
+        guard !titles.isEmpty else { return }
+        transaction {
+            for (id, clip) in titles {
+                guard var spec = clip.title else { continue }
+                f(&spec)
+                dispatch(.setTitle(id, spec))
+            }
+        }
     }
 
     // MARK: - 播放头 / 切割 / 删除(键盘快捷键共用)

@@ -29,6 +29,7 @@ enum EditorAction: Codable, Equatable {
     case setShowProjectModal(Bool)
     case importAsset(Asset)
     case selectClip(ClipID?)
+    case selectClips(Set<ClipID>, anchor: ClipID?)   // 框选多选:整组选中,anchor 供 inspector 显示
     case selectGap(GapID?)
     case setGapDurationByID(GapID, Time)
     case moveGap(GapID, time: Time)

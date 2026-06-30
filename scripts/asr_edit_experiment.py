@@ -23,11 +23,24 @@ def state():
     try: return json.loads(urllib.request.urlopen(BASE + "/state", timeout=10).read())
     except Exception as e: return {"_err": str(e)}
 def busy(): return bool(state().get("agentBusy", False))
+def export_progress():
+    try: return state().get("ui", {}).get("exportProgress")
+    except Exception: return None
 def wait_idle(timeout=300):
     t0 = time.time()
     while time.time() - t0 < timeout:
         if not busy(): return True
         time.sleep(6)
+    return False
+def wait_export(timeout=300):
+    """导出是异步软件渲染,较慢。等到 exportProgress 清空(None=完成/未在导出)且文件已 finalize。"""
+    t0 = time.time()
+    started = False
+    while time.time() - t0 < timeout:
+        p = export_progress()
+        if p is not None: started = True
+        if started and p is None: return True   # 导出从进行中变回 None = 已完成
+        time.sleep(4)
     return False
 def clips(s):
     try: return [e["clip"]["_0"] for e in s["document"]["projects"][0]["sequence"]["spine"] if "clip" in e]
@@ -84,10 +97,8 @@ def main():
     cmd("agentSend", path=INSTRUCTION)
     time.sleep(4)
     wait_idle(300)
-    print(">> agent 空闲,等导出落盘...", flush=True)
-    for _ in range(45):
-        if os.path.exists(OUT) and os.path.getsize(OUT) > 10000: break
-        time.sleep(4)
+    print(">> agent 空闲,等导出渲染完成(异步软件渲染,较慢)...", flush=True)
+    wait_export(300)
     s = state()
     cs = clips(s); ts = titles(s)
     vids = [c for c in cs if not c.get("title")]

@@ -6,6 +6,7 @@ struct UIState: Codable, Equatable {
     var showInspector: Bool = false
     var showEffects: Bool = false
     var selectedClipID: ClipID? = nil
+    var selectedClipIDs: Set<ClipID> = []   // 框选多选集合;selectedClipID 作为 anchor(inspector 取值显示)
     var selectedGapID: GapID? = nil      // 选中的空隙(gap 可像 clip 一样选中/修剪/拖动/删除)
     var selectedTransitionClipID: ClipID? = nil   // 选中的转场(归属于带 crossfadeIn 的那个片段)
     var currentTool: EditTool = .select

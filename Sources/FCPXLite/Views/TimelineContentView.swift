@@ -17,6 +17,7 @@ final class TimelineContentView: NSView {
     private(set) var pxPerSecond: CGFloat = 60
     private(set) var playheadSeconds: Double = 0
     private(set) var selectedClipID: ClipID? = nil
+    private(set) var selectedClipIDs: Set<ClipID> = []
     private(set) var selectedGapID: GapID? = nil
     private(set) var selectedTransitionClipID: ClipID? = nil
     private(set) var currentTool: EditTool = .select
@@ -63,6 +64,11 @@ final class TimelineContentView: NSView {
     var zoomStartPx: CGFloat = 60
     /// 转场调宽:拖转场边缘改 crossfadeIn 时长。seamX=接缝位置,startDur=起始时长。
     var transitionDrag: (clipIndex: Int, seamX: CGFloat, startDur: Double)?
+    /// 框选(marquee):空白处按下拖拽,框内片段/字幕批量选中。start/current = 画布坐标。
+    var marqueeStart: NSPoint?
+    var marqueeCurrent: NSPoint?
+    /// 在播放头线上按下拖拽 = 擦洗播放头(空白处拖则是框选)。
+    var scrubbingPlayhead = false
     /// 边缘命中阈值(像素)。
     static let edgeHitPx: CGFloat = 6
 
@@ -121,6 +127,7 @@ final class TimelineContentView: NSView {
         let pxPerSecond: CGFloat
         let playheadSeconds: Double
         let selectedClipID: ClipID?
+        let selectedClipIDs: Set<ClipID>
         let selectedGapID: GapID?
         let selectedTransitionClipID: ClipID?
         let currentTool: EditTool
@@ -135,6 +142,7 @@ final class TimelineContentView: NSView {
         pxPerSecond = state.pxPerSecond
         playheadSeconds = state.playheadSeconds
         selectedClipID = state.selectedClipID
+        selectedClipIDs = state.selectedClipIDs
         selectedGapID = state.selectedGapID
         selectedTransitionClipID = state.selectedTransitionClipID
         currentTool = state.currentTool
@@ -166,6 +174,24 @@ final class TimelineContentView: NSView {
         if currentTool == .position, dragClipID != nil { drawDragGhost() }   // 位置工具拖拽:画 ghost 跟随
         drawRuler()      // 刻度尺最后画 → 永远在 clip 之上(拖高的 clip 不会盖住刻度)
         drawPlayhead()   // 播放头红线再压在刻度尺之上
+        drawMarquee()    // 框选矩形压在最上层
+    }
+
+    /// 某 clip 是否被选中(单选 anchor 或框选多选集合)。
+    func isSelected(_ id: ClipID) -> Bool {
+        id == selectedClipID || selectedClipIDs.contains(id)
+    }
+
+    /// 框选进行中:画半透明矩形。
+    private func drawMarquee() {
+        guard let s = marqueeStart, let c = marqueeCurrent else { return }
+        let rect = NSRect(x: min(s.x, c.x), y: min(s.y, c.y),
+                          width: abs(c.x - s.x), height: abs(c.y - s.y))
+        guard rect.width > 1 || rect.height > 1 else { return }
+        TimelineColors.selectBorder.withAlphaComponent(0.15).setFill()
+        rect.fill()
+        let path = NSBezierPath(rect: rect)
+        TimelineColors.selectBorder.setStroke(); path.lineWidth = 1; path.stroke()
     }
 
     private func drawClipsOrHint() {
@@ -315,7 +341,7 @@ final class TimelineContentView: NSView {
         let rect = clipRect(p)
         // 标题片段:画成【更矮】的紫色条(顶部对齐),显示文字 —— 像 FCP 的 title,不需要视频那么高。
         if let clip = clipByID(p.clipID), clip.isTitle {
-            drawTitleClip(clip, in: rect, selected: p.clipID == selectedClipID)
+            drawTitleClip(clip, in: rect, selected: isSelected(p.clipID))
             return
         }
         let path = NSBezierPath(roundedRect: rect, xRadius: 3, yRadius: 3)
@@ -351,8 +377,8 @@ final class TimelineContentView: NSView {
 
         // 顶部 1pt 边线
         TimelineColors.clipBlueEdge.setStroke(); path.lineWidth = 1; path.stroke()
-        // 选中:2pt 橙色边框
-        if p.clipID == selectedClipID {
+        // 选中:2pt 橙色边框(单选 anchor 或框选多选集合)
+        if isSelected(p.clipID) {
             let sel = NSBezierPath(roundedRect: rect.insetBy(dx: 1, dy: 1), xRadius: 3, yRadius: 3)
             TimelineColors.selectBorder.setStroke(); sel.lineWidth = 2; sel.stroke()
         }

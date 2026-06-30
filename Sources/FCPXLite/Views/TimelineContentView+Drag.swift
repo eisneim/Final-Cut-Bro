@@ -146,14 +146,50 @@ extension TimelineContentView {
                 }
             }
             dragClipID = nil
-            dispatch?(.setPlayhead(Time.seconds(t)))
+            // 兜底(未命中任何片段/gap/边缘):决定是擦洗播放头还是框选。
+            // 用户要求:只有 ruler 上、或 hover 到播放头线上拖才移播放头;空白处拖 = 框选。
+            if inRuler || currentTool == .position {
+                dispatch?(.setPlayhead(Time.seconds(t)))            // ruler / 位置工具:擦洗播放头
+            } else if nearPlayhead(pt) {
+                scrubbingPlayhead = true
+                dispatch?(.setPlayhead(Time.seconds(t)))            // 播放头线上:擦洗
+            } else {
+                marqueeStart = pt; marqueeCurrent = pt              // 空白:开始框选(松手若没拖动则取消选择)
+            }
         }
+    }
+
+    /// pt.x 是否落在播放头竖线附近(±4px),用于区分"擦洗播放头"与"框选"。
+    func nearPlayhead(_ pt: NSPoint) -> Bool {
+        let x = TimelineGeometry.x(forSeconds: playheadSeconds, pxPerSecond: pxPerSecond)
+        return abs(pt.x - x) <= 4
+    }
+
+    /// 框选矩形(两对角点 → NSRect)命中的片段 id(主轴+连接+标题,矩形相交即选中)。
+    func clipsInMarquee(_ rect: NSRect) -> [ClipID] {
+        placed.filter { clipRect($0).intersects(rect) }.map { $0.clipID }
     }
 
     // MARK: - mouseDragged
 
     override func mouseDragged(with event: NSEvent) {
         let pt = convert(event.locationInWindow, from: nil)
+
+        // 框选进行中:更新矩形,实时选中框内片段。
+        if let start = marqueeStart {
+            marqueeCurrent = pt
+            let rect = NSRect(x: min(start.x, pt.x), y: min(start.y, pt.y),
+                              width: abs(pt.x - start.x), height: abs(pt.y - start.y))
+            let ids = clipsInMarquee(rect)
+            dispatch?(.selectClips(Set(ids), anchor: ids.first))
+            needsDisplay = true
+            return
+        }
+        // 播放头线擦洗
+        if scrubbingPlayhead {
+            dispatch?(.setPlayhead(Time.seconds(TimelineGeometry.seconds(forX: pt.x, pxPerSecond: pxPerSecond))))
+            return
+        }
 
         // Volume level 线拖拽优先
         if volumeMouseDragged(with: event, at: pt) { return }
@@ -270,6 +306,17 @@ extension TimelineContentView {
     // MARK: - mouseUp
 
     override func mouseUp(with event: NSEvent) {
+        // 框选收尾:纯点击空白(位移极小)= 取消选择;有拖动则选中集已在 mouseDragged 设好。
+        if let start = marqueeStart {
+            let pt = convert(event.locationInWindow, from: nil)
+            if hypot(pt.x - start.x, pt.y - start.y) < Self.dragThresholdPx {
+                dispatch?(.selectClips([], anchor: nil))
+            }
+            marqueeStart = nil; marqueeCurrent = nil
+            needsDisplay = true
+            return
+        }
+        scrubbingPlayhead = false
         volumeMouseUp()
         gapMouseUp()
         transitionMouseUp()
