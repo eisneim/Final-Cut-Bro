@@ -87,12 +87,16 @@ final class DebugControlServer {
         let pathOnly = req.path.components(separatedBy: "?").first ?? req.path
         switch (req.method, pathOnly) {
         case ("GET", "/state"):
-            DispatchQueue.main.sync { sendJSON(conn, snapshotJSON()) }
+            // 只在 main 上做【廉价的值拷贝】(Document/UIState 是 struct),把昂贵的 JSON 编码放到连接线程,
+            // 避免每次 /state 都长时间占住主线程 → 否则频繁轮询会和 agent 流式更新抢主线程,UI 严重卡顿。
+            let snap = DispatchQueue.main.sync { (store.document, store.ui, store.agentBusy) }
+            sendJSON(conn, encodeSnapshot(snap.0, snap.1, snap.2))
         case ("POST", "/cmd"):
-            DispatchQueue.main.sync {
+            let snap = DispatchQueue.main.sync { () -> (Document, UIState, Bool) in
                 execute(body: req.body)
-                sendJSON(conn, snapshotJSON())
+                return (store.document, store.ui, store.agentBusy)
             }
+            sendJSON(conn, encodeSnapshot(snap.0, snap.1, snap.2))
         case ("GET", "/screenshot"):
             DispatchQueue.main.sync {
                 if let png = screenshotPNG() { sendPNG(conn, png) }
@@ -373,11 +377,16 @@ final class DebugControlServer {
 
     // MARK: - 渲染
 
-    private func snapshotJSON() -> Data {
+    /// 编码快照(可在任意线程调用,不碰 store)。值类型已在 main 上拷好。
+    private func encodeSnapshot(_ document: Document, _ ui: UIState, _ agentBusy: Bool) -> Data {
         struct Snap: Encodable { let document: Document; let ui: UIState; let agentBusy: Bool }
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]
-        return (try? enc.encode(Snap(document: store.document, ui: store.ui, agentBusy: store.agentBusy))) ?? Data("{}".utf8)
+        return (try? enc.encode(Snap(document: document, ui: ui, agentBusy: agentBusy))) ?? Data("{}".utf8)
+    }
+
+    private func snapshotJSON() -> Data {
+        encodeSnapshot(store.document, store.ui, store.agentBusy)
     }
 
     private func screenshotPNG() -> Data? {
