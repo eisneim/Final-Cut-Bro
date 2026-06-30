@@ -24,7 +24,7 @@ enum FCPXMLExporter {
         s += "  </resources>\n"
 
         // library → event → project → sequence → spine
-        s += "  <library>\n    <event name=\"FCPX-lite\">\n      <project name=\"FCPX-lite Project\">\n"
+        s += "  <library>\n    <event name=\"Final Cut Bro\">\n      <project name=\"Final Cut Bro Project\">\n"
         s += "        <sequence format=\"r0\">\n          <spine>\n"
         for el in document.sequence.spine {
             switch el {

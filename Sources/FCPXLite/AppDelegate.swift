@@ -16,7 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             contentRect: initial,
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered, defer: false)
-        window.title = "FCPX-lite"
+        window.title = "Final Cut Bro"
         window.contentView = NSHostingView(rootView: RootView(store: store))
         window.setFrame(initial, display: true)   // 占满可用屏幕
         window.makeKeyAndOrderFront(nil)
@@ -39,8 +39,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // App 菜单
         let appItem = NSMenuItem(); mainMenu.addItem(appItem)
         let appMenu = NSMenu()
-        appMenu.addItem(NSMenuItem(title: "隐藏 FCPX-lite", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h"))
-        appMenu.addItem(NSMenuItem(title: "退出 FCPX-lite", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        appMenu.addItem(NSMenuItem(title: "隐藏 Final Cut Bro", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h"))
+        appMenu.addItem(NSMenuItem(title: "退出 Final Cut Bro", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         let exportItem = NSMenuItem(title: "导出…", action: #selector(showExportMenu), keyEquivalent: "e")
         exportItem.target = self
         appMenu.addItem(exportItem)

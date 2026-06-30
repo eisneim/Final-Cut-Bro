@@ -2,7 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 swift build -c release
-APP=".build/FCPXLite.app"
+APP=".build/Final Cut Bro.app"
 BIN=".build/release/FCPXLite"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
@@ -13,8 +13,9 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-  <key>CFBundleName</key><string>FCPXLite</string>
-  <key>CFBundleIdentifier</key><string>com.local.fcpxlite</string>
+  <key>CFBundleName</key><string>Final Cut Bro</string>
+  <key>CFBundleDisplayName</key><string>Final Cut Bro</string>
+  <key>CFBundleIdentifier</key><string>com.local.finalcutbro</string>
   <key>CFBundleExecutable</key><string>FCPXLite</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>0.1</string>
@@ -33,5 +34,5 @@ codesign --force --deep --sign - "$APP" 2>/dev/null && echo "ad-hoc 已签名" |
 
 echo "built $APP"
 echo ""
-echo "分享给别人:把 $APP 压成 zip 发出去。接收方首次打开:"
-echo "  右键 → 打开(绕过 Gatekeeper),或终端跑:xattr -dr com.apple.quarantine /path/to/FCPXLite.app"
+echo "分享给别人:把 \"$APP\" 压成 zip 发出去。接收方首次打开:"
+echo "  右键 → 打开(绕过 Gatekeeper),或终端跑:xattr -dr com.apple.quarantine \"/path/to/Final Cut Bro.app\""
