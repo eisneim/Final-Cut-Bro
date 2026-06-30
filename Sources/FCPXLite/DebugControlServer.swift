@@ -250,6 +250,12 @@ final class DebugControlServer {
         case "setInspector": store.dispatch(.setInspector((cmd.width ?? 1) > 0))
         case "setShowEffects": store.dispatch(.setShowEffects((cmd.width ?? 1) > 0))
         case "setAssetStripZoom": store.dispatch(.setAssetStripZoom(cmd.width ?? 6))
+        case "setSkim":
+            // index<0 或缺省 → 清除;否则对素材库第 index 个素材 skim 到 seconds。
+            let i = cmd.index ?? -1
+            if i >= 0, store.document.assetLibrary.indices.contains(i) {
+                store.setSkim(store.document.assetLibrary[i].id, seconds: cmd.seconds ?? 0)
+            } else { store.setSkim(nil, seconds: 0) }
         case "setSpineAdjust":
             // 自测inspector→预览: 给spine clip[index]设opacity(width字段)/scale(seconds字段)
             if let id = spineClipID(at: cmd.index ?? 0) {

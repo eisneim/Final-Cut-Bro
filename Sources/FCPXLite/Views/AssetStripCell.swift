@@ -10,9 +10,20 @@ struct AssetStripCell: View {
     let rows: Int             // 行数(=1 普通;>1 长素材换行)
     let selected: Bool
     var vaRatio: CGFloat = 0.62
+    /// Skim:鼠标在条上移动 → 回调该位置对应的素材秒数(nil=移出,停止 skim)。
+    var onSkim: (Double?) -> Void = { _ in }
     @State private var refresh = 0
 
     private var totalHeight: CGFloat { bandH * CGFloat(max(1, rows)) }
+
+    /// 鼠标局部坐标 → 素材秒数(支持多行:每行覆盖一段时间)。
+    private func skimSeconds(at p: CGPoint) -> Double {
+        let n = max(1, rows)
+        let row = min(n - 1, max(0, Int(p.y / bandH)))
+        let fx = width > 0 ? max(0, min(1, p.x / width)) : 0
+        let frac = (Double(row) + Double(fx)) / Double(n)
+        return frac * asset.duration.seconds
+    }
 
     var body: some View {
         Canvas { ctx, size in
@@ -40,6 +51,12 @@ struct AssetStripCell: View {
         .overlay(RoundedRectangle(cornerRadius: 4)
             .stroke(selected ? Color(TimelineColors.selectBorder) : Color(TimelineColors.clipBlueEdge),
                     lineWidth: selected ? 2 : 1))
+        .onContinuousHover { phase in
+            switch phase {
+            case .active(let p): onSkim(skimSeconds(at: p))   // 移动 → skim 到该帧
+            case .ended: onSkim(nil)                          // 移出 → 停止
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .mediaCacheUpdated)) { _ in refresh &+= 1 }
     }
 

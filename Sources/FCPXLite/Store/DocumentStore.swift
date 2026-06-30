@@ -163,6 +163,12 @@ import Observation
         }
     }
 
+    /// Skimming(瞬时 UI,不进 undo):设置/清除当前划过的素材+时间,viewer 覆盖层据此显示帧。
+    func setSkim(_ assetID: AssetID?, seconds: Double) {
+        ui.skimAssetID = assetID
+        ui.skimSeconds = seconds
+    }
+
     /// 效果/转场面板:给选中的【主轴片段】加交叉叠化转场(与前一片段)。返回 false=无法加(未选/首片段/连接片段)。
     @discardableResult
     func addCrossfadeToSelected(seconds: Double) -> Bool {

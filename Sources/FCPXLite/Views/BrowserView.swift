@@ -108,7 +108,11 @@ struct BrowserView: View {
     private func cell(_ asset: Asset, width: CGFloat, rows: Int) -> some View {
         AssetStripCell(asset: asset, width: width, bandH: bandH, rows: rows,
                        selected: store.ui.selectedAssetIDs.contains(asset.id),
-                       vaRatio: CGFloat(store.ui.videoAudioRatio))
+                       vaRatio: CGFloat(store.ui.videoAudioRatio),
+                       onSkim: { secs in
+                           if let s = secs { store.setSkim(asset.id, seconds: s) }
+                           else { store.setSkim(nil, seconds: 0) }
+                       })
             .onTapGesture {
                 let mods = NSEvent.modifierFlags
                 if mods.contains(.command) { store.dispatch(.toggleAssetSelected(asset.id)) }

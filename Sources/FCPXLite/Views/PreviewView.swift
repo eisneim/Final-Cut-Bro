@@ -150,17 +150,46 @@ final class PlayerHostView: NSView {
 /// 预览区 SwiftUI 包装:视频 + 底部播放控制条。读取 store 的观察字段以触发 updateNSView。
 struct ViewerView: View {
     let store: DocumentStore
+    @StateObject private var skim = SkimFrameProvider()
+
+    private var skimAsset: Asset? {
+        guard let id = store.ui.skimAssetID else { return nil }
+        return store.document.assetLibrary.first { $0.id == id }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            PreviewView(store: store,
-                        sequence: store.document.sequence,
-                        playheadSeconds: store.ui.playhead.seconds,
-                        isPlaying: store.ui.isPlaying)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Tokens.Palette.canvas)
+            ZStack {
+                PreviewView(store: store,
+                            sequence: store.document.sequence,
+                            playheadSeconds: store.ui.playhead.seconds,
+                            isPlaying: store.ui.isPlaying)
+                    .background(Tokens.Palette.canvas)
+                // Skim 覆盖层:划过素材池素材时,盖在播放器上显示该素材当前帧(不碰播放器)。
+                if store.ui.skimAssetID != nil, let cg = skim.image {
+                    Image(decorative: cg, scale: 1)
+                        .resizable().aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color.black)
+                        .overlay(alignment: .topLeading) {
+                            Text("Skim").font(.system(size: 10, weight: .bold))
+                                .foregroundStyle(.white).padding(.horizontal, 5).padding(.vertical, 2)
+                                .background(Color(TimelineColors.playheadRed)).padding(6)
+                        }
+                        .allowsHitTesting(false)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // skim 状态变化 → 请求该帧(asset+seconds 任一变都重算)。
+            .onChange(of: store.ui.skimAssetID) { _, _ in updateSkim() }
+            .onChange(of: store.ui.skimSeconds) { _, _ in updateSkim() }
             transport
         }
+    }
+
+    private func updateSkim() {
+        if let asset = skimAsset { skim.request(asset: asset, seconds: store.ui.skimSeconds) }
+        else { skim.clear() }
     }
 
     private var transport: some View {

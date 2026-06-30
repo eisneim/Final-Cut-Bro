@@ -24,6 +24,9 @@ struct UIState: Codable, Equatable {
     var clipHeight: Double = 72
     var videoAudioRatio: Double = 0.6
     var assetStripZoom: Double = 6   // 素材池 strip 外观缩放(px/秒);小=网格小方块,大=长胶片条
+    // Skimming:鼠标在素材池某素材上划过时,viewer 显示该素材在 skimSeconds 处的帧(不动播放器,纯覆盖层)。
+    var skimAssetID: AssetID? = nil
+    var skimSeconds: Double = 0
     var agentInput: String = ""
     var providerId: String = "stepfun"
     var showSettings: Bool = false
