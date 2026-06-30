@@ -2,9 +2,9 @@ import Foundation
 
 /// Agent 对话消息(进 store,Redux 纪律)。
 struct AgentMessage: Identifiable, Equatable {
-    enum Role: String { case user, assistant, tool }
+    enum Role: String { case user, assistant, tool, confirm }
     let id: UUID
-    let role: Role
+    var role: Role   // confirm → 用户确认后变 tool
     var text: String
     var think: String = ""          // assistant 的推理过程(可折叠展示)
     var toolName: String? = nil     // role == .tool 时:执行的工具名
@@ -15,6 +15,16 @@ struct AgentMessage: Identifiable, Equatable {
         self.id = id; self.role = role; self.text = text; self.think = think
         self.toolName = toolName; self.toolArgs = toolArgs; self.streaming = streaming
     }
+}
+
+/// Agent 请求用户确认的卡片(tool=工具名,message=人话描述,action=确认后执行的闭包)。
+struct AgentConfirm: Identifiable {
+    let id = UUID()
+    let tool: String
+    let message: String
+    let args: [String: Any]
+    /// 确认/拒绝后执行;参数 true=允许,返回给 LLM 的结果文本。
+    let action: @MainActor (Bool) -> String
 }
 
 /// 发给 LLM 的消息(wire 格式)。

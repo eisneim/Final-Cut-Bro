@@ -2,7 +2,7 @@ import Foundation
 import CoreGraphics
 
 /// LLM 可见的动作领域。
-enum ActionDomain: String { case timeline, adjust, navigate }
+enum ActionDomain: String { case timeline, adjust, navigate, system }
 
 /// 形参规格(供生成 JSON schema)。objectArray 用于批量动作:一个由若干同构对象组成的数组。
 indirect enum ParamKind { case int, number, string; case enumString([String]); case objectArray([ParamSpec]) }
@@ -75,7 +75,7 @@ enum AgentActionCatalog {
         return nil
     }
 
-    static let all: [AgentAction] = timeline + adjust + navigate
+    static let all: [AgentAction] = timeline + adjust + navigate + system
 
     // 各 domain 在后续 Task 填充;先放占位让骨架可编译+测试通过。
     static let timeline: [AgentAction] = [
@@ -665,4 +665,93 @@ enum AgentActionCatalog {
             return "已删除项目"
         },
     ]
+
+    // MARK: - system 域(文件读写/目录/命令)
+
+    static let system: [AgentAction] = [
+        AgentAction(type: "read_file", domain: .system,
+                    doc: "读取本地文件内容(文本,前 2000 行)。返回文件文本或错误。path 必须是绝对路径。",
+                    params: [ParamSpec(name: "path", kind: .string, required: true, doc: "文件绝对路径")]) { _, a in
+            guard let p = strArg(a, "path") else { return "错误:缺 path" }
+            let url = URL(fileURLWithPath: p)
+            guard FileManager.default.fileExists(atPath: p) else { return "错误:文件不存在 \(p)" }
+            do {
+                let text = try String(contentsOf: url, encoding: .utf8)
+                let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+                if lines.count > 2000 {
+                    let head = lines.prefix(2000).joined(separator: "\n")
+                    return "\(head)\n…(共 \(lines.count) 行,已截断到前 2000 行)"
+                }
+                return text
+            } catch { return "错误:读取失败 \(error.localizedDescription)" }
+        },
+        AgentAction(type: "write_file", domain: .system,
+                    doc: "把文本写入本地文件(覆盖已有内容)。⚠️ 需要用户确认才能执行。path 必须是绝对路径。",
+                    params: [ParamSpec(name: "path", kind: .string, required: true, doc: "文件绝对路径"),
+                             ParamSpec(name: "content", kind: .string, required: true, doc: "要写入的文本内容")]) { store, a in
+            guard let p = strArg(a, "path"), let content = strArg(a, "content") else { return "错误:缺 path 或 content" }
+            let exists = FileManager.default.fileExists(atPath: p)
+            let msg = exists ? "覆盖已有文件 \(p)(\(content.count) 字符)" : "创建新文件 \(p)(\(content.count) 字符)"
+            // 通过 confirm 机制让用户确认;实际写入由 confirm 回调执行
+            store.requestAgentConfirm(tool: "write_file", message: msg, args: a) { confirmed in
+                guard confirmed else { return "用户取消了写入" }
+                do {
+                    try content.write(toFile: p, atomically: true, encoding: .utf8)
+                    return "已写入 \(p)(\(content.count) 字符)"
+                } catch { return "错误:写入失败 \(error.localizedDescription)" }
+            }
+            return "__PENDING_CONFIRM__"
+        },
+        AgentAction(type: "edit_file", domain: .system,
+                    doc: "编辑本地文件:把 oldText 替换为 newText(精确匹配)。⚠️ 需要用户确认。path 必须是绝对路径。",
+                    params: [ParamSpec(name: "path", kind: .string, required: true, doc: "文件绝对路径"),
+                             ParamSpec(name: "oldText", kind: .string, required: true, doc: "要替换的原文"),
+                             ParamSpec(name: "newText", kind: .string, required: true, doc: "替换后的新文本")]) { store, a in
+            guard let p = strArg(a, "path"), let old = strArg(a, "oldText"), let new = strArg(a, "newText") else {
+                return "错误:缺参数"
+            }
+            guard FileManager.default.fileExists(atPath: p) else { return "错误:文件不存在 \(p)" }
+            let msg = "编辑 \(URL(fileURLWithPath: p).lastPathComponent):把 \"\(old.prefix(50))\" 替换为 \"\(new.prefix(50))\""
+            store.requestAgentConfirm(tool: "edit_file", message: msg, args: a) { confirmed in
+                guard confirmed else { return "用户取消了编辑" }
+                do {
+                    var text = try String(contentsOfFile: p, encoding: .utf8)
+                    guard text.contains(old) else { return "错误:文件中未找到要替换的文本" }
+                    text = text.replacingOccurrences(of: old, with: new)
+                    try text.write(toFile: p, atomically: true, encoding: .utf8)
+                    return "已编辑 \(URL(fileURLWithPath: p).lastPathComponent)"
+                } catch { return "错误:编辑失败 \(error.localizedDescription)" }
+            }
+            return "__PENDING_CONFIRM__"
+        },
+        AgentAction(type: "list_directory", domain: .system,
+                    doc: "列出目录下的文件和子目录(最多 200 项)。path 省略则列出用户桌面。",
+                    params: [ParamSpec(name: "path", kind: .string, required: false, doc: "目录绝对路径,省略=桌面")]) { _, a in
+            let p = strArg(a, "path") ?? (NSHomeDirectory() + "/Desktop")
+            let url = URL(fileURLWithPath: p)
+            guard FileManager.default.fileExists(atPath: p) else { return "错误:目录不存在 \(p)" }
+            do {
+                let items = try FileManager.default.contentsOfDirectory(at: url, includingPropertiesForKeys: [.fileSizeKey], options: [.skipsHiddenFiles])
+                let prefix = items.prefix(200)
+                var out = "\(p)/ (\(items.count) 项)\n"
+                for item in prefix {
+                    let isDir = (try? item.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
+                    let size = (try? item.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
+                    let tag = isDir ? "📁" : "📄"
+                    let sizeStr = isDir ? "" : " \(humanSize(size))"
+                    out += "  \(tag) \(item.lastPathComponent)\(sizeStr)\n"
+                }
+                if items.count > 200 { out += "  …(共 \(items.count) 项,已截断)" }
+                return out
+            } catch { return "错误:读取目录失败 \(error.localizedDescription)" }
+        },
+    ]
+
+    /// 人类可读的文件大小。
+    private static func humanSize(_ bytes: Int) -> String {
+        if bytes < 1024 { return "\(bytes)B" }
+        if bytes < 1024 * 1024 { return String(format: "%.1fKB", Double(bytes) / 1024) }
+        if bytes < 1024 * 1024 * 1024 { return String(format: "%.1fMB", Double(bytes) / 1024 / 1024) }
+        return String(format: "%.1fGB", Double(bytes) / 1024 / 1024 / 1024)
+    }
 }

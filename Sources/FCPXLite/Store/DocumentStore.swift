@@ -10,6 +10,8 @@ import Observation
     /// 用户配置的 LLM provider 列表(磁盘持久化,非文档/非撤销范围)。
     var providers: [ProviderConfig] = ProviderPersistence.load()
     @ObservationIgnored private var agentTask: Task<Void, Never>?
+    /// Agent 请求用户确认(write_file/edit_file/run_command 等危险操作)。
+    @ObservationIgnored var agentConfirm: AgentConfirm? = nil
     /// 复制/粘贴剪贴板(瞬时缓冲,不进文档/不撤销)。
     @ObservationIgnored var clipboard: Clip?
     init(document: Document, ui: UIState = UIState()) {
@@ -270,7 +272,36 @@ import Observation
         agentTask?.cancel()
         agentTask = nil
         agentBusy = false
+        agentConfirm = nil
     }
+
+    /// Agent 请求用户确认(write_file/edit_file/run_command 等危险操作)。
+    /// 调用后 AgentService 暂停工具执行,chat UI 显示确认卡片,用户点"允许"/"拒绝"后回调执行。
+    func requestAgentConfirm(tool: String, message: String, args: [String: Any],
+                              action: @escaping @MainActor (Bool) -> String) {
+        agentConfirm = AgentConfirm(tool: tool, message: message, args: args, action: action)
+        // 在 chat 里插入一条确认消息(带 confirmID,UI 渲染卡片)
+        let cid = agentConfirm!.id
+        agentMessages.append(AgentMessage(id: cid, role: .confirm,
+                                           text: message, toolName: tool, streaming: false))
+    }
+
+    /// 用户点"允许"或"拒绝"。
+    func respondAgentConfirm(approve: Bool) {
+        guard let c = agentConfirm else { return }
+        agentConfirm = nil
+        let result = MainActor.assumeIsolated { c.action(approve) }
+        // 把确认结果更新到对应消息
+        if let idx = agentMessages.firstIndex(where: { $0.id == c.id }) {
+            agentMessages[idx].text = (approve ? "✅ 已确认: " : "❌ 已拒绝: ") + c.message
+            agentMessages[idx].role = .tool   // 确认完成后变成普通 tool 消息
+        }
+        // 存储结果供 AgentService 读取(继续工具循环)
+        agentConfirmResult = (id: c.id, result: result)
+    }
+
+    /// AgentService 等待确认结果的存储槽。
+    @ObservationIgnored var agentConfirmResult: (id: UUID, result: String)? = nil
 
     /// 唯一的"动作"入口。手动 UI 和未来 Agent 都只发 EditorAction。
     func dispatch(_ action: EditorAction) {

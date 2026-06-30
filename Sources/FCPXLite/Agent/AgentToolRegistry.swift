@@ -27,6 +27,8 @@ final class AgentToolRegistry {
                          intro: "改片段画面/音频参数:缩放/位置/裁剪/不透明度/音量。"),
             dispatchTool(name: "navigate", domain: .navigate,
                          intro: "导航/选择/工具/撤销重做/缩放/导入。"),
+            dispatchTool(name: "file_ops", domain: .system,
+                         intro: "本地文件操作:读写文件/列目录(写入和编辑需用户确认)。"),
         ]
     }
 
@@ -85,6 +87,7 @@ final class AgentToolRegistry {
         case .timeline: expectedTool = "timeline_edit"
         case .adjust: expectedTool = "clip_adjust"
         case .navigate: expectedTool = "navigate"
+        case .system: expectedTool = "file_ops"
         }
         guard name == expectedTool else { return "错误:动作 \(type) 属于 \(expectedTool),不该用 \(name)" }
         return action.apply(store, args)

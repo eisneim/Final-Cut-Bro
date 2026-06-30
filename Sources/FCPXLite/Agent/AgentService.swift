@@ -19,13 +19,14 @@ final class AgentService {
 
     private static let systemPrompt = """
     你是 Final Cut Bro(一个简化版 Final Cut Pro,"AI 帮你剪的兄弟")的剪辑助手。用户用中文描述剪辑意图,你用提供的工具操作时间线。
-    你通过 4 个工具操作剪辑:
+    你通过 5 个工具操作剪辑:
     - query_timeline:先调它看当前素材库/时间线(片段用 0 基 index,时间用秒)。
-    - timeline_edit:改结构(insert/append/connect/delete/move/blade/trim/set_gap/position_move)。
+    - timeline_edit:改结构(insert/append/connect/delete/move/blade/trim/set_gap/position_move/blade_at/batch_blade/build_subtitle_cut)。
     - clip_adjust:改画面/音频(scale/position/crop/opacity/volume)、特效(add_effect/remove_effect/set_effect_param,kind=color/blur/fade)、停用启用片段(toggle_enabled)。
     - navigate:导航/选择/撤销/导入(playhead/zoom/tool/select/select_asset/undo/redo/import)、导出(export_fcpxml 工程 / export_movie 渲染成片)。
+    - file_ops:本地文件操作(read_file 读文件内容/write_file 写文件(需确认)/edit_file 编辑文件(需确认)/list_directory 列目录)。
     每个编辑工具都传 type=动作名 + 该动作的参数。操作前先 query_timeline 确认最新 index。
-    若用户要"做完整条片子",记得最后用 export_movie 导出成片。完成后用一句话总结你做了什么。
+    若要求"做完整条片子",记得最后用 export_movie 导出成片。完成后用一句话总结你做了什么。
     """
 
     /// 处理一条用户消息(流式)。返回时整轮结束或被取消。
@@ -86,12 +87,31 @@ final class AgentService {
             wire.append(LLMWireMessage(role: "assistant", content: asstText, toolCalls: roundCalls))
             for tc in roundCalls {
                 let result = registry.execute(name: tc.name, args: tc.args)   // ← 真正改剪辑
-                if let tid = toolMsgIds[tc.id] {
-                    updateMsg(tid) { $0.text = result; $0.streaming = false }
+                // 如果需要用户确认(write_file/edit_file/run_command),暂停等待。
+                if result == "__PENDING_CONFIRM__" {
+                    if let tid = toolMsgIds[tc.id] { updateMsg(tid) { $0.text = "等待用户确认…"; $0.streaming = false } }
+                    // 轮询等待用户响应(confirm 卡片会设 agentConfirmResult)
+                    while store.agentConfirm != nil {
+                        if Task.isCancelled { markStopped(); return }
+                        try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+                    }
+                    // 读取确认结果
+                    let confirmResult = store.agentConfirmResult?.result ?? "用户未响应"
+                    store.agentConfirmResult = nil
+                    if let tid = toolMsgIds[tc.id] {
+                        updateMsg(tid) { $0.text = confirmResult; $0.streaming = false }
+                    } else {
+                        store.agentMessages.append(AgentMessage(role: .tool, text: confirmResult, toolName: tc.name))
+                    }
+                    wire.append(LLMWireMessage(role: "tool", content: confirmResult, toolCallId: tc.id, name: tc.name))
                 } else {
-                    store.agentMessages.append(AgentMessage(role: .tool, text: result, toolName: tc.name))
+                    if let tid = toolMsgIds[tc.id] {
+                        updateMsg(tid) { $0.text = result; $0.streaming = false }
+                    } else {
+                        store.agentMessages.append(AgentMessage(role: .tool, text: result, toolName: tc.name))
+                    }
+                    wire.append(LLMWireMessage(role: "tool", content: result, toolCallId: tc.id, name: tc.name))
                 }
-                wire.append(LLMWireMessage(role: "tool", content: result, toolCallId: tc.id, name: tc.name))
             }
         }
         store.agentMessages.append(AgentMessage(role: .assistant, text: "(已达到最大工具步数,停止)"))

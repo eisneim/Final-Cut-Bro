@@ -44,7 +44,7 @@ final class AgentServiceTests: XCTestCase {
         XCTAssertEqual(s.agentMessages.last?.role, .assistant)
         XCTAssertEqual(s.agentMessages.last?.text, "已把素材追加到时间线。")  // 流式拼接
         XCTAssertFalse(s.agentBusy)
-        XCTAssertEqual(mock.lastTools.count, 4)                          // 4 个 dispatch 工具传给 LLM
+        XCTAssertEqual(mock.lastTools.count, 5)                          // 5 个 dispatch 工具传给 LLM
         XCTAssertTrue(s.agentMessages.contains { $0.role == .tool && $0.toolName == "timeline_edit" })
     }
 

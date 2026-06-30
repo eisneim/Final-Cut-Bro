@@ -83,7 +83,7 @@ final class AgentToolTests: XCTestCase {
     func testToolsJSONShape() {
         let r = AgentToolRegistry(store: store())
         let tools = r.toolsJSON()
-        XCTAssertEqual(tools.count, 4)
+        XCTAssertEqual(tools.count, 5)
         let first = tools[0]
         XCTAssertEqual(first["type"] as? String, "function")
         XCTAssertNotNil((first["function"] as? [String: Any])?["name"])

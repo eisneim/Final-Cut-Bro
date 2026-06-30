@@ -161,7 +161,40 @@ struct ChatPanelView: View {
                     .textSelection(.enabled)
                 Spacer()
             }
+        case .confirm:
+            confirmCard(m)
         }
+    }
+
+    /// 确认卡片:黄色警告 + "允许"/"拒绝" 按钮,用户点后 Agent 继续。
+    private func confirmCard(_ m: AgentMessage) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.yellow)
+                Text("需要确认").font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Tokens.Palette.textPrimary)
+            }
+            Text(m.text).font(Tokens.Typeface.label)
+                .foregroundStyle(Tokens.Palette.textPrimary)
+                .textSelection(.enabled)
+            HStack(spacing: 10) {
+                Button { store.respondAgentConfirm(approve: true) } label: {
+                    Text("允许").font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.white).padding(.horizontal, 14).padding(.vertical, 5)
+                        .background(Color.green).cornerRadius(6)
+                }.buttonStyle(.plain)
+                Button { store.respondAgentConfirm(approve: false) } label: {
+                    Text("拒绝").font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.white).padding(.horizontal, 14).padding(.vertical, 5)
+                        .background(Color.red).cornerRadius(6)
+                }.buttonStyle(.plain)
+            }
+        }
+        .padding(10)
+        .background(Color.yellow.opacity(0.12))
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.yellow.opacity(0.5), lineWidth: 1))
+        .cornerRadius(8)
     }
 
     private func toolArgsBrief(_ m: AgentMessage) -> String {
