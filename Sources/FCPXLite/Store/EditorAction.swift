@@ -57,6 +57,7 @@ enum EditorAction: Codable, Equatable {
     case slide(at: Int, delta: Time, prevAssetDuration: Time, nextAssetDuration: Time)
     case setCrossfade(at: Int, duration: Time)
     case selectTransition(ClipID?)
+    case setTitle(ClipID, TitleSpec)
     case setEnabled(ClipID, Bool)
 }
 

@@ -249,6 +249,7 @@ final class DebugControlServer {
             store.updateSelectedAdjust { $0.transform = Transform() }
         case "setInspector": store.dispatch(.setInspector((cmd.width ?? 1) > 0))
         case "setShowEffects": store.dispatch(.setShowEffects((cmd.width ?? 1) > 0))
+        case "addTitle": _ = store.addTitleAtPlayhead(text: cmd.path ?? "标题")
         case "setAssetStripZoom": store.dispatch(.setAssetStripZoom(cmd.width ?? 6))
         case "setSkim":
             // index<0 或缺省 → 清除;否则对素材库第 index 个素材 skim 到 seconds。

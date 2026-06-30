@@ -14,6 +14,7 @@ enum CompositionBuilder {
 
     static func build(document: Document) -> AVPlayerItem? {
         let composition = AVMutableComposition()
+        let renderSize = CGSize(width: document.formatWidth, height: document.formatHeight)
         let library = Dictionary(uniqueKeysWithValues: document.assetLibrary.map { ($0.id, $0) })
         var inserted = false
         // 每段:轨ID(图片段为 invalid)+ 可选静帧图 + lane + adjust + [start,end) + 原生尺寸/方向 + effects + 变换关键帧
@@ -23,9 +24,17 @@ enum CompositionBuilder {
 
         func place(_ clip: Clip, at start: CMTime, lane: Int) {
             guard clip.enabled else { return }   // 停用片段不参与预览/导出(时间线仍显示,只是变暗)
-            guard let asset = library[clip.assetID] else { return }
             let end = start + cm(clip.duration)
             if end > totalEnd { totalEnd = end }
+            // 标题:把文字渲染成整帧透明图,作为静帧层叠加(无真实媒体,不走资源库)。
+            if let title = clip.title {
+                guard let cg = TitleRenderer.render(title, size: renderSize) else { return }
+                inserted = true
+                segments.append((kCMPersistentTrackID_Invalid, cg, lane, clip.adjust, start, end,
+                                 renderSize, .identity, clip.effects, clip.transformKeyframes))
+                return
+            }
+            guard let asset = library[clip.assetID] else { return }
             // 图片:作为静帧层直接交给合成器(无轨),不走 AVAsset 轨道。
             if asset.kind == .image {
                 // 用 CGImageSource 解码以保留 alpha 通道(NSImage.cgImage 会渲染进不透明上下文丢掉透明)。
@@ -151,7 +160,6 @@ enum CompositionBuilder {
         }
 
         let item = AVPlayerItem(asset: composition)
-        let renderSize = CGSize(width: document.formatWidth, height: document.formatHeight)
 
         // 分段构建 instruction:在每个编辑点(各段 start/end)切一段,每段只含该时刻活跃的轨。
         // 单条覆盖全程的 instruction 在 clip 时间错开时会让变换串掉(bug6),故必须分段。

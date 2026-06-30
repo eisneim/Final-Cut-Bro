@@ -338,6 +338,7 @@ import Observation
         case let .slip(i, delta, assetDur): apply { Mutations.slip(at: i, delta: delta, assetDuration: assetDur, in: $0) }
         case let .slide(i, delta, prevDur, nextDur): apply { Mutations.slide(at: i, delta: delta, prevAssetDuration: prevDur, nextAssetDuration: nextDur, in: $0) }
         case let .setCrossfade(i, dur): apply { Mutations.setCrossfade(at: i, duration: dur, in: $0) }
+        case let .setTitle(id, spec): apply { Mutations.setTitle(clipID: id, spec, in: $0) }
         case let .setEnabled(id, on):    apply { Mutations.setEnabled(clipID: id, on, in: $0) }
         }
     }
@@ -382,6 +383,31 @@ import Observation
     func overwriteAtPlayhead() {
         guard let clip = clipFromSelection() else { return }
         dispatch(.overwrite(clip, atTime: ui.playhead))
+    }
+
+    /// 在播放头处加一个标题(连接到上方 lane 1;无主轴片段则插主轴)。默认 5s。
+    @discardableResult
+    func addTitleAtPlayhead(text: String = "标题") -> ClipID {
+        var spec = TitleSpec(); spec.text = text
+        let title = Clip(assetID: AssetID(), sourceIn: .zero, duration: .seconds(5), title: spec)
+        let host = spineIndexAtPlayhead()
+        if host < document.sequence.spine.count {
+            var acc = 0.0
+            for i in 0..<host { acc += document.sequence.spine[i].duration.seconds }
+            let offset = max(0, ui.playhead.seconds - acc)
+            dispatch(.connect(title, host: host, lane: 1, offset: .seconds(offset)))
+        } else {
+            dispatch(.insertClip(title, at: document.sequence.spine.count))
+        }
+        dispatch(.selectClip(title.id))
+        return title.id
+    }
+
+    /// 改选中标题片段的规格(inspector / on-screen 编辑)。
+    func updateSelectedTitle(_ f: (inout TitleSpec) -> Void) {
+        guard let id = ui.selectedClipID, let clip = selectedClip(), var spec = clip.title else { return }
+        f(&spec)
+        dispatch(.setTitle(id, spec))
     }
 
     // MARK: - 播放头 / 切割 / 删除(键盘快捷键共用)

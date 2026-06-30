@@ -36,6 +36,18 @@ struct EffectsPanel: View {
             },
         ]
     }
+    private var titleItems: [Item] {
+        [
+            Item(title: "基本标题", subtitle: "屏幕中央一行文字", icon: "textformat") { s in
+                s.addTitleAtPlayhead(text: "标题"); return "已加标题(可在检查器/画面中编辑)"
+            },
+            Item(title: "下方字幕", subtitle: "屏幕下方小字幕条", icon: "captions.bubble") { s in
+                let id = s.addTitleAtPlayhead(text: "字幕")
+                s.updateSelectedTitle { $0.fontSize = 56; $0.position = CGPoint(x: 0, y: 380) }
+                _ = id; return "已加下方字幕"
+            },
+        ]
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -46,6 +58,7 @@ struct EffectsPanel: View {
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
+                    section("标题", titleItems)
                     section("效果", effectItems)
                     section("转场", transitionItems)
                 }
