@@ -151,7 +151,9 @@ final class DebugControlServer {
                 let msgs = store.agentMessages.map { m -> [String: Any] in
                     ["role": m.role.rawValue, "text": m.text, "tool": m.toolName ?? ""]
                 }
-                let info: [String: Any] = ["busy": store.agentBusy, "messages": msgs]
+                let info: [String: Any] = ["busy": store.agentBusy, "messages": msgs,
+                                           "pendingConfirm": store.agentConfirm != nil,
+                                           "confirmMessage": store.agentConfirm?.message ?? ""]
                 let data = (try? JSONSerialization.data(withJSONObject: info)) ?? Data("{}".utf8)
                 sendJSON(conn, data)
             }
@@ -249,6 +251,9 @@ final class DebugControlServer {
             store.sendAgentMessage()
         case "agentStop":
             store.stopAgent()
+        case "respondConfirm":
+            // 端到端:模拟用户点确认卡片的"允许"(seconds>0)/"拒绝"(否则)。
+            store.respondAgentConfirm(approve: (cmd.seconds ?? 1) > 0)
         case "resetSelectedTransform":
             store.updateSelectedAdjust { $0.transform = Transform() }
         case "setInspector": store.dispatch(.setInspector((cmd.width ?? 1) > 0))
