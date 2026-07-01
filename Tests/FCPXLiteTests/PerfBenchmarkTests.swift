@@ -116,4 +116,66 @@ final class PerfBenchmarkTests: XCTestCase {
             print("\(n)\t\(String(format: "%.4f", ms))")
         }
     }
+
+    /// 修复验证:窄 dirtyRect 只重画相交片段(Task 2 裁剪)。N=200 全画 200 个,窄条只画个位数。
+    func testDrawCullingByDirtyRect() {
+        let (seq, assets) = makeSequence(200)
+        // frame 要够宽容纳全部 200 片段(200×3s×60px=36000),否则"全画"也只覆盖视口内的。
+        let content = TimelineContentView(frame: NSRect(x: 0, y: 0, width: 37000, height: 600))
+        content.apply(state: TimelineContentView.State(
+            sequence: seq, assetLibrary: assets, pxPerSecond: 60, playheadSeconds: 1,
+            selectedClipID: nil, selectedClipIDs: [], selectedGapID: nil,
+            selectedTransitionClipID: nil, currentTool: .select,
+            snappingEnabled: true, clipHeight: 72, vaRatio: 0.6))
+        guard let rep = content.bitmapImageRepForCachingDisplay(in: content.bounds),
+              let ctx = NSGraphicsContext(bitmapImageRep: rep) else { return XCTFail("no ctx") }
+
+        func drawClipCount(dirtyRect: NSRect) -> Int {
+            PerfProbe.shared.enabled = true
+            PerfProbe.shared.reset()
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = ctx
+            content.draw(dirtyRect)
+            NSGraphicsContext.restoreGraphicsState()
+            let n = PerfProbe.shared.snapshot()["drawClip"]?.count ?? 0
+            PerfProbe.shared.enabled = false
+            return n
+        }
+        // 全画:画全部片段(200 主轴 + 100 连接字幕 = placed.count)
+        let expectedFull = content.placed.count
+        let full = drawClipCount(dirtyRect: content.bounds)
+        // 窄条(播放头附近 40pt):只画个位数
+        let stripRect = NSRect(x: 100, y: 0, width: 40, height: content.bounds.height)
+        let strip = drawClipCount(dirtyRect: stripRect)
+        // 耗时对比(修复的核心收益:播放头移动=窄条重画)
+        func drawMS(_ r: NSRect) -> Double {
+            NSGraphicsContext.saveGraphicsState(); NSGraphicsContext.current = ctx
+            let ms = timeMS(20) { content.draw(r) }
+            NSGraphicsContext.restoreGraphicsState(); return ms
+        }
+        let fullMS = drawMS(content.bounds), stripMS = drawMS(stripRect)
+        print("\n=== 修复验证 Task2: drawClip 全画=\(full) vs 窄条=\(strip);耗时 全画=\(String(format: "%.1f", fullMS))ms vs 窄条=\(String(format: "%.2f", stripMS))ms ===")
+        XCTAssertEqual(full, expectedFull, "全画应画全部片段")
+        XCTAssertLessThan(strip, 10, "窄 dirtyRect 只重画相交片段(应个位数)")
+    }
+
+    /// 修复验证:一次 apply+draw 的 Layout.compute 从 2 降到 1(Task 4 缓存)。
+    func testLayoutMemoized() {
+        let (seq, assets) = makeSequence(50)
+        let content = TimelineContentView(frame: NSRect(x: 0, y: 0, width: 2000, height: 600))
+        PerfProbe.shared.enabled = true
+        PerfProbe.shared.reset()
+        content.apply(state: TimelineContentView.State(
+            sequence: seq, assetLibrary: assets, pxPerSecond: 60, playheadSeconds: 1,
+            selectedClipID: nil, selectedClipIDs: [], selectedGapID: nil,
+            selectedTransitionClipID: nil, currentTool: .select,
+            snappingEnabled: true, clipHeight: 72, vaRatio: 0.6))
+        // 模拟一次重画 + 多次命中测试(拖拽 tick 会反复命中)
+        _ = content.placed
+        for _ in 0..<10 { _ = content.hitTestClip(at: NSPoint(x: 300, y: 100)) }
+        let calls = PerfProbe.shared.snapshot()["Layout.compute"]?.count ?? 0
+        PerfProbe.shared.enabled = false
+        print("\n=== 修复验证 Task4: apply+placed+10次命中 → Layout.compute 调用 \(calls) 次(缓存前会是 12+)===")
+        XCTAssertEqual(calls, 1, "同一 sequence 版本内 Layout.compute 只算一次")
+    }
 }

@@ -52,16 +52,30 @@ final class AgentService {
             var roundCalls: [LLMToolCall] = []
             var toolMsgIds: [String: UUID] = [:]   // toolCall.id → 对应的 tool 气泡
 
+            // 流式文本【按时间节流 flush】(~18Hz):避免每个 token 都改 agentMessages,
+            // 否则 ChatPanelView 逐 token 重建列表挤爆主线程、饿死时间轴拖拽/重画。
+            var pendingFlush = false
+            var lastFlushNanos = DispatchTime.now().uptimeNanoseconds
+            let flushIntervalNanos: UInt64 = 55_000_000   // ~18Hz
+            func flushStreamText() {
+                guard pendingFlush else { return }
+                PerfProbe.shared.count("chat.flush")
+                updateMsg(asstId) { $0.text = asstText; $0.think = asstThink }
+                pendingFlush = false
+                lastFlushNanos = DispatchTime.now().uptimeNanoseconds
+            }
+
             do {
                 for try await ev in backend.stream(messages: wire, tools: registry.toolsJSON()) {
                     if Task.isCancelled { markStopped(); return }
                     PerfProbe.shared.measure("AgentService.tokenApply") {
                     switch ev {
                     case .textDelta(let d):
-                        asstText += d; updateMsg(asstId) { $0.text = asstText }
+                        asstText += d; pendingFlush = true          // 累加,节流时才写入
                     case .thinkDelta(let d):
-                        asstThink += d; updateMsg(asstId) { $0.think = asstThink }
+                        asstThink += d; pendingFlush = true
                     case .toolCallBegin(let id, let name):
+                        flushStreamText()                            // 工具气泡前先把已累积文本落地(保证顺序)
                         let tid = UUID(); toolMsgIds[id] = tid
                         store.agentMessages.append(AgentMessage(id: tid, role: .tool, text: "调用中…", toolName: name, toolArgs: "", streaming: true))
                     case .toolCallArg(let id, let chunk):
@@ -75,12 +89,17 @@ final class AgentService {
                     }
                     }
                     if case .error = ev { return }
+                    // 节流:距上次 flush 超过间隔才写入(终止事件由循环后的 trailing flush 兜底)
+                    if pendingFlush, DispatchTime.now().uptimeNanoseconds - lastFlushNanos > flushIntervalNanos {
+                        flushStreamText()
+                    }
                 }
             } catch {
                 updateMsg(asstId) { $0.text = "出错:\(error.localizedDescription)"; $0.streaming = false }
                 return
             }
 
+            flushStreamText()   // trailing flush:保证最后一批文字不丢
             updateMsg(asstId) { $0.streaming = false }
 
             if roundCalls.isEmpty { return }   // 最终回复,结束

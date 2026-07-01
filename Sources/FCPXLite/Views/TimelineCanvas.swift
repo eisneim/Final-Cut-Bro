@@ -63,24 +63,29 @@ struct TimelineCanvas: NSViewRepresentable {
             vaRatio: vaRatio
         ))
 
-        // 内容宽度 = max(可视宽, 总时长*px + 200);高度足够 ~7 条车道。
+        // 尺寸计算复用 content.placed(已按 sequenceVersion 缓存),避免每次 update 再算 2 次 Layout.compute。
+        let placed = content.placed
         let visibleWidth = scrollView.contentView.bounds.width
-        let totalSeconds = Layout.compute(sequence)
+        let totalSeconds = placed
             .map { ($0.absStart + $0.duration).seconds }
             .max() ?? 0
         let neededWidth = CGFloat(totalSeconds) * pxPerSecond + 200
         let width = max(visibleWidth, neededWidth)
 
         // 高度 = max(可视, 容纳所有 lane 所需);超过可视即可竖向滚动。lane 0 在内容里居中。
-        let maxAbsLane = Layout.compute(sequence).map { abs($0.lane) }.max() ?? 0
+        let maxAbsLane = placed.map { abs($0.lane) }.max() ?? 0
         let needed = TimelineContentView.rulerHeight
             + CGFloat(2 * maxAbsLane + 1) * (clipHeight + TimelineContentView.laneGap)
             + clipHeight   // 上下各留一条余量
         let visibleHeight = scrollView.contentView.bounds.height
         let frameHeight = max(visibleHeight, needed)
 
-        content.frame = NSRect(x: 0, y: 0, width: width, height: frameHeight)
-        content.needsDisplay = true
+        // 仅当 frame 实际变化才全画;否则交给 apply() 的定向失效(播放头/选择只重画窄条)。
+        let newFrame = NSRect(x: 0, y: 0, width: width, height: frameHeight)
+        if content.frame != newFrame {
+            content.frame = newFrame
+            content.needsDisplay = true
+        }
     }
 }
 

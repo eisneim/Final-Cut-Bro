@@ -74,6 +74,26 @@ final class AgentServiceTests: XCTestCase {
         XCTAssertEqual(asst?.text, "好的。")
     }
 
+    /// 流式节流:喂大量瞬时 token → agentMessages 只在节流点 flush(不逐 token 写),
+    /// 但最终文本必须完整(trailing flush 不丢尾)。
+    func testStreamingCoalesced() async {
+        let s = store()
+        var evs: [AgentStreamEvent] = (0..<500).map { .textDelta("\($0 % 10)") }
+        evs.append(.done)
+        let mock = MockBackend([evs])
+        PerfProbe.shared.enabled = true
+        PerfProbe.shared.reset()
+        let svc = AgentService(store: s, backend: mock)
+        await svc.send(userText: "说很多")
+        let flushes = PerfProbe.shared.snapshot()["chat.flush"]?.count ?? 0
+        PerfProbe.shared.enabled = false
+
+        let expected = (0..<500).map { "\($0 % 10)" }.joined()
+        let asst = s.agentMessages.last { $0.role == .assistant }
+        XCTAssertEqual(asst?.text, expected, "trailing flush 保证最终文本完整,不丢尾")
+        XCTAssertLessThan(flushes, 10, "500 个瞬时 token 应只 flush 个位数次(节流生效),实际 \(flushes)")
+    }
+
     func testThinkSplitterInlineTags() {
         var sp = ThinkSplitter()
         let (v1, t1) = sp.feed("hello<think>reason")

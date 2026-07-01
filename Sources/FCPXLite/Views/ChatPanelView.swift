@@ -100,7 +100,8 @@ struct ChatPanelView: View {
 
     private func scrollToEnd(_ proxy: ScrollViewProxy) {
         guard let last = store.agentMessages.last else { return }
-        withAnimation(.easeOut(duration: 0.12)) { proxy.scrollTo(last.id, anchor: .bottom) }
+        // 流式滚动不加动画:agentMessages 现已节流到 ~18Hz,逐次动画反而挤主线程。
+        proxy.scrollTo(last.id, anchor: .bottom)
     }
 
     private var emptyHint: some View {

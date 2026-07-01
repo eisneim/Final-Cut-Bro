@@ -72,8 +72,16 @@ final class TimelineContentView: NSView {
     /// 边缘命中阈值(像素)。
     static let edgeHitPx: CGFloat = 6
 
-    /// 派生:当前布局
-    var placed: [Placed] { Layout.compute(sequence) }
+    /// 派生:当前布局。按 sequenceVersion 缓存 —— 一次拖拽 tick 内 draw + 多次命中测试复用一次 Layout.compute。
+    var placed: [Placed] {
+        if let c = placedCache, c.version == sequenceVersion { return c.value }
+        let v = Layout.compute(sequence)
+        placedCache = (sequenceVersion, v)
+        return v
+    }
+    private var placedCache: (version: Int, value: [Placed])?
+    /// sequence 实际变化时(在 apply 里)bump,使 placed 缓存失效。
+    private(set) var sequenceVersion = 0
 
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
@@ -137,6 +145,23 @@ final class TimelineContentView: NSView {
     }
 
     func apply(state: State) {
+        // ---- 赋值前捕获旧值(供定向失效)----
+        let oldPlayheadX = TimelineGeometry.x(forSeconds: playheadSeconds, pxPerSecond: pxPerSecond)
+        let oldSelClipID = selectedClipID
+        let oldSelClipIDs = selectedClipIDs
+        let oldSelGap = selectedGapID
+        let oldSelTrans = selectedTransitionClipID
+        let oldSelectionRect = selectionDirtyRect(selectionClipIDUnion(oldSelClipID, oldSelClipIDs))
+
+        // ---- 结构/尺寸变化(需全画,不可避免)----
+        let sequenceChanged = sequence != state.sequence
+        let structuralChanged = sequenceChanged
+            || pxPerSecond != state.pxPerSecond
+            || laneH != state.clipHeight
+            || vaRatio != state.vaRatio
+            || assetLibrary != state.assetLibrary
+
+        // ---- 赋值 ----
         sequence = state.sequence
         assetLibrary = state.assetLibrary
         pxPerSecond = state.pxPerSecond
@@ -149,15 +174,36 @@ final class TimelineContentView: NSView {
         snappingEnabled = state.snappingEnabled
         laneH = state.clipHeight
         vaRatio = state.vaRatio
-        needsDisplay = true
-        window?.invalidateCursorRects(for: self)   // 工具变 → 重建光标
+
+        if sequenceChanged { sequenceVersion &+= 1; placedCache = nil }
+        window?.invalidateCursorRects(for: self)   // 工具/布局变 → 重建光标(便宜)
+
+        // ---- 定向失效 ----
+        if structuralChanged { needsDisplay = true; return }   // 全画
+
+        // gap/转场选择变化少见,算它们的 rect 易错 → 回退全画
+        if oldSelGap != selectedGapID || oldSelTrans != selectedTransitionClipID {
+            needsDisplay = true; return
+        }
+
+        var dirty: NSRect? = nil
+        let newPlayheadX = TimelineGeometry.x(forSeconds: playheadSeconds, pxPerSecond: pxPerSecond)
+        if oldPlayheadX != newPlayheadX {
+            dirty = unionRect(dirty, playheadDirtyRect(oldX: oldPlayheadX, newX: newPlayheadX))
+        }
+        if oldSelClipID != selectedClipID || oldSelClipIDs != selectedClipIDs {
+            dirty = unionRect(dirty, oldSelectionRect)
+            dirty = unionRect(dirty, selectionDirtyRect(selectionClipIDUnion(selectedClipID, selectedClipIDs)))
+        }
+        if let d = dirty { setNeedsDisplay(d) }
+        // 都没变(仅 tool/snapping)→ 不重画
     }
 
     // MARK: - 绘制
 
     override func draw(_ dirtyRect: NSRect) {
         TimelineColors.canvas.setFill()
-        bounds.fill()
+        dirtyRect.fill()   // 只填脏区(其余绘制已被 AppKit 裁到 dirtyRect)
 
         drawMainLaneBand()
         drawGaps()
@@ -166,13 +212,19 @@ final class TimelineContentView: NSView {
         if ps.isEmpty {
             drawEmptyHint()
         } else {
-            for p in ps { drawClip(p) }
+            // per-clip 裁剪:只重画与脏区相交的片段(省掉不可见片段的 filmstrip/波形构建)。
+            for p in ps where clipRect(p).intersects(dirtyRect) {
+                PerfProbe.shared.count("drawClip")
+                drawClip(p)
+            }
         }
+        // 以下都保持无条件(靠 context 裁剪):转场标记会画到片段 rect 左侧之外、
+        // ruler/播放头/框选跨全宽或钉顶,单独 cull 会留残影。
         drawTransitions()
 
         drawClipsOrHint()
         if currentTool == .position, dragClipID != nil { drawDragGhost() }   // 位置工具拖拽:画 ghost 跟随
-        drawRuler()      // 刻度尺最后画 → 永远在 clip 之上(拖高的 clip 不会盖住刻度)
+        drawRuler(dirty: dirtyRect)      // 刻度尺最后画 → 永远在 clip 之上(拖高的 clip 不会盖住刻度)
         drawPlayhead()   // 播放头红线再压在刻度尺之上
         drawMarquee()    // 框选矩形压在最上层
     }
@@ -295,7 +347,7 @@ final class TimelineContentView: NSView {
         path.stroke()
     }
 
-    private func drawRuler() {
+    private func drawRuler(dirty: NSRect) {
         let h = Self.rulerHeight
         // 钉在视口顶部:用可视区起点 y(竖滚后跟随),保证 ruler 永远在最上层、不被高 lane 的 clip 遮、也不滚走。
         let top = enclosingScrollView?.documentVisibleRect.minY ?? 0
@@ -314,14 +366,20 @@ final class TimelineContentView: NSView {
             .foregroundColor: TimelineColors.textMuted,
         ]
 
+        // 只画落在 dirty 横向范围内的刻度/标签 —— label.draw 的文字排版是 CPU 成本,
+        // 全长 600+ 个标签即使被裁剪也要排版;按 dirty 裁剪后窄条重画只排几个。
+        let xLo = dirty.minX - 48   // 左扩一个标签宽,避免边界标签缺半
+        let xHi = dirty.maxX
         var t = 0.0
         let maxSeconds = Double(bounds.width / pxPerSecond)
         while t <= maxSeconds {
             let x = TimelineGeometry.x(forSeconds: t, pxPerSecond: pxPerSecond)
-            TimelineColors.textMuted.setFill()
-            NSRect(x: x, y: top + h - 6, width: 1, height: 6).fill()
-            let label = Self.timecode(seconds: t) as NSString
-            label.draw(at: NSPoint(x: x + 3, y: top + 4), withAttributes: attrs)
+            if x >= xLo && x <= xHi {
+                TimelineColors.textMuted.setFill()
+                NSRect(x: x, y: top + h - 6, width: 1, height: 6).fill()
+                let label = Self.timecode(seconds: t) as NSString
+                label.draw(at: NSPoint(x: x + 3, y: top + 4), withAttributes: attrs)
+            }
             t += interval
         }
     }
@@ -335,7 +393,11 @@ final class TimelineContentView: NSView {
                                                    name: NSView.boundsDidChangeNotification, object: clip)
         }
     }
-    @objc private func scrolled() { needsDisplay = true }
+    /// 滚动:只失效【视口矩形】而非整块内容(整块=重画全部 200 片段 92ms)。
+    /// draw 的 per-clip 裁剪把重画限制在视口内可见片段;ruler 钉在视口顶,随之重画。
+    @objc private func scrolled() {
+        setNeedsDisplay(enclosingScrollView?.documentVisibleRect ?? bounds)
+    }
 
     private func drawClip(_ p: Placed) {
         let rect = clipRect(p)
