@@ -86,16 +86,12 @@ struct ChatPanelView: View {
                 .padding(8)
             }
             .onChange(of: store.agentMessages.count) { _, _ in scrollToEnd(proxy) }
-            .onChange(of: streamTail) { _, _ in scrollToEnd(proxy) }
             .onChange(of: store.agentBusy) { _, _ in scrollToEnd(proxy) }
+            .onReceive(Timer.publish(every: 0.3, on: .main, in: .common).autoconnect()) { _ in
+                if store.agentBusy { scrollToEnd(proxy) }
+            }
         }
         .frame(maxHeight: .infinity)
-    }
-
-    /// 流式内容的"尾部指纹":text + think + tool 都在增长时变化 → 任何流式更新都触发自动滚动到底。
-    private var streamTail: Int {
-        guard let last = store.agentMessages.last else { return 0 }
-        return last.text.count &+ last.think.count &+ (last.toolName?.count ?? 0)
     }
 
     private func scrollToEnd(_ proxy: ScrollViewProxy) {
@@ -109,7 +105,7 @@ struct ChatPanelView: View {
             .font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted).padding(.vertical, 8)
     }
 
-    /// 可折叠的推理过程:点一下折叠/展开;最终 response 不折叠。
+    /// 可折叠的推理过程:用 ChunkedStreamingView 分块渲染(thinking 越来越长是卡顿根源)。
     private func thinkBlock(_ m: AgentMessage) -> some View {
         let collapsed = collapsedThinks.contains(m.id)
         return Button {
@@ -122,9 +118,8 @@ struct ChatPanelView: View {
                     Text("💭 思考过程(点击展开)").font(.system(size: 10))
                         .foregroundStyle(Tokens.Palette.textMuted).lineLimit(1)
                 } else {
-                    Text("💭 \(m.think)").font(.system(size: 10)).italic()
-                        .foregroundStyle(Tokens.Palette.textMuted)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    // 分块渲染:thinking 越来越长,只更新最后一块,前面的冻结不重算。
+                    ChunkedStreamingView(text: "💭 " + m.think, streaming: m.streaming)
                 }
                 Spacer(minLength: 0)
             }
@@ -147,18 +142,8 @@ struct ChatPanelView: View {
                 if !m.think.isEmpty { thinkBlock(m) }
                 if !m.text.isEmpty || m.streaming {
                     HStack {
-                        if m.streaming {
-                            // 流式用 NSTextView:只做增量 append,文本再长也不卡。
-                            // SwiftUI Text 每帧重渲染全文 → O(N²) 到后期主线程卡死。
-                            StreamingTextView(text: m.text, streaming: true)
-                                .frame(minHeight: 40, maxHeight: 400)
-                                .background(Tokens.Palette.elevated).cornerRadius(8)
-                        } else {
-                            Text(m.text).font(Tokens.Typeface.label)
-                                .foregroundStyle(Tokens.Palette.textPrimary)
-                                .textSelection(.enabled)
-                                .padding(8).background(Tokens.Palette.elevated).cornerRadius(8)
-                        }
+                        // 分块渲染:streaming 时只更新最后一块,完成后全部冻结。
+                        ChunkedStreamingView(text: m.text, streaming: m.streaming)
                         Spacer()
                     }
                 }

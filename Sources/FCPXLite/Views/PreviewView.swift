@@ -34,6 +34,8 @@ struct PreviewView: NSViewRepresentable {
         private var timeObserver: Any?
         private var observing = false
         private var lastFingerprint: String = ""
+        private var lastPlayheadSeconds: Double = -1
+        private var lastIsPlaying: Bool = false
 
         func attach(to view: PlayerHostView) {
             view.playerLayer.player = player
@@ -41,7 +43,16 @@ struct PreviewView: NSViewRepresentable {
 
         func update(sequence: Sequence, store: DocumentStore, playheadSeconds: Double, isPlaying: Bool) {
             let fp = Self.structureFingerprint(sequence)
-            if lastSequence == nil || fp != lastFingerprint {
+            // 播放器状态没变 → 跳过整个 update(agentMessages 等无关变化会触发 SwiftUI 重渲染到此)。
+            let playheadChanged = abs(playheadSeconds - lastPlayheadSeconds) > 0.001
+            let playingChanged = isPlaying != lastIsPlaying
+            let structureChanged = lastSequence == nil || fp != lastFingerprint
+            let paramsChanged = lastSequence != nil && lastSequence != sequence
+            guard structureChanged || paramsChanged || playheadChanged || playingChanged else { return }
+            lastPlayheadSeconds = playheadSeconds
+            lastIsPlaying = isPlaying
+
+            if structureChanged {
                 // 轨道结构变(增删/移动/trim/blade)→ 重建 item。
                 lastSequence = sequence
                 lastFingerprint = fp
