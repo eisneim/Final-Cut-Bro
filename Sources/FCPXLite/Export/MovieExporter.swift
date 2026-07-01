@@ -59,12 +59,10 @@ enum MovieExporter {
         let hasVideo = videoComposition != nil
         let fileType = outputFileType(for: settings.codec)
 
-        let renderSize: CGSize
-        if let s = settings.resolution.size {
-            renderSize = s
-        } else {
-            renderSize = CGSize(width: document.formatWidth, height: document.formatHeight)
-        }
+        // 导出尺寸【保持项目宽高比】(不再用固定横屏尺寸把竖屏拉成横屏)。
+        // vc.renderSize = 项目宽高;writer 用同比例尺寸 → reader→writer 只等比缩放,不拉伸。
+        let renderSize = settings.resolution.renderSize(
+            projectWidth: document.formatWidth, projectHeight: document.formatHeight)
 
         try? FileManager.default.removeItem(at: url)
 

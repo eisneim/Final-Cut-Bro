@@ -131,6 +131,25 @@ final class MovieExporterMatrixTests: XCTestCase {
         }
     }
 
+    /// 回归:竖屏项目导出必须【保持竖屏宽高比】,不能被拉成横屏(旧 bug:固定 1920x1080)。
+    func testPortraitProjectStaysPortrait() throws {
+        let src = try makeColorVideo(seconds: 1, size: CGSize(width: 720, height: 1280), color: .blue)
+        defer { try? FileManager.default.removeItem(at: src) }
+        let doc = makeDoc(srcURL: src, srcSize: CGSize(width: 720, height: 1280))
+
+        // .original:保持项目原尺寸 720x1280
+        let orig = try exportAndProbe(doc, settings: ExportSettings(codec: .h264, quality: .medium, resolution: .original, includeAudio: false), ext: "mp4")
+        XCTAssertEqual(orig.size.width, 720, accuracy: 2, "original 竖屏宽")
+        XCTAssertEqual(orig.size.height, 1280, accuracy: 2, "original 竖屏高")
+        XCTAssertGreaterThan(orig.size.height, orig.size.width, "必须竖屏(高>宽),不能拉成横屏")
+
+        // .r1080:短边=1080 → 1080x1920,仍竖屏(不是 1920x1080 横屏)
+        let r1080 = try exportAndProbe(doc, settings: ExportSettings(codec: .h264, quality: .medium, resolution: .r1080, includeAudio: false), ext: "mp4")
+        XCTAssertEqual(r1080.size.width, 1080, accuracy: 2, "1080p 竖屏宽=1080")
+        XCTAssertEqual(r1080.size.height, 1920, accuracy: 2, "1080p 竖屏高=1920")
+        XCTAssertGreaterThan(r1080.size.height, r1080.size.width, "1080p 竖屏必须保持竖屏")
+    }
+
     /// 质量档:高质量 H.264 文件应显著大于低质量(码率确实生效)。用高熵噪声内容,使码率上限真正约束。
     func testQualityAffectsFileSize() throws {
         let src = try makeNoiseVideo(seconds: 1, size: CGSize(width: 640, height: 360))
