@@ -17,20 +17,35 @@ enum TitleRenderer {
         NSGraphicsContext.current = ns
 
         let color = NSColor(hex: spec.colorHex)
-        let font = spec.bold
-            ? NSFont.boldSystemFont(ofSize: CGFloat(spec.fontSize))
-            : NSFont.systemFont(ofSize: CGFloat(spec.fontSize))
+        // 字体:指定字体族名则用之(粗体经 NSFontManager 转换),否则系统字体。
+        var font: NSFont
+        if let fn = spec.fontName, let f = NSFont(name: fn, size: CGFloat(spec.fontSize)) {
+            font = spec.bold ? NSFontManager.shared.convert(f, toHaveTrait: .boldFontMask) : f
+        } else {
+            font = spec.bold ? NSFont.boldSystemFont(ofSize: CGFloat(spec.fontSize))
+                             : NSFont.systemFont(ofSize: CGFloat(spec.fontSize))
+        }
         let para = NSMutableParagraphStyle()
         para.alignment = [.left, .center, .right][max(0, min(2, spec.align))]
         para.lineBreakMode = .byWordWrapping   // 超宽自动换行(CJK 按字断行),不再横向溢出被裁
-        let attrs: [NSAttributedString.Key: Any] = [
+        var attrs: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: color,
             .paragraphStyle: para,
-            // 轻微描边/阴影增强可读性(深底浅字时仍清晰)。
-            .strokeColor: NSColor.black.withAlphaComponent(0.6),
-            .strokeWidth: -3.0,
         ]
+        // 描边(border):负 strokeWidth = 同时描边+填充(NSAttributedString 约定)。0 = 不描边。
+        if spec.strokeWidth > 0 {
+            attrs[.strokeColor] = NSColor(hex: spec.strokeColorHex)
+            attrs[.strokeWidth] = -spec.strokeWidth
+        }
+        // 阴影(shadow):CGContext 原点左下 → 向下投影用负 height。
+        if spec.shadowEnabled {
+            let sh = NSShadow()
+            sh.shadowColor = NSColor(hex: spec.shadowColorHex)
+            sh.shadowBlurRadius = CGFloat(spec.shadowRadius)
+            sh.shadowOffset = NSSize(width: CGFloat(spec.shadowDX), height: -CGFloat(spec.shadowDY))
+            attrs[.shadow] = sh
+        }
         let str = NSAttributedString(string: spec.text, attributes: attrs)
         // 最大绘制宽 = 画面 90%(左右各留 5% 边距),文字在此宽度内换行 + 按 align 对齐。
         let maxW = size.width * 0.9
