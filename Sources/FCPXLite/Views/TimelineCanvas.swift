@@ -40,6 +40,12 @@ struct TimelineCanvas: NSViewRepresentable {
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        PerfProbe.shared.measure("TimelineCanvas.updateNSView") {
+            updateImpl(scrollView, context: context)
+        }
+    }
+
+    private func updateImpl(_ scrollView: NSScrollView, context: Context) {
         guard let content = scrollView.documentView as? TimelineContentView else { return }
 
         content.apply(state: TimelineContentView.State(

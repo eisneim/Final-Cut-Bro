@@ -55,6 +55,7 @@ final class AgentService {
             do {
                 for try await ev in backend.stream(messages: wire, tools: registry.toolsJSON()) {
                     if Task.isCancelled { markStopped(); return }
+                    PerfProbe.shared.measure("AgentService.tokenApply") {
                     switch ev {
                     case .textDelta(let d):
                         asstText += d; updateMsg(asstId) { $0.text = asstText }
@@ -70,9 +71,10 @@ final class AgentService {
                         _ = id
                     case .error(let m):
                         updateMsg(asstId) { $0.text = (asstText.isEmpty ? "" : asstText + "\n") + "出错:" + m; $0.streaming = false }
-                        return
                     case .done: break
                     }
+                    }
+                    if case .error = ev { return }
                 }
             } catch {
                 updateMsg(asstId) { $0.text = "出错:\(error.localizedDescription)"; $0.streaming = false }

@@ -10,6 +10,10 @@ struct Placed: Equatable {
 /// 纯函数布局:Sequence → [Placed]。磁性的"绝对位置"在这里实时算。
 enum Layout {
     static func compute(_ sequence: Sequence) -> [Placed] {
+        PerfProbe.shared.measure("Layout.compute") { computeImpl(sequence) }
+    }
+
+    private static func computeImpl(_ sequence: Sequence) -> [Placed] {
         var out: [Placed] = []
         var t = Time.zero
         var prevWasClip = false

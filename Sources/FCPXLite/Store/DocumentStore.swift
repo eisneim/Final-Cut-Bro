@@ -305,6 +305,10 @@ import Observation
 
     /// 唯一的"动作"入口。手动 UI 和未来 Agent 都只发 EditorAction。
     func dispatch(_ action: EditorAction) {
+        PerfProbe.shared.measure("DocumentStore.dispatch") { dispatchImpl(action) }
+    }
+
+    private func dispatchImpl(_ action: EditorAction) {
         switch action {
         case let .insertClip(c, i):              apply { Mutations.insertClip(c, at: i, in: $0) }
         case let .overwrite(c, t):               apply { Mutations.overwrite(c, atTime: t, in: $0) }

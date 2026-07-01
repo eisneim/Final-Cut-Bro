@@ -91,6 +91,9 @@ final class DebugControlServer {
             // 避免每次 /state 都长时间占住主线程 → 否则频繁轮询会和 agent 流式更新抢主线程,UI 严重卡顿。
             let snap = DispatchQueue.main.sync { (store.document, store.ui, store.agentBusy) }
             sendJSON(conn, encodeSnapshot(snap.0, snap.1, snap.2))
+        case ("GET", "/perf"):
+            // 性能探针报告(PerfProbe):Layout.compute / updateNSView / dispatch / tokenApply 的 count/total/avg/max。
+            sendText(conn, status: "200 OK", PerfProbe.shared.report())
         case ("POST", "/cmd"):
             let snap = DispatchQueue.main.sync { () -> (Document, UIState, Bool) in
                 execute(body: req.body)
@@ -251,6 +254,10 @@ final class DebugControlServer {
             store.sendAgentMessage()
         case "agentStop":
             store.stopAgent()
+        case "perfEnable":
+            PerfProbe.shared.enabled = (cmd.seconds ?? 1) > 0
+        case "perfReset":
+            PerfProbe.shared.reset()
         case "respondConfirm":
             // 端到端:模拟用户点确认卡片的"允许"(seconds>0)/"拒绝"(否则)。
             store.respondAgentConfirm(approve: (cmd.seconds ?? 1) > 0)
