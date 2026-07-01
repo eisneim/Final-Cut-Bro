@@ -47,6 +47,7 @@ struct ExportPanel: View {
             }
         } else {
             VStack(alignment: .leading, spacing: 10) {
+                if let err = store.ui.exportError { errorBanner(err) }   // 失败/卡死 → 顶部醒目红条
                 // Resolution
                 HStack {
                     Text("分辨率").font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
@@ -100,13 +101,25 @@ struct ExportPanel: View {
                     .font(Tokens.Typeface.body)
 
                 // Error
-                if let err = store.ui.exportError {
-                    Text(err).font(.system(size: 11))
-                        .foregroundStyle(Tokens.Palette.windowClose)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                if let err = store.ui.exportError { errorBanner(err) }
             }
         }
+    }
+
+    /// 醒目错误横条(红底红框 + 图标),导出失败/卡死时暴露原因(不再默默卡住)。
+    @ViewBuilder private func errorBanner(_ err: String) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.red)
+            Text(err).font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Tokens.Palette.textPrimary)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(8)
+        .background(Color.red.opacity(0.12))
+        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.red.opacity(0.6), lineWidth: 1))
+        .cornerRadius(6)
     }
 
     // MARK: - Tab 1: Project Export
@@ -122,11 +135,7 @@ struct ExportPanel: View {
                 .background(Tokens.Palette.elevated).cornerRadius(6)
                 .foregroundStyle(Tokens.Palette.textPrimary)
                 .font(Tokens.Typeface.body)
-            if let err = store.ui.exportError {
-                Text(err).font(.system(size: 11))
-                    .foregroundStyle(Tokens.Palette.windowClose)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            if let err = store.ui.exportError { errorBanner(err) }
         }
     }
 

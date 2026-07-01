@@ -1,7 +1,21 @@
 // Sources/FCPXLite/Export/MovieExporter.swift
 import AVFoundation
 
-enum MovieExportError: Error { case emptyTimeline, sessionFailed(String) }
+enum MovieExportError: Error, CustomStringConvertible {
+    case emptyTimeline
+    case sessionFailed(String)
+    case readerFailed(String)     // AVAssetReader 读取中失败(surface reader.error)
+    case stalled(String)          // 看门狗:长时间无进度(卡死)→ 暴露诊断
+
+    var description: String {
+        switch self {
+        case .emptyTimeline:        return "时间线为空,无可导出内容"
+        case .sessionFailed(let m): return "导出会话失败:\(m)"
+        case .readerFailed(let m):  return "读取素材失败:\(m)"
+        case .stalled(let m):       return "导出卡住(超时无进度):\(m)"
+        }
+    }
+}
 
 /// 把 Document 渲染成片。
 /// 主路径:AVAssetReader + AVAssetWriter (codec/bitrate/size 精确控制)。
@@ -141,9 +155,24 @@ enum MovieExporter {
         var doneCalled = false
         let q = DispatchQueue(label: "fcpxlite.export")
 
+        // 看门狗:记录最后一次"有进度"的时刻;长时间无进度 → 判定卡死并暴露诊断。
+        var lastActivity = Date()
+        var lastProgressPct: Float = 0
+        var watchdog: DispatchSourceTimer?
+        func stopWatchdog() { watchdog?.cancel(); watchdog = nil }
+        func statusStr(_ s: AVAssetReader.Status) -> String {
+            switch s {
+            case .reading: return "reading"; case .completed: return "completed"
+            case .failed: return "failed"; case .cancelled: return "cancelled"
+            case .unknown: return "unknown"
+            @unknown default: return "unknown"
+            }
+        }
+
         func finish(result: Result<URL, Error>) {
             guard !doneCalled else { return }
             doneCalled = true
+            stopWatchdog()
             DispatchQueue.main.async { completion(result) }
         }
 
@@ -152,7 +181,9 @@ enum MovieExporter {
         var audioFinished = (writerAudioInput == nil)
 
         func checkDone() {
+            guard !doneCalled else { return }   // 看门狗已收尾/已完成 → 不再重入 finishWriting
             guard videoFinished, audioFinished else { return }
+            stopWatchdog()
             writerVideoInput?.markAsFinished()
             writerAudioInput?.markAsFinished()
             reader.cancelReading()
@@ -180,10 +211,19 @@ enum MovieExporter {
                             return
                         }
                         vInput.append(buf)
+                        lastActivity = Date()   // 看门狗:有进度
                         if totalDuration > 0 {
-                            DispatchQueue.main.async { progress(Float(pts / totalDuration) * 0.9) }
+                            lastProgressPct = Float(pts / totalDuration) * 0.9
+                            let p = lastProgressPct
+                            DispatchQueue.main.async { progress(p) }
                         }
                     } else {
+                        // nil:读完了 OR reader 失败 → 必须区分,否则失败被当成正常结束(静默半截片)。
+                        if reader.status == .failed {
+                            finish(result: .failure(MovieExportError.readerFailed(
+                                "视频轨读取失败:\(String(describing: reader.error))")))
+                            return
+                        }
                         videoFinished = true
                         checkDone()
                         return
@@ -197,7 +237,13 @@ enum MovieExporter {
                 while aInput.isReadyForMoreMediaData {
                     if let buf = aOut.copyNextSampleBuffer() {
                         aInput.append(buf)
+                        lastActivity = Date()   // 看门狗:音频也算进度(修复"卡在末尾 audio finalize")
                     } else {
+                        if reader.status == .failed {
+                            finish(result: .failure(MovieExportError.readerFailed(
+                                "音频轨读取失败:\(String(describing: reader.error))")))
+                            return
+                        }
                         audioFinished = true
                         checkDone()
                         return
@@ -205,6 +251,26 @@ enum MovieExporter {
                 }
             }
         }
+
+        // 看门狗:每 3s 检查一次;若 stallTimeout 秒内毫无进度 → 判定卡死,取消并暴露诊断
+        // (哪个输入没完成、卡在百分之几、reader 状态/错误)。修复"卡在 80% 无任何提示"。
+        let stallTimeout: TimeInterval = 30
+        let wd = DispatchSource.makeTimerSource(queue: q)
+        wd.schedule(deadline: .now() + 5, repeating: 3)
+        wd.setEventHandler {
+            if doneCalled { wd.cancel(); return }
+            if Date().timeIntervalSince(lastActivity) > stallTimeout {
+                let diag = "停在 \(Int(lastProgressPct * 100))%;video完成=\(videoFinished) audio完成=\(audioFinished);"
+                    + "reader=\(statusStr(reader.status)) writer=\(writer.status.rawValue);"
+                    + "readerErr=\(String(describing: reader.error)) writerErr=\(String(describing: writer.error))"
+                NSLog("[MovieExporter] 导出卡死:\(diag)")
+                reader.cancelReading()
+                writer.cancelWriting()
+                finish(result: .failure(MovieExportError.stalled(diag)))
+            }
+        }
+        watchdog = wd
+        wd.resume()
 
         // Pure-audio path: no video input, trigger checkDone when audio finishes
         if writerVideoInput == nil, writerAudioInput == nil {
