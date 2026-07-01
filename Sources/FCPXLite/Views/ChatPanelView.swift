@@ -147,10 +147,18 @@ struct ChatPanelView: View {
                 if !m.think.isEmpty { thinkBlock(m) }
                 if !m.text.isEmpty || m.streaming {
                     HStack {
-                        Text(m.text + (m.streaming ? " ▌" : "")).font(Tokens.Typeface.label)
-                            .foregroundStyle(Tokens.Palette.textPrimary)
-                            .textSelection(.enabled)
-                            .padding(8).background(Tokens.Palette.elevated).cornerRadius(8)
+                        if m.streaming {
+                            // 流式用 NSTextView:只做增量 append,文本再长也不卡。
+                            // SwiftUI Text 每帧重渲染全文 → O(N²) 到后期主线程卡死。
+                            StreamingTextView(text: m.text, streaming: true)
+                                .frame(minHeight: 40, maxHeight: 400)
+                                .background(Tokens.Palette.elevated).cornerRadius(8)
+                        } else {
+                            Text(m.text).font(Tokens.Typeface.label)
+                                .foregroundStyle(Tokens.Palette.textPrimary)
+                                .textSelection(.enabled)
+                                .padding(8).background(Tokens.Palette.elevated).cornerRadius(8)
+                        }
                         Spacer()
                     }
                 }
