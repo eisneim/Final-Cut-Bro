@@ -17,7 +17,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered, defer: false)
         window.title = "Final Cut Bro"
+        window.titleVisibility = .hidden   // 隐藏标题文字,腾出标题栏放按钮(交通灯仍在)
         window.contentView = NSHostingView(rootView: RootView(store: store))
+        installTitlebarAccessories()
         window.setFrame(initial, display: true)   // 占满可用屏幕
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -32,6 +34,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     #if DEBUG
     private var debugServer: DebugControlServer?
     #endif
+
+    /// 把面板切换组(左)+ 导出(右)挂进窗口标题栏(交通灯那条)。
+    private func installTitlebarAccessories() {
+        let leading = NSTitlebarAccessoryViewController()
+        leading.layoutAttribute = .leading
+        let lv = NSHostingView(rootView: TitlebarToggleGroup(store: store))
+        lv.frame = NSRect(x: 0, y: 0, width: 150, height: 34)   // 显式尺寸(intrinsic 在标题栏里会塌成 0)
+        leading.view = lv
+        window.addTitlebarAccessoryViewController(leading)
+
+        let trailing = NSTitlebarAccessoryViewController()
+        trailing.layoutAttribute = .trailing
+        let tv = NSHostingView(rootView: TitlebarExportButton(store: store))
+        tv.frame = NSRect(x: 0, y: 0, width: 52, height: 34)
+        trailing.view = tv
+        window.addTitlebarAccessoryViewController(trailing)
+    }
 
     /// 标准菜单栏:App / 文件 / 编辑 / 显示 / 窗口 / 帮助。
     private func installMenu() {

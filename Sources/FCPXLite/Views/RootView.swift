@@ -111,59 +111,13 @@ struct RootView: View {
     // MARK: - Format Toolbar
 
     private var formatToolbar: some View {
-        HStack(spacing: 12) {
-            // 左侧:面板切换组(素材库 / 检查器 / Agent),FCP 式分段容器
-            panelToggleGroup
+        HStack {
             Spacer()
             Text("1080p HD 25p,立体声").font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
             Spacer()
-            // 右上角:导出
-            Button { store.dispatch(.setShowExport(true)) } label: {
-                ExportToolbarIcon(color: Tokens.Palette.textIcon)
-                    .frame(width: 30, height: 30)
-                    .background(Tokens.Palette.elevated)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Tokens.Palette.divider, lineWidth: 1))
-            }
-            .buttonStyle(.plain).help("导出(⌘E)")
         }
-        .padding(.horizontal, 12).frame(height: Tokens.Metric.topBarHeight)
+        .padding(.horizontal, 12).frame(height: Tokens.Metric.toolbarHeight)
         .background(Tokens.Palette.chrome)
-    }
-
-    /// 三个面板切换按钮的分段容器(素材库 / 检查器 / Agent)。激活=蓝底亮图标,未激活=暗图标。
-    private var panelToggleGroup: some View {
-        HStack(spacing: 0) {
-            toggleButton(active: store.ui.showBrowser, help: "素材库(左)") {
-                store.dispatch(.setShowBrowser(!store.ui.showBrowser))
-            } icon: { LibraryToggleIcon(color: $0) }
-            groupDivider
-            toggleButton(active: store.ui.showInspector, help: "检查器(右)⌘4") {
-                store.dispatch(.setInspector(!store.ui.showInspector))
-            } icon: { InspectorToggleIcon(color: $0) }
-            groupDivider
-            toggleButton(active: store.ui.showChat, help: "Agent 面板(右)") {
-                store.dispatch(.setShowChat(!store.ui.showChat))
-            } icon: { AgentToggleIcon(color: $0) }
-        }
-        .background(Tokens.Palette.elevated)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
-        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Tokens.Palette.divider, lineWidth: 1))
-    }
-
-    private var groupDivider: some View {
-        Rectangle().fill(Tokens.Palette.divider).frame(width: 1, height: 30)
-    }
-
-    /// 单个切换按钮:激活时蓝底 + 亮图标,未激活透明 + 暗图标。
-    private func toggleButton<I: View>(active: Bool, help: String, action: @escaping () -> Void,
-                                       @ViewBuilder icon: (Color) -> I) -> some View {
-        Button(action: action) {
-            icon(active ? Tokens.Palette.textPrimary : Tokens.Palette.textMuted)
-                .frame(width: 40, height: 30)
-                .background(active ? Tokens.Palette.clipBlue : Color.clear)
-        }
-        .buttonStyle(.plain).help(help)
     }
 
     // MARK: - Resize Handle
