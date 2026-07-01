@@ -22,6 +22,7 @@ enum TitleRenderer {
             : NSFont.systemFont(ofSize: CGFloat(spec.fontSize))
         let para = NSMutableParagraphStyle()
         para.alignment = [.left, .center, .right][max(0, min(2, spec.align))]
+        para.lineBreakMode = .byWordWrapping   // 超宽自动换行(CJK 按字断行),不再横向溢出被裁
         let attrs: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: color,
@@ -31,12 +32,18 @@ enum TitleRenderer {
             .strokeWidth: -3.0,
         ]
         let str = NSAttributedString(string: spec.text, attributes: attrs)
-        let textSize = str.size()
-        // 居中 + position 偏移。注意 CGContext 原点在左下,position.y 向下为正 → 减。
+        // 最大绘制宽 = 画面 90%(左右各留 5% 边距),文字在此宽度内换行 + 按 align 对齐。
+        let maxW = size.width * 0.9
+        let bounds = str.boundingRect(with: CGSize(width: maxW, height: .greatestFiniteMagnitude),
+                                      options: [.usesLineFragmentOrigin, .usesFontLeading])
+        let textH = ceil(bounds.height) + 4
+        // 水平:以画面中心为准的 maxW 框(段落 align 在框内对齐);垂直:居中 + position.y 偏移。
+        // CGContext 原点在左下,position.y 向下为正 → 减。
         let cx = size.width / 2, cy = size.height / 2
-        let originX = cx - textSize.width / 2 + spec.position.x
-        let originY = cy - textSize.height / 2 - spec.position.y
-        str.draw(in: CGRect(x: originX, y: originY, width: textSize.width + 4, height: textSize.height + 4))
+        let originX = cx - maxW / 2 + spec.position.x
+        let originY = cy - textH / 2 - spec.position.y
+        str.draw(with: CGRect(x: originX, y: originY, width: maxW, height: textH),
+                 options: [.usesLineFragmentOrigin, .usesFontLeading])
 
         NSGraphicsContext.restoreGraphicsState()
         return ctx.makeImage()
