@@ -118,8 +118,12 @@ struct ChatPanelView: View {
                     Text("💭 思考过程(点击展开)").font(.system(size: 10))
                         .foregroundStyle(Tokens.Palette.textMuted).lineLimit(1)
                 } else {
-                    // 分块渲染:thinking 越来越长,只更新最后一块,前面的冻结不重算。
-                    ChunkedStreamingView(text: "💭 " + m.think, streaming: m.streaming)
+                    // 分块渲染:thinking 越来越长,只有最后一块重排,前面的冻结(内容可见)。
+                    ChunkedStreamingView(text: "💭 " + m.think, streaming: m.streaming,
+                                         chunkSize: 120,
+                                         font: .system(size: 10).italic(),
+                                         color: Tokens.Palette.textMuted)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 Spacer(minLength: 0)
             }
@@ -142,8 +146,11 @@ struct ChatPanelView: View {
                 if !m.think.isEmpty { thinkBlock(m) }
                 if !m.text.isEmpty || m.streaming {
                     HStack {
-                        // 分块渲染:streaming 时只更新最后一块,完成后全部冻结。
+                        // 分块渲染:streaming 时只有最后一块重排,内容始终可见;完成后全部冻结。
                         ChunkedStreamingView(text: m.text, streaming: m.streaming)
+                            .padding(8)
+                            .background(Tokens.Palette.elevated)
+                            .cornerRadius(8)
                         Spacer()
                     }
                 }
