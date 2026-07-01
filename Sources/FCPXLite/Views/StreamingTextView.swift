@@ -2,11 +2,13 @@ import SwiftUI
 import AppKit
 
 /// 流式 assistant 气泡:用 AppKit NSTextView 替代 SwiftUI Text。
-/// SwiftUI Text 每次重设全文 → 重算全部文字排版 → 文本越长越卡(O(N²) 总量)。
-/// NSTextView 底层是 NSTextStorage → 只做增量 layout → 几乎 O(1) append,几千字也流畅。
+/// 关键:只做【追加】(append delta),不替换全文 → O(1) per flush → 几千字也不卡。
+/// SwiftUI Text + setAttributedString 每次都是 O(N) → O(N²) 总量 → 后期 100% CPU。
 struct StreamingTextView: NSViewRepresentable {
     let text: String
     let streaming: Bool
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> NSScrollView {
         let tv = NSTextView()
@@ -31,14 +33,36 @@ struct StreamingTextView: NSViewRepresentable {
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let tv = scrollView.documentView as? NSTextView else { return }
+        let co = context.coordinator
         let display = streaming ? text + " ▌" : text
-        // 仅当内容实际变化才替换(避免无意义 layout)
-        guard tv.string != display else { return }
-        let str = NSAttributedString(string: display, attributes: [
-            .foregroundColor: NSColor.white,
-            .font: NSFont.systemFont(ofSize: NSFont.labelFontSize),
-        ])
-        tv.textStorage?.setAttributedString(str)
+
+        // 首次或非流式:全量设置
+        if co.displayedCount == 0 || !streaming {
+            let str = NSAttributedString(string: display, attributes: Self.attrs)
+            tv.textStorage?.setAttributedString(str)
+            co.displayedCount = display.count
+            tv.scrollToEndOfDocument(nil)
+            return
+        }
+
+        // 流式追加:只 append 新增字符 → O(1) 不触碰已有文本的 layout。
+        let oldCount = co.displayedCount
+        let newCount = display.count
+        guard newCount > oldCount else { return }
+        let oldEnd = display.index(display.startIndex, offsetBy: oldCount)
+        let delta = String(display[oldEnd...])
+        let attrDelta = NSAttributedString(string: delta, attributes: Self.attrs)
+        tv.textStorage?.append(attrDelta)
+        co.displayedCount = newCount
         tv.scrollToEndOfDocument(nil)
     }
+
+    final class Coordinator {
+        var displayedCount = 0
+    }
+
+    private static let attrs: [NSAttributedString.Key: Any] = [
+        .foregroundColor: NSColor.white,
+        .font: NSFont.systemFont(ofSize: NSFont.labelFontSize),
+    ]
 }
