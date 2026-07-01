@@ -46,7 +46,7 @@ struct PreviewView: NSViewRepresentable {
                 lastSequence = sequence
                 lastFingerprint = fp
                 player.replaceCurrentItem(with: CompositionBuilder.build(document: store.document))
-                seek(playheadSeconds)
+                seek(playheadSeconds, exact: !isPlaying)
             } else if lastSequence != sequence {
                 // 仅参数变(inspector 调 transform/opacity)→ 只更新 videoComposition,不换 item(避免黑屏闪烁)。
                 lastSequence = sequence
@@ -55,15 +55,15 @@ struct PreviewView: NSViewRepresentable {
                     item.videoComposition = rebuilt.videoComposition
                     item.audioMix = rebuilt.audioMix
                 }
-                if !isPlaying { seek(playheadSeconds) }
+                if !isPlaying { seek(playheadSeconds, exact: true) }
             } else if !isPlaying {
-                seek(playheadSeconds)
+                seek(playheadSeconds, exact: true)
             } else {
                 // 播放中:若外部 playhead 与播放器当前时间差距明显(>0.3s),说明是用户主动拖动/跳转
-                // (而非 time observer 的自然推进)→ 立即 seek 到新位置继续播,不再被弹回旧位置。
+                // (而非 time observer 的自然推进)→ 立即【容差】seek 到新位置继续播(exact=false 避免逐帧解码卡顿)。
                 let cur = player.currentTime().seconds
                 if cur.isFinite, abs(cur - playheadSeconds) > 0.3 {
-                    seek(playheadSeconds)
+                    seek(playheadSeconds, exact: false)
                 }
             }
             if isPlaying { player.play() } else { player.pause() }
@@ -87,9 +87,16 @@ struct PreviewView: NSViewRepresentable {
             return s
         }
 
-        private func seek(_ seconds: Double) {
+        private func seek(_ seconds: Double, exact: Bool) {
             let t = CMTime(seconds: max(0, seconds), preferredTimescale: 600)
-            player.seek(to: t, toleranceBefore: .zero, toleranceAfter: .zero)
+            // 播放中(exact=false):容差 seek → snap 到最近可解码帧,点击跳转瞬时完成、不逐帧精确解码。
+            // 暂停时(exact=true):零容差 → 精确定位到该帧(帧步进/精修需要)。
+            let tol: CMTime = exact ? .zero : CMTime(seconds: 0.15, preferredTimescale: 600)
+            let t0 = DispatchTime.now().uptimeNanoseconds
+            player.seek(to: t, toleranceBefore: tol, toleranceAfter: tol) { _ in
+                PerfProbe.shared.record("player.seek(\(exact ? "exact" : "tol"))",
+                                        Double(DispatchTime.now().uptimeNanoseconds - t0) / 1_000_000)
+            }
         }
 
         private func ensureObserver(store: DocumentStore) {
