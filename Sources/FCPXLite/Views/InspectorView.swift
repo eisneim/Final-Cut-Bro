@@ -7,39 +7,62 @@ struct InspectorView: View {
 
     var body: some View {
         Group {
-            if let clip = store.selectedClip() {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        if clip.isTitle { InspectorTitleSection(store: store) }
-                        section("复合", reset: { store.updateSelectedAdjust { $0.opacity = 1 } }) {
-                            sliderRow("不透明度", value: bind(\.opacity, scale: 100), range: 0...100, suffix: "%", display: clip.adjust.opacity * 100)
-                        }
-                        section("变换", reset: { store.updateSelectedAdjust { $0.transform = Transform() } }) {
-                            xyRow("位置",
-                                  x: bindCG(\.transform.position.x), y: bindCG(\.transform.position.y),
-                                  dx: clip.adjust.transform.position.x, dy: clip.adjust.transform.position.y, suffix: "px")
-                            sliderRow("旋转", value: bind(\.transform.rotation), range: -180...180, suffix: "°", display: clip.adjust.transform.rotation)
-                            sliderRow("缩放(全部)", value: scaleAllBinding(clip), range: 1...400, suffix: "%", display: clip.adjust.transform.scale.width * 100)
-                            keyframeRow(clip)
-                        }
-                        section("裁剪", reset: { store.updateSelectedAdjust { $0.crop = Crop() } }) {
-                            sliderRow("左", value: bind(\.crop.left), range: 0...1000, suffix: "px", display: clip.adjust.crop.left)
-                            sliderRow("右", value: bind(\.crop.right), range: 0...1000, suffix: "px", display: clip.adjust.crop.right)
-                            sliderRow("上", value: bind(\.crop.top), range: 0...1000, suffix: "px", display: clip.adjust.crop.top)
-                            sliderRow("下", value: bind(\.crop.bottom), range: 0...1000, suffix: "px", display: clip.adjust.crop.bottom)
-                        }
-                        InspectorEffectsSection(store: store)
-                    }
-                }
-                .background(Tokens.Palette.chrome)
-            } else {
-                ZStack {
-                    Tokens.Palette.chrome
-                    Text("不检查任何对象").font(Tokens.Typeface.body).foregroundStyle(Tokens.Palette.textMuted)
-                }
+            switch store.ui.inspectorFocus {
+            case .asset:
+                if let asset = store.selectedAsset() {
+                    InspectorAssetMeta(store: store, asset: asset)
+                } else { projectOrEmpty }
+            case .clip:
+                if store.selectedClip() != nil {
+                    clipInspector
+                } else { projectOrEmpty }   // 片段被删/取消选择 → 回落到项目信息
+            case .project, .none:
+                projectOrEmpty
             }
         }
         .frame(maxHeight: .infinity)
+    }
+
+    /// 有项目 → 显示项目 meta;无项目 → 空态。
+    @ViewBuilder private var projectOrEmpty: some View {
+        if store.document.hasProject {
+            InspectorProjectMeta(store: store)
+        } else {
+            ZStack {
+                Tokens.Palette.chrome
+                Text("不检查任何对象").font(Tokens.Typeface.body).foregroundStyle(Tokens.Palette.textMuted)
+            }
+        }
+    }
+
+    /// 时间轴片段的编辑项(复合/变换/裁剪/特效/标题)。
+    @ViewBuilder private var clipInspector: some View {
+        if let clip = store.selectedClip() {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    if clip.isTitle { InspectorTitleSection(store: store) }
+                    section("复合", reset: { store.updateSelectedAdjust { $0.opacity = 1 } }) {
+                        sliderRow("不透明度", value: bind(\.opacity, scale: 100), range: 0...100, suffix: "%", display: clip.adjust.opacity * 100)
+                    }
+                    section("变换", reset: { store.updateSelectedAdjust { $0.transform = Transform() } }) {
+                        xyRow("位置",
+                              x: bindCG(\.transform.position.x), y: bindCG(\.transform.position.y),
+                              dx: clip.adjust.transform.position.x, dy: clip.adjust.transform.position.y, suffix: "px")
+                        sliderRow("旋转", value: bind(\.transform.rotation), range: -180...180, suffix: "°", display: clip.adjust.transform.rotation)
+                        sliderRow("缩放(全部)", value: scaleAllBinding(clip), range: 1...400, suffix: "%", display: clip.adjust.transform.scale.width * 100)
+                        keyframeRow(clip)
+                    }
+                    section("裁剪", reset: { store.updateSelectedAdjust { $0.crop = Crop() } }) {
+                        sliderRow("左", value: bind(\.crop.left), range: 0...1000, suffix: "px", display: clip.adjust.crop.left)
+                        sliderRow("右", value: bind(\.crop.right), range: 0...1000, suffix: "px", display: clip.adjust.crop.right)
+                        sliderRow("上", value: bind(\.crop.top), range: 0...1000, suffix: "px", display: clip.adjust.crop.top)
+                        sliderRow("下", value: bind(\.crop.bottom), range: 0...1000, suffix: "px", display: clip.adjust.crop.bottom)
+                    }
+                    InspectorEffectsSection(store: store)
+                }
+            }
+            .background(Tokens.Palette.chrome)
+        }
     }
 
     // MARK: - Bindings

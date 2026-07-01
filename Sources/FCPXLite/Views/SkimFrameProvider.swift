@@ -11,11 +11,17 @@ final class SkimFrameProvider: ObservableObject {
 
     private var generators: [String: AVAssetImageGenerator] = [:]
     private var reqToken = 0
+    private var lastAssetKey: String?
     private let q = DispatchQueue(label: "fcpxlite.skim", qos: .userInteractive)
 
     func request(asset: Asset, seconds: Double) {
-        // 即时回退:最近的缓存缩略图(24 张),保证移动时不空白。
-        if let thumbs = TimelineMediaCache.shared.thumbnails(for: asset), !thumbs.isEmpty {
+        let key = asset.id.raw
+        let assetChanged = key != lastAssetKey
+        lastAssetKey = key
+        // 低清缩略图回退【只在首次(空白)或切换到别的素材时】用 —— 否则每次移动都把画面重置成
+        // 160×90 缩略图,高清帧还没到又被下次覆盖 → 全程看着像马赛克。同素材内 skim 保留上一张高清帧。
+        if (image == nil || assetChanged),
+           let thumbs = TimelineMediaCache.shared.thumbnails(for: asset), !thumbs.isEmpty {
             let dur = max(0.001, asset.duration.seconds)
             let idx = min(thumbs.count - 1, max(0, Int(seconds / dur * Double(thumbs.count))))
             image = thumbs[idx]
@@ -24,12 +30,12 @@ final class SkimFrameProvider: ObservableObject {
 
         reqToken &+= 1
         let token = reqToken
-        let key = asset.id.raw
         let gen: AVAssetImageGenerator = {
             if let g = generators[key] { return g }
             let g = AVAssetImageGenerator(asset: AVURLAsset(url: asset.url))
             g.appliesPreferredTrackTransform = true
-            g.maximumSize = CGSize(width: 960, height: 540)
+            // 1280 边界盒:横屏≈1280×720、竖屏≈720×1280 → 近原生清晰度(旧值 960×540 对竖屏只有 304×540,糊)。
+            g.maximumSize = CGSize(width: 1280, height: 1280)
             g.requestedTimeToleranceBefore = CMTime(seconds: 0.1, preferredTimescale: 600)
             g.requestedTimeToleranceAfter = CMTime(seconds: 0.1, preferredTimescale: 600)
             generators[key] = g
@@ -45,5 +51,5 @@ final class SkimFrameProvider: ObservableObject {
         }
     }
 
-    func clear() { image = nil; reqToken &+= 1 }
+    func clear() { image = nil; reqToken &+= 1; lastAssetKey = nil }
 }

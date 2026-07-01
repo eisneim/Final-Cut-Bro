@@ -110,6 +110,12 @@ import Observation
         return nil
     }
 
+    /// 当前选中的素材(inspector 显示 meta 用)。
+    func selectedAsset() -> Asset? {
+        guard let id = ui.selectedAssetID else { return nil }
+        return document.assetLibrary.first { $0.id == id }
+    }
+
     /// 按 id 集合取出 clip(主轴或连接子项),保持调用方传入顺序无关。
     func clipsByIDs(_ ids: Set<ClipID>) -> [(id: ClipID, clip: Clip)] {
         guard !ids.isEmpty else { return [] }
@@ -330,9 +336,9 @@ import Observation
         case let .setShowExport(v):              ui.showExport = v
         case let .setShowSettings(v):            ui.showSettings = v
         case let .createProject(p):
-            snapshot(); document.projects.append(p); document.currentProjectID = p.id
+            snapshot(); document.projects.append(p); document.currentProjectID = p.id; ui.inspectorFocus = .project
         case let .selectProject(id):
-            snapshot(); document.currentProjectID = id; ui.selectedClipID = nil; ui.playhead = .zero
+            snapshot(); document.currentProjectID = id; ui.selectedClipID = nil; ui.playhead = .zero; ui.inspectorFocus = .project
         case let .removeProject(id):
             snapshot()
             document.projects.removeAll { $0.id == id }
@@ -351,8 +357,8 @@ import Observation
         case let .setShowProjectModal(v):        ui.showProjectModal = v
         case let .importAsset(a):                snapshot(); document.assetLibrary.append(a)
         case let .removeAsset(id):               snapshot(); document.assetLibrary.removeAll { $0.id == id }; ui.selectedAssetIDs.remove(id); if ui.selectedAssetID == id { ui.selectedAssetID = nil }
-        case let .selectClip(id):                ui.selectedClipID = id; ui.selectedClipIDs = id.map { [$0] } ?? []; ui.selectedGapID = nil; ui.selectedTransitionClipID = nil
-        case let .selectClips(ids, anchor):      ui.selectedClipIDs = ids; ui.selectedClipID = anchor ?? ids.first; ui.selectedGapID = nil; ui.selectedTransitionClipID = nil
+        case let .selectClip(id):                ui.selectedClipID = id; ui.selectedClipIDs = id.map { [$0] } ?? []; ui.selectedGapID = nil; ui.selectedTransitionClipID = nil; if id != nil { ui.inspectorFocus = .clip }
+        case let .selectClips(ids, anchor):      ui.selectedClipIDs = ids; ui.selectedClipID = anchor ?? ids.first; ui.selectedGapID = nil; ui.selectedTransitionClipID = nil; if !ids.isEmpty { ui.inspectorFocus = .clip }
         case let .selectGap(id):                 ui.selectedGapID = id; ui.selectedClipID = nil; ui.selectedTransitionClipID = nil
         case let .selectTransition(id):          ui.selectedTransitionClipID = id; ui.selectedClipID = nil; ui.selectedGapID = nil
         case let .setGapDurationByID(id, dur):   apply { Mutations.setGapDurationByID(id, duration: dur, in: $0) }
@@ -366,6 +372,7 @@ import Observation
             // 单选:清除多选集,只保留这一个(同时更新 anchor)
             ui.selectedAssetID = id
             ui.selectedAssetIDs = id.map { [$0] } ?? []
+            if id != nil { ui.inspectorFocus = .asset }
         case let .toggleAssetSelected(id):
             // ⌘-click:切换单个素材的选中状态;anchor 更新到该素材
             if ui.selectedAssetIDs.contains(id) {
@@ -374,6 +381,7 @@ import Observation
                 ui.selectedAssetIDs.insert(id)
                 ui.selectedAssetID = id   // 更新 anchor
             }
+            ui.inspectorFocus = .asset
         case let .selectAssetRange(id):
             // ⇧-click:从 anchor 到 id 在 assetLibrary 顺序中选中区间
             let ids = document.assetLibrary.map(\.id)
@@ -382,6 +390,7 @@ import Observation
             let lo = min(fromIdx, toIdx)
             let hi = max(fromIdx, toIdx)
             for i in lo...hi { ui.selectedAssetIDs.insert(ids[i]) }
+            ui.inspectorFocus = .asset
             // anchor 不变(FCP 行为:Shift 不移动 anchor)
         case .selectAllAssets:
             // ⌘A:选中全部素材(不影响时间轴选中)

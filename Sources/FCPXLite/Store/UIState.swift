@@ -1,5 +1,11 @@
 import Foundation
 
+/// Inspector 当前聚焦的对象类型 —— 跟随【最后一次选择】的对象(FCP 行为:
+/// 点素材→显素材信息,点时间轴片段→显片段编辑项,点/建项目→显项目信息)。
+enum InspectorFocus: String, Codable {
+    case none, project, asset, clip
+}
+
 /// 瞬时 UI 状态 —— 也放进 store(Redux 纪律:零本地 state)。
 /// Codable 以便测试注入完整场景快照。
 struct UIState: Codable, Equatable {
@@ -7,6 +13,7 @@ struct UIState: Codable, Equatable {
     var showEffects: Bool = false
     var selectedClipID: ClipID? = nil
     var selectedClipIDs: Set<ClipID> = []   // 框选多选集合;selectedClipID 作为 anchor(inspector 取值显示)
+    var inspectorFocus: InspectorFocus = .none   // Inspector 显示哪类对象(跟随最后选择)
     var selectedGapID: GapID? = nil      // 选中的空隙(gap 可像 clip 一样选中/修剪/拖动/删除)
     var selectedTransitionClipID: ClipID? = nil   // 选中的转场(归属于带 crossfadeIn 的那个片段)
     var currentTool: EditTool = .select
