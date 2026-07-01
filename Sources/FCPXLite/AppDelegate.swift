@@ -35,19 +35,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var debugServer: DebugControlServer?
     #endif
 
-    /// 把面板切换组(左)+ 导出(右)挂进窗口标题栏(交通灯那条)。
+    /// 把面板切换组 + 导出挂进窗口标题栏【右侧】(交通灯那条),二者挨在一起。
     private func installTitlebarAccessories() {
-        let leading = NSTitlebarAccessoryViewController()
-        leading.layoutAttribute = .leading
-        let lv = NSHostingView(rootView: TitlebarToggleGroup(store: store))
-        lv.frame = NSRect(x: 0, y: 0, width: 150, height: 34)   // 显式尺寸(intrinsic 在标题栏里会塌成 0)
-        leading.view = lv
-        window.addTitlebarAccessoryViewController(leading)
-
         let trailing = NSTitlebarAccessoryViewController()
         trailing.layoutAttribute = .trailing
-        let tv = NSHostingView(rootView: TitlebarExportButton(store: store))
-        tv.frame = NSRect(x: 0, y: 0, width: 52, height: 34)
+        let tv = NSHostingView(rootView: TitlebarTrailingControls(store: store))
+        // 显式尺寸(intrinsic 在标题栏里会塌成 0);高度 44 → 标题栏加高、上下留白。
+        tv.frame = NSRect(x: 0, y: 0, width: 230, height: 44)
         trailing.view = tv
         window.addTitlebarAccessoryViewController(trailing)
     }
