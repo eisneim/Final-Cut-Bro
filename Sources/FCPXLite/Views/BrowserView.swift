@@ -115,8 +115,15 @@ struct BrowserView: View {
                            else { store.setSkim(nil, seconds: 0) }
                        })
             .contextMenu {
-                Button("删除素材", role: .destructive) {
-                    store.dispatch(.removeAsset(asset.id))
+                let sel = store.ui.selectedAssetIDs
+                if sel.count > 1 && sel.contains(asset.id) {
+                    Button("删除 \(sel.count) 个素材", role: .destructive) {
+                        store.removeAssets(sel)
+                    }
+                } else {
+                    Button("删除素材", role: .destructive) {
+                        store.dispatch(.removeAsset(asset.id))
+                    }
                 }
             }
             .onTapGesture {

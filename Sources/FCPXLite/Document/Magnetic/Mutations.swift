@@ -644,6 +644,26 @@ enum Mutations {
         return s
     }
 
+    /// 设置某 clip 的时间线定位:offset(连接片段相对宿主起点的偏移)和/或 duration(时长)。
+    /// 用于给【字幕/连接片段】改起止时间(set_title 的 startSeconds/durationSeconds)。
+    /// 主轴 clip 的 offset 在磁性布局里无意义,只应用 duration。纯函数,调用方负责 commit。
+    static func setClipTiming(clipID: ClipID, offset: Time?, duration: Time?, in seq: Sequence) -> Sequence {
+        var s = seq
+        for (i, el) in s.spine.enumerated() {
+            guard case .clip(var c) = el else { continue }
+            if c.id == clipID {                                   // 主轴:只改时长
+                if let d = duration { c.duration = d }
+                s.spine[i] = .clip(c); return s
+            }
+            if let j = c.connected.firstIndex(where: { $0.id == clipID }) {   // 连接:offset + 时长
+                if let o = offset { c.connected[j].offset = .seconds(max(0, o.seconds)) }
+                if let d = duration { c.connected[j].duration = .seconds(max(0.1, d.seconds)) }
+                s.spine[i] = .clip(c); return s
+            }
+        }
+        return s
+    }
+
     /// 设置某 clip(主轴或连接子项)的启用状态(V 键停用/启用)。纯函数,调用方负责 commit。
     static func setEnabled(clipID: ClipID, _ enabled: Bool, in seq: Sequence) -> Sequence {
         var s = seq

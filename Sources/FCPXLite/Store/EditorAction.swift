@@ -61,6 +61,7 @@ enum EditorAction: Codable, Equatable {
     case setCrossfade(at: Int, duration: Time)
     case selectTransition(ClipID?)
     case setTitle(ClipID, TitleSpec)
+    case setConnectedTiming(ClipID, offset: Time?, duration: Time?)   // 给字幕/连接片段改起点(offset)和/或时长
     case setEnabled(ClipID, Bool)
 }
 

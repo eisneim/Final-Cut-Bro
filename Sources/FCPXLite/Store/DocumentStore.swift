@@ -409,6 +409,7 @@ import Observation
         case let .slide(i, delta, prevDur, nextDur): apply { Mutations.slide(at: i, delta: delta, prevAssetDuration: prevDur, nextAssetDuration: nextDur, in: $0) }
         case let .setCrossfade(i, dur): apply { Mutations.setCrossfade(at: i, duration: dur, in: $0) }
         case let .setTitle(id, spec): apply { Mutations.setTitle(clipID: id, spec, in: $0) }
+        case let .setConnectedTiming(id, off, dur): apply { Mutations.setClipTiming(clipID: id, offset: off, duration: dur, in: $0) }
         case let .setEnabled(id, on):    apply { Mutations.setEnabled(clipID: id, on, in: $0) }
         }
     }
@@ -558,13 +559,29 @@ import Observation
             }
             dispatch(.selectTransition(nil)); return
         }
-        guard let id = ui.selectedClipID else { return }
-        if let idx = TimelineGeometry.spineIndex(ofClipID: id, in: document.sequence) {
-            dispatch(.rippleDelete(at: idx))
-        } else {
-            dispatch(.removeConnected(id))   // 连接片段
+        // 片段:支持【多选批量删除】。连接片段按 id 删(顺序无关),主轴片段每次重新解析
+        // 索引后 ripple 删(删一个会使后面索引移位),整批合成单次 undo。
+        let ids = effectiveSelection()
+        guard !ids.isEmpty else { return }
+        transaction {
+            for cid in ids where TimelineGeometry.spineIndex(ofClipID: cid, in: document.sequence) == nil {
+                dispatch(.removeConnected(cid))            // 连接片段
+            }
+            var spineIDs = Array(ids).filter { TimelineGeometry.spineIndex(ofClipID: $0, in: document.sequence) != nil }
+            while let cid = spineIDs.popLast() {
+                if let idx = TimelineGeometry.spineIndex(ofClipID: cid, in: document.sequence) {
+                    dispatch(.rippleDelete(at: idx))        // 主轴片段:重新解析索引再删
+                }
+            }
         }
-        dispatch(.selectClip(nil))
+        dispatch(.selectClips([], anchor: nil))
+    }
+
+    /// 从素材库批量删除素材(素材池右键"删除"支持多选),整批单次 undo。
+    /// 时间线上引用被删素材的片段会标红"素材丢失"(不自动删除,保留 FCP 行为)。
+    func removeAssets(_ ids: Set<AssetID>) {
+        guard !ids.isEmpty else { return }
+        transaction { for id in ids { dispatch(.removeAsset(id)) } }
     }
 
     private func clipFromSelection() -> Clip? {

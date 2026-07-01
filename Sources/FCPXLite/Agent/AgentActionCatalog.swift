@@ -550,7 +550,7 @@ enum AgentActionCatalog {
                 ? "已旋转到 \(d)°" : "错误:clipIndex 无效"
         },
         AgentAction(type: "set_title", domain: .adjust,
-                    doc: "编辑【已存在】的第 titleIndex 个标题(0基,主轴+连接按文档顺序)。可改 text/fontSize/colorHex(#RRGGBB)/bold(true/false)/align(0左1中2右)/x/y。只传想改的字段。",
+                    doc: "编辑【已存在】的第 titleIndex 个标题(0基,主轴+连接按文档顺序)。可改 text/fontSize/colorHex(#RRGGBB)/bold(true/false)/align(0左1中2右)/x/y(屏幕内位置px);还可改【时间线上的时间】:startSeconds=字幕出现的时间线起点秒,durationSeconds=字幕停留时长秒。只传想改的字段。",
                     params: [ParamSpec(name: "titleIndex", kind: .int, required: true, doc: "标题索引,0基"),
                              ParamSpec(name: "text", kind: .string, required: false, doc: "新文字"),
                              ParamSpec(name: "fontSize", kind: .number, required: false, doc: "字号"),
@@ -558,9 +558,11 @@ enum AgentActionCatalog {
                              ParamSpec(name: "bold", kind: .string, required: false, doc: "true/false"),
                              ParamSpec(name: "align", kind: .int, required: false, doc: "0左1中2右"),
                              ParamSpec(name: "x", kind: .number, required: false, doc: "水平位置px"),
-                             ParamSpec(name: "y", kind: .number, required: false, doc: "垂直位置px")]) { store, a in
+                             ParamSpec(name: "y", kind: .number, required: false, doc: "垂直位置px"),
+                             ParamSpec(name: "startSeconds", kind: .number, required: false, doc: "时间线上出现的起点(秒)"),
+                             ParamSpec(name: "durationSeconds", kind: .number, required: false, doc: "停留时长(秒)")]) { store, a in
             guard let id = titleClipID(store, intArg(a, "titleIndex") ?? -1),
-                  var spec = findClip(store, id)?.title else { return "错误:titleIndex 无效(没有那个标题)" }
+                  let cur = findClip(store, id), var spec = cur.title else { return "错误:titleIndex 无效(没有那个标题)" }
             if let t = strArg(a, "text") { spec.text = t }
             if let fs = numArg(a, "fontSize") { spec.fontSize = fs }
             if let c = strArg(a, "colorHex") { spec.colorHex = c }
@@ -569,6 +571,16 @@ enum AgentActionCatalog {
             if let x = numArg(a, "x") { spec.position.x = x }
             if let y = numArg(a, "y") { spec.position.y = y }
             store.dispatch(.setTitle(id, spec))
+            // 时间线上的起点/时长(连接片段:offset 相对宿主起点)
+            let start = numArg(a, "startSeconds"), dur = numArg(a, "durationSeconds")
+            if start != nil || dur != nil {
+                var newOffset: Time? = nil
+                if let s = start, let absStart = store.clipAbsStart(id) {
+                    let hostStart = absStart.seconds - cur.offset.seconds     // 宿主绝对起点
+                    newOffset = .seconds(max(0, s - hostStart))
+                }
+                store.dispatch(.setConnectedTiming(id, offset: newOffset, duration: dur.map { .seconds($0) }))
+            }
             return "已编辑标题「\(spec.text)」"
         },
     ]
