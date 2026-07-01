@@ -19,7 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.title = "Final Cut Bro"
         window.titleVisibility = .hidden   // 隐藏标题文字,腾出标题栏放按钮(交通灯仍在)
         window.contentView = NSHostingView(rootView: RootView(store: store))
-        installTitlebarAccessories()
+        installToolbar()
         window.setFrame(initial, display: true)   // 占满可用屏幕
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -35,15 +35,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var debugServer: DebugControlServer?
     #endif
 
-    /// 把面板切换组 + 导出挂进窗口标题栏【右侧】(交通灯那条),二者挨在一起。
-    private func installTitlebarAccessories() {
-        let trailing = NSTitlebarAccessoryViewController()
-        trailing.layoutAttribute = .trailing
-        let tv = NSHostingView(rootView: TitlebarTrailingControls(store: store))
-        // 显式尺寸(intrinsic 在标题栏里会塌成 0);高度 44 → 标题栏加高、上下留白。
-        tv.frame = NSRect(x: 0, y: 0, width: 230, height: 44)
-        trailing.view = tv
-        window.addTitlebarAccessoryViewController(trailing)
+    /// 用 NSToolbar + .unified 统一工具栏样式:交通灯与按钮同处一条【高】bar(FCP 风,~52px)。
+    /// 右侧:面板切换组 + 导出(flexibleSpace 把它们推到右边,挨在一起)。
+    private func installToolbar() {
+        let tb = NSToolbar(identifier: "fcbMain")
+        tb.delegate = self
+        tb.displayMode = .iconOnly
+        tb.allowsUserCustomization = false
+        window.toolbar = tb
+        window.toolbarStyle = .unified   // 高的统一标题栏(比 .unifiedCompact 更高)
     }
 
     /// 标准菜单栏:App / 文件 / 编辑 / 显示 / 窗口 / 帮助。
@@ -274,5 +274,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func showHelpMenu() {
         // 打开项目 README(简单有效,后续可换成内置帮助页)
         if let url = URL(string: "https://github.com") { NSWorkspace.shared.open(url) }
+    }
+}
+
+extension NSToolbarItem.Identifier {
+    static let fcbToggles = NSToolbarItem.Identifier("fcbToggles")
+    static let fcbExport  = NSToolbarItem.Identifier("fcbExport")
+}
+
+extension AppDelegate: NSToolbarDelegate {
+    func toolbarDefaultItemIdentifiers(_ t: NSToolbar) -> [NSToolbarItem.Identifier] {
+        [.flexibleSpace, .fcbToggles, .fcbExport]   // flexibleSpace 把两组推到右侧,挨在一起
+    }
+    func toolbarAllowedItemIdentifiers(_ t: NSToolbar) -> [NSToolbarItem.Identifier] {
+        [.flexibleSpace, .fcbToggles, .fcbExport]
+    }
+    func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier id: NSToolbarItem.Identifier,
+                 willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
+        let item = NSToolbarItem(itemIdentifier: id)
+        switch id {
+        case .fcbToggles:
+            let v = NSHostingView(rootView: TitlebarToggleGroup(store: store))
+            v.frame = NSRect(x: 0, y: 0, width: 150, height: 30)
+            item.view = v
+        case .fcbExport:
+            let v = NSHostingView(rootView: TitlebarExportButton(store: store))
+            v.frame = NSRect(x: 0, y: 0, width: 40, height: 30)
+            item.view = v
+        default:
+            return nil
+        }
+        return item
     }
 }

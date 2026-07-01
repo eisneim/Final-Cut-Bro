@@ -1,21 +1,8 @@
 import SwiftUI
 import AppKit
 
-/// 标题栏(红黄绿交通灯那条)【右侧】配件:面板切换组 + 导出,挨在一起放在右上角。
-/// 通过 NSTitlebarAccessoryViewController(.trailing)挂上去。
-
-/// 右侧一整组:切换组 + 导出(切换组在左、导出在最右)。带上下留白让标题栏更高。
-struct TitlebarTrailingControls: View {
-    let store: DocumentStore
-    var body: some View {
-        HStack(spacing: 10) {
-            TitlebarToggleGroup(store: store)
-            TitlebarExportButton(store: store)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)          // 上下留白 → 标题栏更高、按钮不贴边
-    }
-}
+/// 标题栏(NSToolbar .unified 那条高 bar)里的按钮:面板切换组 + 导出。
+/// 由 AppDelegate 的 NSToolbarDelegate 各包成 NSToolbarItem(自定义 view)放到右侧。
 
 /// 三个面板切换按钮(素材库/检查器/Agent)。激活=蓝底亮图标,未激活=暗图标。
 struct TitlebarToggleGroup: View {
