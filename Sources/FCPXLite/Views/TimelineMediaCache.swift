@@ -57,7 +57,9 @@ final class TimelineMediaCache {
         let av = AVURLAsset(url: asset.url)
         let gen = AVAssetImageGenerator(asset: av)
         gen.appliesPreferredTrackTransform = true
-        gen.maximumSize = CGSize(width: 160, height: 90)
+        // 方形边界盒(而非 160×90):竖屏视频用 160×90 只有 ~51×90(极糊)。
+        // 480 盒 → 横屏≈480×270、竖屏≈270×480,素材池放大后也不马赛克。
+        gen.maximumSize = CGSize(width: 480, height: 480)
         gen.requestedTimeToleranceBefore = CMTime(seconds: 0.3, preferredTimescale: 600)
         gen.requestedTimeToleranceAfter = CMTime(seconds: 0.3, preferredTimescale: 600)
         let dur = CMTimeGetSeconds(av.duration)
