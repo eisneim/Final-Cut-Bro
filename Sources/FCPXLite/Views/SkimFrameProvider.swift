@@ -11,31 +11,27 @@ final class SkimFrameProvider: ObservableObject {
 
     private var generators: [String: AVAssetImageGenerator] = [:]
     private var reqToken = 0
-    private var lastAssetKey: String?
     private let q = DispatchQueue(label: "fcpxlite.skim", qos: .userInteractive)
 
     func request(asset: Asset, seconds: Double) {
-        let key = asset.id.raw
-        let assetChanged = key != lastAssetKey
-        lastAssetKey = key
-        // 低清缩略图回退【只在首次(空白)或切换到别的素材时】用 —— 否则每次移动都把画面重置成
-        // 160×90 缩略图,高清帧还没到又被下次覆盖 → 全程看着像马赛克。同素材内 skim 保留上一张高清帧。
-        if (image == nil || assetChanged),
-           let thumbs = TimelineMediaCache.shared.thumbnails(for: asset), !thumbs.isEmpty {
+        // 即时回退:缓存缩略图【每次移动都立刻更新】→ skim 跟手不卡。
+        // 缩略图现在是 480 盒(竖屏 270×480),已足够清晰,不再是马赛克。
+        if let thumbs = TimelineMediaCache.shared.thumbnails(for: asset), !thumbs.isEmpty {
             let dur = max(0.001, asset.duration.seconds)
             let idx = min(thumbs.count - 1, max(0, Int(seconds / dur * Double(thumbs.count))))
             image = thumbs[idx]
         }
         guard asset.kind != .audio else { image = nil; return }
 
+        // 异步取【该秒精确高清帧】(1280),完成后替换回退缩略图(鼠标停下时得到精确帧)。
         reqToken &+= 1
         let token = reqToken
+        let key = asset.id.raw
         let gen: AVAssetImageGenerator = {
             if let g = generators[key] { return g }
             let g = AVAssetImageGenerator(asset: AVURLAsset(url: asset.url))
             g.appliesPreferredTrackTransform = true
-            // 1280 边界盒:横屏≈1280×720、竖屏≈720×1280 → 近原生清晰度(旧值 960×540 对竖屏只有 304×540,糊)。
-            g.maximumSize = CGSize(width: 1280, height: 1280)
+            g.maximumSize = CGSize(width: 1280, height: 1280)   // 竖屏≈720×1280,近原生
             g.requestedTimeToleranceBefore = CMTime(seconds: 0.1, preferredTimescale: 600)
             g.requestedTimeToleranceAfter = CMTime(seconds: 0.1, preferredTimescale: 600)
             generators[key] = g
@@ -51,5 +47,5 @@ final class SkimFrameProvider: ObservableObject {
         }
     }
 
-    func clear() { image = nil; reqToken &+= 1; lastAssetKey = nil }
+    func clear() { image = nil; reqToken &+= 1 }
 }
