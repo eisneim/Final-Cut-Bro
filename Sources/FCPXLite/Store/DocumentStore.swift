@@ -333,6 +333,8 @@ import Observation
         case let .setGapDuration(i, dur):        apply { Mutations.setGapDuration(at: i, duration: dur, in: $0) }
         case let .setInspector(v):               ui.showInspector = v
         case let .setShowEffects(v):             ui.showEffects = v
+        case let .setShowBrowser(v):             ui.showBrowser = v
+        case let .setShowChat(v):                ui.showChat = v
         case let .setShowExport(v):              ui.showExport = v
         case let .setShowSettings(v):            ui.showSettings = v
         case let .createProject(p):

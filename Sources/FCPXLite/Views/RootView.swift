@@ -8,10 +8,12 @@ struct RootView: View {
     var body: some View {
         HStack(spacing: 0) {
             leftWorkspace
-            WidthDragHandle(width: store.ui.chatWidth, sign: -1) {
-                store.dispatch(.setPanelWidth(.chat, $0))
+            if store.ui.showChat {
+                WidthDragHandle(width: store.ui.chatWidth, sign: -1) {
+                    store.dispatch(.setPanelWidth(.chat, $0))
+                }
+                ChatPanelView(store: store).frame(width: store.ui.chatWidth)
             }
-            ChatPanelView(store: store).frame(width: store.ui.chatWidth)
         }
         .background(Tokens.Palette.chrome)
         .frame(minWidth: 1100, minHeight: 680)
@@ -41,16 +43,18 @@ struct RootView: View {
                 VStack(spacing: 0) {
                     HStack(spacing: 0) {
                         // 左侧栏:项目 + 素材池在同一个 ScrollView 里整体滚动(项目可有很多个)。
-                        ScrollView {
-                            VStack(spacing: 0) {
-                                ProjectBar(store: store)
-                                Divider().overlay(Tokens.Palette.divider)
-                                BrowserView(store: store)
+                        if store.ui.showBrowser {
+                            ScrollView {
+                                VStack(spacing: 0) {
+                                    ProjectBar(store: store)
+                                    Divider().overlay(Tokens.Palette.divider)
+                                    BrowserView(store: store)
+                                }
                             }
-                        }
-                        .frame(width: store.ui.browserWidth)
-                        WidthDragHandle(width: store.ui.browserWidth, sign: 1) {
-                            store.dispatch(.setPanelWidth(.browser, $0))
+                            .frame(width: store.ui.browserWidth)
+                            WidthDragHandle(width: store.ui.browserWidth, sign: 1) {
+                                store.dispatch(.setPanelWidth(.browser, $0))
+                            }
                         }
                         ViewerView(store: store)
                         if store.ui.showInspector {
@@ -108,28 +112,58 @@ struct RootView: View {
 
     private var formatToolbar: some View {
         HStack(spacing: 12) {
-            Text("所有片段 ⌄").font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
+            // 左侧:面板切换组(素材库 / 检查器 / Agent),FCP 式分段容器
+            panelToggleGroup
             Spacer()
             Text("1080p HD 25p,立体声").font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
             Spacer()
-            Button { store.dispatch(.setInspector(!store.ui.showInspector)) } label: { Text("≡|||") }
-                .help("检查器开关 ⌘4")
-                .buttonStyle(.plain)
-                .foregroundStyle(store.ui.showInspector ? Tokens.Palette.selectYellow : Tokens.Palette.textMuted)
-            Spacer().frame(width: 18)   // 导出按钮与检查器开关之间留空隙
+            // 右上角:导出
             Button { store.dispatch(.setShowExport(true)) } label: {
-                HStack(spacing: 4) {
-                    Image(systemName: "square.and.arrow.up")
-                    Text("导出").font(Tokens.Typeface.label)
-                }
-                .foregroundStyle(Tokens.Palette.onAccent)
-                .padding(.horizontal, 10).padding(.vertical, 4)
-                .background(Tokens.Palette.clipBlue).cornerRadius(6)
+                ExportToolbarIcon(color: Tokens.Palette.textIcon)
+                    .frame(width: 30, height: 30)
+                    .background(Tokens.Palette.elevated)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Tokens.Palette.divider, lineWidth: 1))
             }
             .buttonStyle(.plain).help("导出(⌘E)")
         }
-        .padding(.horizontal, 12).frame(height: Tokens.Metric.toolbarHeight)
+        .padding(.horizontal, 12).frame(height: Tokens.Metric.topBarHeight)
         .background(Tokens.Palette.chrome)
+    }
+
+    /// 三个面板切换按钮的分段容器(素材库 / 检查器 / Agent)。激活=蓝底亮图标,未激活=暗图标。
+    private var panelToggleGroup: some View {
+        HStack(spacing: 0) {
+            toggleButton(active: store.ui.showBrowser, help: "素材库(左)") {
+                store.dispatch(.setShowBrowser(!store.ui.showBrowser))
+            } icon: { LibraryToggleIcon(color: $0) }
+            groupDivider
+            toggleButton(active: store.ui.showInspector, help: "检查器(右)⌘4") {
+                store.dispatch(.setInspector(!store.ui.showInspector))
+            } icon: { InspectorToggleIcon(color: $0) }
+            groupDivider
+            toggleButton(active: store.ui.showChat, help: "Agent 面板(右)") {
+                store.dispatch(.setShowChat(!store.ui.showChat))
+            } icon: { AgentToggleIcon(color: $0) }
+        }
+        .background(Tokens.Palette.elevated)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Tokens.Palette.divider, lineWidth: 1))
+    }
+
+    private var groupDivider: some View {
+        Rectangle().fill(Tokens.Palette.divider).frame(width: 1, height: 30)
+    }
+
+    /// 单个切换按钮:激活时蓝底 + 亮图标,未激活透明 + 暗图标。
+    private func toggleButton<I: View>(active: Bool, help: String, action: @escaping () -> Void,
+                                       @ViewBuilder icon: (Color) -> I) -> some View {
+        Button(action: action) {
+            icon(active ? Tokens.Palette.textPrimary : Tokens.Palette.textMuted)
+                .frame(width: 40, height: 30)
+                .background(active ? Tokens.Palette.clipBlue : Color.clear)
+        }
+        .buttonStyle(.plain).help(help)
     }
 
     // MARK: - Resize Handle

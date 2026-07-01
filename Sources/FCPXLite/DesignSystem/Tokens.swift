@@ -32,6 +32,7 @@ enum Tokens {
     enum Metric {
         static let titlebarHeight: CGFloat = 30
         static let toolbarHeight: CGFloat = 26
+        static let topBarHeight: CGFloat = 46   // 顶部主工具条(面板切换组 + 导出),比原 26 高
         static let timelineToolbarHeight: CGFloat = 24
         static let librariesWidth: CGFloat = 200
         static let browserWidth: CGFloat = 280

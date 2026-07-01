@@ -21,6 +21,8 @@ enum EditorAction: Codable, Equatable {
     case setGapDuration(at: Int, duration: Time)
     case setInspector(Bool)
     case setShowEffects(Bool)
+    case setShowBrowser(Bool)   // 顶栏切换:素材库(左)显隐
+    case setShowChat(Bool)      // 顶栏切换:Agent 面板(右)显隐
     case setShowExport(Bool)
     case setShowSettings(Bool)
     case createProject(Project)

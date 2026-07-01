@@ -11,6 +11,8 @@ enum InspectorFocus: String, Codable {
 struct UIState: Codable, Equatable {
     var showInspector: Bool = false
     var showEffects: Bool = false
+    var showBrowser: Bool = true    // 素材库(左)显隐,顶栏按钮切换
+    var showChat: Bool = true       // Agent 面板(右)显隐,顶栏按钮切换
     var selectedClipID: ClipID? = nil
     var selectedClipIDs: Set<ClipID> = []   // 框选多选集合;selectedClipID 作为 anchor(inspector 取值显示)
     var inspectorFocus: InspectorFocus = .none   // Inspector 显示哪类对象(跟随最后选择)
