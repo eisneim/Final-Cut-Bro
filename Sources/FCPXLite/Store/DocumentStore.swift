@@ -241,6 +241,22 @@ import Observation
         dispatch(.selectClip(dup.id))
     }
 
+    /// ⌘⇧V:粘贴【属性】—— 把剪贴板片段的 调整(变换/裁剪/不透明/音量)+ 特效 + 变换/音量关键帧
+    /// 应用到【所有选中片段】(FCP 高频:一个片段调好效果,复制,选中其他片段,一键套用)。整批单次 undo。
+    func pasteAttributesToSelected() {
+        guard let src = clipboard else { return }
+        let targets = clipsByIDs(effectiveSelection())
+        guard !targets.isEmpty else { return }
+        transaction {
+            for (id, _) in targets {
+                dispatch(.setAdjust(id, src.adjust))
+                dispatch(.setEffects(id, src.effects))
+                dispatch(.setTransformKeyframes(id, src.transformKeyframes))
+                dispatch(.setVolumeKeyframes(id, src.volumeKeyframes))
+            }
+        }
+    }
+
     /// 主轴插入下标:跳过所有"结束 ≤ 播放头"的元素 → 在播放头所在/之后的编辑点插入。
     private func spineInsertIndexAtPlayhead() -> Int {
         let ph = ui.playhead.seconds

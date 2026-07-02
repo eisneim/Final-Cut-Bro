@@ -90,14 +90,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         editMenu.addItem(NSMenuItem(title: "剪切", action: #selector(NSText.cut(_:)), keyEquivalent: "x"))
         editMenu.addItem(NSMenuItem(title: "复制", action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
         editMenu.addItem(NSMenuItem(title: "粘贴", action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
+        let pasteAttr = NSMenuItem(title: "粘贴属性", action: #selector(pasteAttributesMenu), keyEquivalent: "v")
+        pasteAttr.keyEquivalentModifierMask = [.command, .shift]; pasteAttr.target = self; editMenu.addItem(pasteAttr)
         editMenu.addItem(NSMenuItem(title: "全选", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
         editItem.submenu = editMenu
 
         // ── 显示 ──
         let viewItem = NSMenuItem(); mainMenu.addItem(viewItem)
         let viewMenu = NSMenu(title: "显示")
+        let browserItem = NSMenuItem(title: "显示/隐藏素材库", action: #selector(toggleBrowserMenu), keyEquivalent: "1")
+        browserItem.target = self; viewMenu.addItem(browserItem)
         let inspItem = NSMenuItem(title: "显示/隐藏检查器", action: #selector(toggleInspectorMenu), keyEquivalent: "4")
         inspItem.target = self; viewMenu.addItem(inspItem)
+        let chatItem = NSMenuItem(title: "显示/隐藏 Agent 面板", action: #selector(toggleChatMenu), keyEquivalent: "0")
+        chatItem.target = self; viewMenu.addItem(chatItem)
         let fxItem = NSMenuItem(title: "显示/隐藏效果面板", action: #selector(toggleEffectsMenu), keyEquivalent: "5")
         fxItem.target = self; viewMenu.addItem(fxItem)
         let snapItem = NSMenuItem(title: "切换磁吸吸附", action: #selector(toggleSnappingMenu), keyEquivalent: "n")
@@ -169,7 +175,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 case "z":      mods.contains(.shift) ? store.redo() : store.undo(); return nil
                 case "a":      store.dispatch(.selectAllAssets); return nil
                 case "c":      store.copySelected(); return nil
-                case "v":      store.pasteAtPlayhead(); return nil
+                case "v":      mods.contains(.shift) ? store.pasteAttributesToSelected() : store.pasteAtPlayhead(); return nil
                 case "5":      store.dispatch(.setShowEffects(!store.ui.showEffects)); return nil
                 default:       return event
                 }
@@ -268,6 +274,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
     @objc private func toggleInspectorMenu() { store.dispatch(.setInspector(!store.ui.showInspector)) }
     @objc private func toggleEffectsMenu() { store.dispatch(.setShowEffects(!store.ui.showEffects)) }
+    @objc private func toggleBrowserMenu() { store.dispatch(.setShowBrowser(!store.ui.showBrowser)) }
+    @objc private func toggleChatMenu() { store.dispatch(.setShowChat(!store.ui.showChat)) }
+    @objc private func pasteAttributesMenu() { store.pasteAttributesToSelected() }
     @objc private func toggleSnappingMenu() { store.dispatch(.toggleSnapping) }
     @objc private func zoomInMenu() { store.dispatch(.setZoom(store.ui.pxPerSecond * 1.5)) }
     @objc private func zoomOutMenu() { store.dispatch(.setZoom(store.ui.pxPerSecond / 1.5)) }
