@@ -58,7 +58,7 @@ final class TimelineInteractionMathTests: XCTestCase {
         v.apply(state: .init(sequence: Sequence(spine: spine), assetLibrary: [],
                              pxPerSecond: 60, playheadSeconds: 0, selectedClipID: nil, selectedClipIDs: [], selectedGapID: nil,
                              selectedTransitionClipID: nil,
-                             currentTool: .select, snappingEnabled: true, clipHeight: 72, vaRatio: 0.6))
+                             currentTool: .select, snappingEnabled: true, clipHeight: 72, vaRatio: 0.6, timelineSkimming: false))
         return v
     }
 

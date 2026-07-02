@@ -61,7 +61,7 @@ final class PerfBenchmarkTests: XCTestCase {
                 sequence: seq, assetLibrary: assets, pxPerSecond: 60, playheadSeconds: 1,
                 selectedClipID: nil, selectedClipIDs: [], selectedGapID: nil,
                 selectedTransitionClipID: nil, currentTool: .select,
-                snappingEnabled: true, clipHeight: 72, vaRatio: 0.6)
+                snappingEnabled: true, clipHeight: 72, vaRatio: 0.6, timelineSkimming: false)
 
             PerfProbe.shared.enabled = true
             PerfProbe.shared.reset()
@@ -108,7 +108,7 @@ final class PerfBenchmarkTests: XCTestCase {
                 sequence: seq, assetLibrary: assets, pxPerSecond: 60, playheadSeconds: 1,
                 selectedClipID: nil, selectedClipIDs: [], selectedGapID: nil,
                 selectedTransitionClipID: nil, currentTool: .select,
-                snappingEnabled: true, clipHeight: 72, vaRatio: 0.6))
+                snappingEnabled: true, clipHeight: 72, vaRatio: 0.6, timelineSkimming: false))
             guard let rep = content.bitmapImageRepForCachingDisplay(in: content.bounds) else {
                 print("\(n)\t(no rep)"); continue
             }
@@ -126,7 +126,7 @@ final class PerfBenchmarkTests: XCTestCase {
             sequence: seq, assetLibrary: assets, pxPerSecond: 60, playheadSeconds: 1,
             selectedClipID: nil, selectedClipIDs: [], selectedGapID: nil,
             selectedTransitionClipID: nil, currentTool: .select,
-            snappingEnabled: true, clipHeight: 72, vaRatio: 0.6))
+            snappingEnabled: true, clipHeight: 72, vaRatio: 0.6, timelineSkimming: false))
         guard let rep = content.bitmapImageRepForCachingDisplay(in: content.bounds),
               let ctx = NSGraphicsContext(bitmapImageRep: rep) else { return XCTFail("no ctx") }
 
@@ -169,7 +169,7 @@ final class PerfBenchmarkTests: XCTestCase {
             sequence: seq, assetLibrary: assets, pxPerSecond: 60, playheadSeconds: 1,
             selectedClipID: nil, selectedClipIDs: [], selectedGapID: nil,
             selectedTransitionClipID: nil, currentTool: .select,
-            snappingEnabled: true, clipHeight: 72, vaRatio: 0.6))
+            snappingEnabled: true, clipHeight: 72, vaRatio: 0.6, timelineSkimming: false))
         // 模拟一次重画 + 多次命中测试(拖拽 tick 会反复命中)
         _ = content.placed
         for _ in 0..<10 { _ = content.hitTestClip(at: NSPoint(x: 300, y: 100)) }

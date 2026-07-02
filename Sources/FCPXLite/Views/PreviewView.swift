@@ -10,6 +10,7 @@ struct PreviewView: NSViewRepresentable {
     let sequence: Sequence        // 变化触发重建
     let playheadSeconds: Double
     let isPlaying: Bool
+    let skimming: Bool            // true=时间轴 skimming 中(playheadSeconds 实为 skimmer 时间)→ 容差 seek
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -21,7 +22,7 @@ struct PreviewView: NSViewRepresentable {
 
     func updateNSView(_ nsView: PlayerHostView, context: Context) {
         context.coordinator.update(sequence: sequence, store: store,
-                                   playheadSeconds: playheadSeconds, isPlaying: isPlaying)
+                                   playheadSeconds: playheadSeconds, isPlaying: isPlaying, skimming: skimming)
     }
 
     static func dismantleNSView(_ nsView: PlayerHostView, coordinator: Coordinator) {
@@ -41,7 +42,7 @@ struct PreviewView: NSViewRepresentable {
             view.playerLayer.player = player
         }
 
-        func update(sequence: Sequence, store: DocumentStore, playheadSeconds: Double, isPlaying: Bool) {
+        func update(sequence: Sequence, store: DocumentStore, playheadSeconds: Double, isPlaying: Bool, skimming: Bool) {
             let fp = Self.structureFingerprint(sequence)
             // 播放器状态没变 → 跳过整个 update(agentMessages 等无关变化会触发 SwiftUI 重渲染到此)。
             let playheadChanged = abs(playheadSeconds - lastPlayheadSeconds) > 0.001
@@ -51,13 +52,15 @@ struct PreviewView: NSViewRepresentable {
             guard structureChanged || paramsChanged || playheadChanged || playingChanged else { return }
             lastPlayheadSeconds = playheadSeconds
             lastIsPlaying = isPlaying
+            // skimming 中:容差 seek(snap 到最近可解码帧),快速划过不逐帧精确解码卡顿。
+            let exactSeek = !isPlaying && !skimming
 
             if structureChanged {
                 // 轨道结构变(增删/移动/trim/blade)→ 重建 item。
                 lastSequence = sequence
                 lastFingerprint = fp
                 player.replaceCurrentItem(with: CompositionBuilder.build(document: store.document))
-                seek(playheadSeconds, exact: !isPlaying)
+                seek(playheadSeconds, exact: exactSeek)
             } else if lastSequence != sequence {
                 // 仅参数变(inspector 调 transform/opacity)→ 只更新 videoComposition,不换 item(避免黑屏闪烁)。
                 lastSequence = sequence
@@ -66,9 +69,9 @@ struct PreviewView: NSViewRepresentable {
                     item.videoComposition = rebuilt.videoComposition
                     item.audioMix = rebuilt.audioMix
                 }
-                if !isPlaying { seek(playheadSeconds, exact: true) }
+                if !isPlaying { seek(playheadSeconds, exact: exactSeek) }
             } else if !isPlaying {
-                seek(playheadSeconds, exact: true)
+                seek(playheadSeconds, exact: exactSeek)
             } else {
                 // 播放中:若外部 playhead 与播放器当前时间差距明显(>0.3s),说明是用户主动拖动/跳转
                 // (而非 time observer 的自然推进)→ 立即【容差】seek 到新位置继续播(exact=false 避免逐帧解码卡顿)。
@@ -180,8 +183,9 @@ struct ViewerView: View {
             ZStack {
                 PreviewView(store: store,
                             sequence: store.document.sequence,
-                            playheadSeconds: store.ui.playhead.seconds,
-                            isPlaying: store.ui.isPlaying)
+                            playheadSeconds: store.ui.timelineSkimSeconds ?? store.ui.playhead.seconds,
+                            isPlaying: store.ui.isPlaying && store.ui.timelineSkimSeconds == nil,
+                            skimming: store.ui.timelineSkimSeconds != nil)
                     .background(Tokens.Palette.canvas)
                 // Skim 覆盖层:划过素材池素材时,盖在播放器上显示该素材当前帧(不碰播放器)。
                 if store.ui.skimAssetID != nil, let cg = skim.image {

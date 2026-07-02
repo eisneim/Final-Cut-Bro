@@ -10,9 +10,10 @@ struct TimelineToolbar: View {
             editButtons
             toolSelector
             Spacer()
-            // 右:clip 高度 + 画面/波形占比 + 缩放 + 效果开关
+            // 右:clip 高度 + 画面/波形占比 + 缩放 + 跳读预览 + 效果开关
             clipControls
             zoomControls
+            skimToggle
             effectsToggle
         }
         .padding(.horizontal, 10)
@@ -116,6 +117,18 @@ struct TimelineToolbar: View {
             ), in: 0.1...0.9)
             .frame(width: 70).help("画面/波形 占比")
         }
+    }
+
+    // MARK: - Skimming toggle(跳读预览)
+
+    private var skimToggle: some View {
+        Button { store.dispatch(.toggleTimelineSkimming) } label: {
+            Image(systemName: "cursorarrow.rays")
+                .font(.system(size: 13))
+                .foregroundStyle(store.ui.timelineSkimming ? Tokens.Palette.selectYellow : Tokens.Palette.textMuted)
+        }
+        .buttonStyle(.plain).frame(width: 24, height: 22)
+        .help(store.ui.timelineSkimming ? "跳读预览:开(鼠标划过时间轴即预览该帧)" : "跳读预览:关")
     }
 
     // MARK: - Effects toggle (最右)

@@ -37,6 +37,10 @@ struct UIState: Codable, Equatable {
     // Skimming:鼠标在素材池某素材上划过时,viewer 显示该素材在 skimSeconds 处的帧(不动播放器,纯覆盖层)。
     var skimAssetID: AssetID? = nil
     var skimSeconds: Double = 0
+    // 主时间轴 skimming(FCP 逻辑):开启后鼠标在时间轴上划过 → skimmer 竖线跟随光标 +
+    // 预览显示该时间点的【合成帧】(不移动播放头)。timelineSkimSeconds=nil 表示当前未在时间轴上划过。
+    var timelineSkimming: Bool = false
+    var timelineSkimSeconds: Double? = nil
     var agentInput: String = ""
     var providerId: String = "stepfun"
     var showSettings: Bool = false

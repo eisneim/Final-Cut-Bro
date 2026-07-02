@@ -50,6 +50,8 @@ enum EditorAction: Codable, Equatable {
     case setPlaying(Bool)
     case togglePlay
     case toggleSnapping
+    case toggleTimelineSkimming              // 主时间轴 skimming 开关
+    case setTimelineSkim(Double?)            // 设置/清除 skimmer 位置(秒;nil=鼠标离开时间轴)
     case setPanelWidth(PanelKind, Double)
     case setClipHeight(Double)
     case setVideoAudioRatio(Double)

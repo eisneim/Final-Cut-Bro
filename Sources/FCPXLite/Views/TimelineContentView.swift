@@ -22,6 +22,10 @@ final class TimelineContentView: NSView {
     private(set) var selectedTransitionClipID: ClipID? = nil
     private(set) var currentTool: EditTool = .select
     private(set) var snappingEnabled: Bool = true
+    /// 主时间轴 skimming 开启态(由 apply 推入)。开→鼠标划过驱动 skimmer 线+预览。
+    private(set) var timelineSkimming: Bool = false
+    /// 当前 skimmer 竖线的 x(画布坐标,nil=无)。纯本地状态,由 mouseMoved 驱动、定向失效重画。
+    var skimmerX: CGFloat? = nil
     /// clip 条高度(可调)与 画面/波形 占比(filmstrip 占上方比例)。
     private(set) var laneH: CGFloat = 72
     private(set) var vaRatio: CGFloat = 0.6
@@ -144,6 +148,7 @@ final class TimelineContentView: NSView {
         let snappingEnabled: Bool
         let clipHeight: CGFloat
         let vaRatio: CGFloat
+        let timelineSkimming: Bool
     }
 
     func apply(state: State) {
@@ -154,6 +159,7 @@ final class TimelineContentView: NSView {
         let oldSelGap = selectedGapID
         let oldSelTrans = selectedTransitionClipID
         let oldTool = currentTool
+        let oldSkimming = timelineSkimming
         let oldSelectionRect = selectionDirtyRect(selectionClipIDUnion(oldSelClipID, oldSelClipIDs))
 
         // ---- 结构/尺寸变化(需全画,不可避免)----
@@ -177,8 +183,14 @@ final class TimelineContentView: NSView {
         snappingEnabled = state.snappingEnabled
         laneH = state.clipHeight
         vaRatio = state.vaRatio
+        timelineSkimming = state.timelineSkimming
 
         if sequenceChanged { sequenceVersion &+= 1; placedCache = nil }
+        // 关掉 skimming → 清除 skimmer 竖线并擦除(rare event,全画可接受)。
+        if oldSkimming && !timelineSkimming, skimmerX != nil {
+            skimmerX = nil
+            needsDisplay = true
+        }
         // 工具切换 → 立即换光标(鼠标在视图内时马上生效,不等移动)。
         if oldTool != currentTool, let win = window {
             let mp = convert(win.mouseLocationOutsideOfEventStream, from: nil)
@@ -233,6 +245,7 @@ final class TimelineContentView: NSView {
         if currentTool == .position, dragClipID != nil { drawDragGhost() }   // 位置工具拖拽:画 ghost 跟随
         drawRuler(dirty: dirtyRect)      // 刻度尺最后画 → 永远在 clip 之上(拖高的 clip 不会盖住刻度)
         drawPlayhead()   // 播放头红线再压在刻度尺之上
+        if timelineSkimming, let sx = skimmerX { drawSkimmer(at: sx) }   // skimmer 白线(高于播放头)
         drawMarquee()    // 框选矩形压在最上层
     }
 
@@ -596,6 +609,18 @@ final class TimelineContentView: NSView {
         tri.move(to: NSPoint(x: x - 5, y: 0))
         tri.line(to: NSPoint(x: x + 5, y: 0))
         tri.line(to: NSPoint(x: x, y: 8))
+        tri.close()
+        tri.fill()
+    }
+
+    /// skimmer 竖线:白色 1px + 顶部小三角,压在播放头之上(FCP skimmer 是浅色,区别于红色播放头)。
+    private func drawSkimmer(at x: CGFloat) {
+        NSColor(calibratedWhite: 0.92, alpha: 0.95).setFill()
+        NSRect(x: x - 0.5, y: 0, width: 1, height: bounds.height).fill()
+        let tri = NSBezierPath()
+        tri.move(to: NSPoint(x: x - 4, y: 0))
+        tri.line(to: NSPoint(x: x + 4, y: 0))
+        tri.line(to: NSPoint(x: x, y: 7))
         tri.close()
         tri.fill()
     }

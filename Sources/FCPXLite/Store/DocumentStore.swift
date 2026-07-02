@@ -422,6 +422,10 @@ import Observation
         case let .setPlaying(v):                 ui.isPlaying = v
         case .togglePlay:                        ui.isPlaying.toggle()
         case .toggleSnapping:                    ui.snappingEnabled.toggle()
+        case .toggleTimelineSkimming:
+            ui.timelineSkimming.toggle()
+            if !ui.timelineSkimming { ui.timelineSkimSeconds = nil }   // 关掉即清除 skimmer,预览回到播放头
+        case let .setTimelineSkim(s):            ui.timelineSkimSeconds = s
         case let .setPanelWidth(panel, w):
             let cw = max(80, min(700, w))
             switch panel {

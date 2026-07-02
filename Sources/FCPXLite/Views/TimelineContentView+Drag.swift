@@ -94,6 +94,9 @@ extension TimelineContentView {
 
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
+        // 点击/拖拽开始 → 结束 skimming 覆盖,预览交回播放头(避免交互期间预览停留在 skim 帧)。
+        if skimmerX != nil { skimmerX = nil; needsDisplay = true }
+        if timelineSkimming { dispatch?(.setTimelineSkim(nil)) }
         let pt = convert(event.locationInWindow, from: nil)
         let t = TimelineGeometry.seconds(forX: pt.x, pxPerSecond: pxPerSecond)
         // ruler 钉在视口顶部(随竖滚移动),命中判定必须用同一钉顶坐标,否则竖滚后
@@ -409,7 +412,7 @@ extension TimelineContentView {
         super.updateTrackingAreas()
         for ta in trackingAreas { removeTrackingArea(ta) }
         let ta = NSTrackingArea(rect: .zero,
-                                options: [.activeInKeyWindow, .inVisibleRect, .mouseMoved, .cursorUpdate],
+                                options: [.activeInKeyWindow, .inVisibleRect, .mouseMoved, .mouseEnteredAndExited, .cursorUpdate],
                                 owner: self, userInfo: nil)
         addTrackingArea(ta)
     }
@@ -418,7 +421,31 @@ extension TimelineContentView {
         cursorForPoint(convert(event.locationInWindow, from: nil)).set()
     }
     override func mouseMoved(with event: NSEvent) {
-        cursorForPoint(convert(event.locationInWindow, from: nil)).set()
+        let pt = convert(event.locationInWindow, from: nil)
+        cursorForPoint(pt).set()
+        updateSkim(at: pt)
+    }
+    /// 鼠标离开时间轴:清除 skimmer,预览回到播放头。
+    override func mouseExited(with event: NSEvent) {
+        if let old = skimmerX {
+            skimmerX = nil
+            setNeedsDisplay(NSRect(x: old - 5, y: 0, width: 10, height: bounds.height))
+        }
+        if timelineSkimming { dispatch?(.setTimelineSkim(nil)) }
+    }
+
+    /// skimming 开启时:把 skimmer 移到光标 x,定向失效(只重画旧+新窄条),并驱动预览 seek 到该时间。
+    func updateSkim(at pt: NSPoint) {
+        guard timelineSkimming else { return }
+        let sec = max(0, TimelineGeometry.seconds(forX: pt.x, pxPerSecond: pxPerSecond))
+        let newX = TimelineGeometry.x(forSeconds: sec, pxPerSecond: pxPerSecond)
+        if let old = skimmerX, abs(old - newX) < 0.5 { return }   // 没动到下一个像素,跳过
+        let old = skimmerX
+        skimmerX = newX
+        let lo = min(old ?? newX, newX) - 5
+        let hi = max(old ?? newX, newX) + 5
+        setNeedsDisplay(NSRect(x: lo, y: 0, width: hi - lo, height: bounds.height))
+        dispatch?(.setTimelineSkim(sec))
     }
 
     /// 按当前工具 + 光标位置决定光标。
