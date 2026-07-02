@@ -59,7 +59,7 @@ final class RetimeAndBatchDeleteTests: XCTestCase {
     /// dispatch 层直接改连接片段定位,可单次 undo 还原。
     func testSetConnectedTimingUndo() {
         let (s, tid) = storeWithConnectedTitle()
-        s.dispatch(.setConnectedTiming(tid, offset: .seconds(7), duration: .seconds(1)))
+        s.dispatch(.setConnectedTiming(tid, offset: .seconds(7), sourceIn: nil, duration: .seconds(1)))
         XCTAssertEqual(s.clipsByIDs([tid]).first!.clip.offset.seconds, 7.0, accuracy: 1e-6)
         s.undo()
         XCTAssertEqual(s.clipsByIDs([tid]).first!.clip.offset.seconds, 2.0, accuracy: 1e-6)

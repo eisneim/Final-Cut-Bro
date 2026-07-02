@@ -440,7 +440,8 @@ import Observation
         case let .slide(i, delta, prevDur, nextDur): apply { Mutations.slide(at: i, delta: delta, prevAssetDuration: prevDur, nextAssetDuration: nextDur, in: $0) }
         case let .setCrossfade(i, dur): apply { Mutations.setCrossfade(at: i, duration: dur, in: $0) }
         case let .setTitle(id, spec): apply { Mutations.setTitle(clipID: id, spec, in: $0) }
-        case let .setConnectedTiming(id, off, dur): apply { Mutations.setClipTiming(clipID: id, offset: off, duration: dur, in: $0) }
+        case let .setConnectedTiming(id, off, si, dur): apply { Mutations.setClipTiming(clipID: id, offset: off, sourceIn: si, duration: dur, in: $0) }
+        case let .relocateConnected(id, lane, t): apply { Mutations.relocateConnected(clipID: id, toLane: lane, atTime: t, in: $0) }
         case let .setEnabled(id, on):    apply { Mutations.setEnabled(clipID: id, on, in: $0) }
         }
     }
@@ -624,21 +625,49 @@ import Observation
 
     // MARK: - 快速 trim 到播放头(⌥[ 裁当前片段头 / ⌥] 裁当前片段尾)
 
-    /// ⌥[ : 只裁【光标所在片段】的头 —— 去掉该片段在光标左侧的部分(入点前移到光标),其它片段不动。
+    /// ⌥[ : 裁头到播放头。选中的是【连接片段】(字幕/音乐)→ 裁它;否则裁光标所在主轴片段。
     func trimLeftOfPlayhead() {
+        if let (clip, absStart) = selectedConnectedClip() {
+            let deltaIn = ui.playhead.seconds - absStart.seconds
+            guard deltaIn > 0, deltaIn < clip.duration.seconds else { return }
+            let isMedia = clip.title == nil
+            dispatch(.setConnectedTiming(clip.id,
+                offset: .seconds(clip.offset.seconds + deltaIn),
+                sourceIn: isMedia ? .seconds(clip.sourceIn.seconds + deltaIn) : nil,
+                duration: .seconds(clip.duration.seconds - deltaIn)))
+            return
+        }
         guard let (i, clipStart, _) = clipAtPlayhead() else { return }
         let deltaIn = ui.playhead - clipStart    // 头部要去掉的时长 = 光标 − 片段起点
         guard deltaIn > .zero else { return }
         dispatch(.trimLeft(at: i, deltaIn: deltaIn))
     }
 
-    /// ⌥] : 只裁【光标所在片段】的尾 —— 去掉该片段在光标右侧的部分(时长缩到光标处),其它片段不动。
+    /// ⌥] : 裁尾到播放头。选中的是【连接片段】→ 裁它;否则裁光标所在主轴片段。
     func trimRightOfPlayhead() {
+        if let (clip, absStart) = selectedConnectedClip() {
+            var newDur = ui.playhead.seconds - absStart.seconds
+            guard newDur > 0.1 else { return }
+            if clip.title == nil {   // 媒体:不超素材尾
+                let assetDur = document.assetLibrary.first { $0.id == clip.assetID }?.duration.seconds ?? newDur
+                newDur = min(newDur, max(0.1, assetDur - clip.sourceIn.seconds))
+            }
+            dispatch(.setConnectedTiming(clip.id, offset: nil, sourceIn: nil, duration: .seconds(newDur)))
+            return
+        }
         guard let (i, clipStart, clip) = clipAtPlayhead() else { return }
         let newDur = ui.playhead - clipStart     // 新时长 = 光标 − 片段起点
         guard newDur > .zero else { return }
         let assetDur = document.assetLibrary.first { $0.id == clip.assetID }?.duration ?? clip.duration
         dispatch(.trimRight(at: i, newDuration: newDur, assetDuration: assetDur))
+    }
+
+    /// 选中的是连接片段则返回(clip, 绝对起点);否则 nil。
+    private func selectedConnectedClip() -> (clip: Clip, absStart: Time)? {
+        guard let id = ui.selectedClipID,
+              TimelineGeometry.spineIndex(ofClipID: id, in: document.sequence) == nil,  // 主轴里没有 = 连接
+              let clip = selectedClip(), let absStart = clipAbsStart(id) else { return nil }
+        return (clip, absStart)
     }
 
     /// 找到光标所在的主轴片段(spine 下标、绝对起点、clip)。光标不在任何片段内返回 nil。

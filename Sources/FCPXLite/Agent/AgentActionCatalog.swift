@@ -579,7 +579,7 @@ enum AgentActionCatalog {
                     let hostStart = absStart.seconds - cur.offset.seconds     // 宿主绝对起点
                     newOffset = .seconds(max(0, s - hostStart))
                 }
-                store.dispatch(.setConnectedTiming(id, offset: newOffset, duration: dur.map { .seconds($0) }))
+                store.dispatch(.setConnectedTiming(id, offset: newOffset, sourceIn: nil, duration: dur.map { .seconds($0) }))
             }
             return "已编辑标题「\(spec.text)」"
         },

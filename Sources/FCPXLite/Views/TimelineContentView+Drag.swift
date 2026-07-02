@@ -37,6 +37,27 @@ extension TimelineContentView {
         return nil
     }
 
+    /// 命中某【连接片段】(lane≠0,字幕/连接音频)的首/尾边缘,edgeHitPx 内。
+    func connectedEdgeHit(at pt: NSPoint) -> (clipID: ClipID, edge: TrimEdge)? {
+        for p in placed where p.lane != 0 {
+            let r = clipRect(p)
+            guard pt.y >= r.minY, pt.y <= r.maxY else { continue }
+            if abs(pt.x - r.minX) <= Self.edgeHitPx { return (p.clipID, .head) }
+            if abs(pt.x - r.maxX) <= Self.edgeHitPx { return (p.clipID, .tail) }
+        }
+        return nil
+    }
+
+    /// 在各宿主的 connected 列表里按 id 找连接片段值。
+    func connectedClipValue(_ id: ClipID) -> Clip? {
+        for el in sequence.spine {
+            if case .clip(let c) = el {
+                if let child = c.connected.first(where: { $0.id == id }) { return child }
+            }
+        }
+        return nil
+    }
+
     /// 命中某 clip 边缘的 x 坐标(head=clip 左缘,tail=clip 右缘)。供抓取偏移用。
     func trimEdgeX(_ clipID: ClipID, _ edge: TrimEdge) -> CGFloat {
         guard let p = placed.first(where: { $0.clipID == clipID }) else { return 0 }
@@ -102,6 +123,11 @@ extension TimelineContentView {
                 dispatch?(.selectClip(e.clipID))
                 return
             }
+            if let ce = connectedEdgeHit(at: pt) {   // 连接片段(字幕/音乐)首尾 → trim 时长
+                connTrimDrag = (ce.clipID, ce.edge, pt.x - trimEdgeX(ce.clipID, ce.edge))
+                dispatch?(.selectClip(ce.clipID))
+                return
+            }
             // 中段(非边缘):slip(默认)/ slide(⌥)。命中主轴 clip 即开始。
             if !inRuler, let p = hitTestClip(at: pt), p.lane == 0,
                let idx = TimelineGeometry.spineIndex(ofClipID: p.clipID, in: sequence) {
@@ -132,6 +158,12 @@ extension TimelineContentView {
                 if currentTool == .select, let e = edgeHit(at: pt) {
                     trimDrag = (e.clipID, e.index, e.edge, pt.x - trimEdgeX(e.clipID, e.edge))
                     dispatch?(.selectClip(e.clipID))
+                    return
+                }
+                // 2b. 连接片段(字幕/音乐)边缘 trim(在拖动前判定,抓边=改时长)
+                if currentTool == .select, let ce = connectedEdgeHit(at: pt) {
+                    connTrimDrag = (ce.clipID, ce.edge, pt.x - trimEdgeX(ce.clipID, ce.edge))
+                    dispatch?(.selectClip(ce.clipID))
                     return
                 }
                 // 3. 普通片段拖动/选择
@@ -283,6 +315,31 @@ extension TimelineContentView {
             }
             return
         }
+        // 连接片段(字幕/音乐)边缘 trim:改 offset/sourceIn/duration(不动主轴)。
+        if let cd = connTrimDrag,
+           let p = placed.first(where: { $0.clipID == cd.clipID }),
+           let clip = connectedClipValue(cd.clipID) {
+            let absStart = p.absStart.seconds
+            let isMedia = clip.title == nil
+            let cursorSec = snapSeconds(TimelineGeometry.seconds(forX: pt.x - cd.grabDX, pxPerSecond: pxPerSecond))
+            if cd.edge == .tail {
+                var newDur = max(0.1, cursorSec - absStart)
+                if isMedia {   // 媒体:不超出素材尾
+                    let maxDur = max(0.1, assetDuration(of: clip).seconds - clip.sourceIn.seconds)
+                    newDur = min(newDur, maxDur)
+                }
+                dispatch?(.setConnectedTiming(cd.clipID, offset: nil, sourceIn: nil, duration: .seconds(newDur)))
+            } else {
+                let deltaIn = cursorSec - absStart               // 正=向右收头
+                let newOffset = max(0, clip.offset.seconds + deltaIn)
+                let newDur = max(0.1, clip.duration.seconds - deltaIn)
+                let newSourceIn = isMedia ? max(0, clip.sourceIn.seconds + deltaIn) : nil
+                dispatch?(.setConnectedTiming(cd.clipID, offset: .seconds(newOffset),
+                                              sourceIn: newSourceIn.map { .seconds($0) },
+                                              duration: .seconds(newDur)))
+            }
+            return
+        }
         // 片段拖动:所见即所得 —— 实时 relocate(不画 ghost,空缺立即合拢,FCPX 丝滑磁性)。
         if let id = dragClipID {
             dragCurrentPoint = pt
@@ -290,7 +347,13 @@ extension TimelineContentView {
             let lane = TimelineGeometry.lane(forY: pt.y, rulerHeight: Self.rulerHeight,
                                              laneHeight: laneH, laneGap: Self.laneGap,
                                              contentHeight: bounds.height)
-            if currentTool == .position {
+            let dragged = placed.first { $0.clipID == id }
+            if dragged?.isConnected == true {
+                // 连接片段(字幕/音乐):平滑重定位 —— 用请求 lane(0 则贴回原侧 ±1),永不变主轴、不跳。
+                let snapped = snappedTargetSeconds(forCursorX: pt.x)
+                let laneForDrag = lane != 0 ? lane : ((dragged?.lane ?? 1) >= 0 ? 1 : -1)
+                dispatch?(.relocateConnected(id, lane: laneForDrag, time: Time.seconds(snapped)))
+            } else if currentTool == .position {
                 // 位置工具:拖拽中只画 ghost 跟随光标(不 dispatch)。positionMove 会在源处留 gap,
                 // 若每个 tick 都发就会叠出多个 gap("两个黑条")且坐标失效跳变 → 改为松手一次性 commit。
                 needsDisplay = true
@@ -334,7 +397,7 @@ extension TimelineContentView {
         // 其余工具的片段拖动已在 mouseDragged 中实时完成(所见即所得),这里只清状态。
         dragClipID = nil; dragStartPoint = nil; dragCurrentPoint = nil
         trimDrag = nil; rollDrag = nil; handLastX = nil; zoomStartX = nil
-        slipDrag = nil
+        slipDrag = nil; connTrimDrag = nil
         needsDisplay = true
     }
 
@@ -382,6 +445,12 @@ extension TimelineContentView {
                                          width: Self.edgeHitPx * 2, height: leftR.height)
                     addCursorRect(rollRect, cursor: .resizeLeftRight)
                 }
+            }
+            // 连接片段(字幕/音乐)首尾边缘 → 双箭头(可 trim 时长)
+            for p in placed where p.lane != 0 {
+                let r = clipRect(p)
+                addCursorRect(NSRect(x: r.minX - Self.edgeHitPx, y: r.minY, width: Self.edgeHitPx * 2, height: r.height), cursor: .resizeLeftRight)
+                addCursorRect(NSRect(x: r.maxX - Self.edgeHitPx, y: r.minY, width: Self.edgeHitPx * 2, height: r.height), cursor: .resizeLeftRight)
             }
         default:
             addCursorRect(bounds, cursor: .arrow)

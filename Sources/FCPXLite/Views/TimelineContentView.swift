@@ -64,6 +64,8 @@ final class TimelineContentView: NSView {
     var zoomStartPx: CGFloat = 60
     /// 转场调宽:拖转场边缘改 crossfadeIn 时长。seamX=接缝位置,startDur=起始时长。
     var transitionDrag: (clipIndex: Int, seamX: CGFloat, startDur: Double)?
+    /// 连接片段(字幕/连接音频)边缘 trim:拖首/尾改时长(不走主轴 ripple)。
+    var connTrimDrag: (clipID: ClipID, edge: TrimEdge, grabDX: CGFloat)?
     /// 框选(marquee):空白处按下拖拽,框内片段/字幕批量选中。start/current = 画布坐标。
     var marqueeStart: NSPoint?
     var marqueeCurrent: NSPoint?

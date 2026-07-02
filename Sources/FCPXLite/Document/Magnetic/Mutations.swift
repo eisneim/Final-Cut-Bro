@@ -169,6 +169,27 @@ enum Mutations {
         return s
     }
 
+    /// 拖动【连接片段】(字幕/连接音频)的平滑重定位:重新挂到 atTime 所在的宿主,
+    /// lane 直接用请求值(clamp 到非零 ±1…±8,**不走 magneticLane 塌回 ±1、也永不变成主轴片段**),
+    /// offset = atTime − 宿主起点(host 含 atTime → 天然在 [0,hostDur),不跳)。sourceIn/duration 不变。
+    /// 修复:旧 relocate 对连接片段会 lane 乱跳 / 落到主轴带时误插进 spine(跳到 y=0)。
+    static func relocateConnected(clipID: ClipID, toLane lane: Int, atTime t: Time, in seq: Sequence) -> Sequence {
+        var s = seq
+        guard let extracted = extractClip(clipID, from: &s) else { return seq }
+        guard let host = hostSpineIndex(forTime: t, in: s) else { return seq }   // 无宿主(空白/末尾外)→ no-op
+        var clip = extracted
+        let mag = min(8, max(1, abs(lane)))
+        clip.lane = lane >= 0 ? mag : -mag        // 保证非零,方向随请求
+        let hostAbsStart = s.spine[0..<host.index].reduce(Time.zero) { $0 + $1.duration }
+        let off = t - hostAbsStart
+        clip.offset = off < .zero ? .zero : off
+        guard case .clip(var hostClip) = s.spine[host.index] else { return seq }
+        hostClip.connected.append(clip)
+        s.spine[host.index] = .clip(hostClip)
+        assertInvariants(s)
+        return s
+    }
+
     /// 轨道磁吸:给定拖拽方向(正/负)与目标时间区间,返回该侧从 ±1 起第一个不与现有
     /// 连接片段时间重叠的层级。中间层级空 → 落在 ±1(贴着主轴),不悬空。
     private static func magneticLane(direction: Int, start: Time, duration: Time, in seq: Sequence) -> Int {
@@ -647,7 +668,7 @@ enum Mutations {
     /// 设置某 clip 的时间线定位:offset(连接片段相对宿主起点的偏移)和/或 duration(时长)。
     /// 用于给【字幕/连接片段】改起止时间(set_title 的 startSeconds/durationSeconds)。
     /// 主轴 clip 的 offset 在磁性布局里无意义,只应用 duration。纯函数,调用方负责 commit。
-    static func setClipTiming(clipID: ClipID, offset: Time?, duration: Time?, in seq: Sequence) -> Sequence {
+    static func setClipTiming(clipID: ClipID, offset: Time?, sourceIn: Time?, duration: Time?, in seq: Sequence) -> Sequence {
         var s = seq
         for (i, el) in s.spine.enumerated() {
             guard case .clip(var c) = el else { continue }
@@ -655,8 +676,9 @@ enum Mutations {
                 if let d = duration { c.duration = d }
                 s.spine[i] = .clip(c); return s
             }
-            if let j = c.connected.firstIndex(where: { $0.id == clipID }) {   // 连接:offset + 时长
+            if let j = c.connected.firstIndex(where: { $0.id == clipID }) {   // 连接:offset + sourceIn + 时长
                 if let o = offset { c.connected[j].offset = .seconds(max(0, o.seconds)) }
+                if let si = sourceIn { c.connected[j].sourceIn = .seconds(max(0, si.seconds)) }
                 if let d = duration { c.connected[j].duration = .seconds(max(0.1, d.seconds)) }
                 s.spine[i] = .clip(c); return s
             }
