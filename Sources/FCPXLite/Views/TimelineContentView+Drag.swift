@@ -103,10 +103,10 @@ extension TimelineContentView {
 
         switch currentTool {
         case .hand:
-            handLastX = pt.x
+            handLastX = event.locationInWindow.x   // 窗口坐标(滚动后不漂)
             return
         case .zoom:
-            zoomStartX = pt.x
+            zoomStartX = event.locationInWindow.x   // 窗口坐标(缩放后不漂)
             zoomStartPx = pxPerSecond
             return
         case .blade:
@@ -231,21 +231,22 @@ extension TimelineContentView {
         // gap 修剪/拖动
         if gapMouseDragged(at: pt) { return }
 
-        // 手工具:横向滚动
+        // 手工具:横向滚动。用【窗口坐标】算位移 —— 内容坐标在滚动后会漂移导致跳动。
         if currentTool == .hand, let last = handLastX, let sv = enclosingScrollView {
-            let dx = pt.x - last
+            let winX = event.locationInWindow.x
+            let dx = winX - last
             let clip = sv.contentView
             var newX = clip.bounds.origin.x - dx
-            newX = max(0, min(newX, bounds.width - clip.bounds.width))
-            clip.scroll(to: NSPoint(x: newX, y: 0))
+            newX = max(0, min(newX, max(0, bounds.width - clip.bounds.width)))
+            clip.scroll(to: NSPoint(x: newX, y: clip.bounds.origin.y))   // 保留竖直滚动位置
             sv.reflectScrolledClipView(clip)
-            handLastX = pt.x   // 注意:scroll 后坐标系变,简单近似
+            handLastX = winX
             return
         }
-        // 缩放工具:拖动改缩放
+        // 缩放工具:拖动改缩放。用【窗口坐标】—— 内容坐标随缩放变化会自我干扰导致振荡。
         if currentTool == .zoom, let sx = zoomStartX {
-            let factor = 1.0 + Double(pt.x - sx) / 200.0
-            dispatch?(.setZoom(Double(zoomStartPx) * factor))
+            let factor = 1.0 + Double(event.locationInWindow.x - sx) / 200.0
+            dispatch?(.setZoom(Double(zoomStartPx) * max(0.1, factor)))
             return
         }
         // Roll 编辑:拖动切点,左 clip 向右 / 右 clip 向左等量调整
@@ -401,59 +402,38 @@ extension TimelineContentView {
         needsDisplay = true
     }
 
-    // MARK: - 光标(随工具 + select 工具边缘热区)
+    // MARK: - 光标(随工具 + 边缘热区)—— 用 NSTrackingArea + cursorUpdate/mouseMoved,
+    // 而非 addCursorRect(后者在 NSScrollView 的 document view 里不可靠,是"切工具光标不变"的根因)。
 
-    override func resetCursorRects() {
-        discardCursorRects()
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        for ta in trackingAreas { removeTrackingArea(ta) }
+        let ta = NSTrackingArea(rect: .zero,
+                                options: [.activeInKeyWindow, .inVisibleRect, .mouseMoved, .cursorUpdate],
+                                owner: self, userInfo: nil)
+        addTrackingArea(ta)
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        cursorForPoint(convert(event.locationInWindow, from: nil)).set()
+    }
+    override func mouseMoved(with event: NSEvent) {
+        cursorForPoint(convert(event.locationInWindow, from: nil)).set()
+    }
+
+    /// 按当前工具 + 光标位置决定光标。
+    func cursorForPoint(_ pt: NSPoint) -> NSCursor {
         switch currentTool {
-        case .hand:
-            addCursorRect(bounds, cursor: .openHand)
-        case .zoom:
-            addCursorRect(bounds, cursor: .crosshair)
-        case .trim:
-            addCursorRect(bounds, cursor: .resizeLeftRight)
-        case .select:
-            // 默认箭头覆盖全区
-            addCursorRect(bounds, cursor: .arrow)
-            addVolumeLineCursorRects()
-            addGapCursorRects()
-            addTransitionCursorRects()
-            // lane-0 clip 的首/尾边缘热区 + roll 切点热区 → 双箭头光标
-            let lane0 = placed.filter { $0.lane == 0 }.sorted { $0.absStart < $1.absStart }
-            for p in lane0 {
-                let r = clipRect(p)
-                // 尾边缘
-                let tailRect = NSRect(x: r.maxX - Self.edgeHitPx, y: r.minY,
-                                     width: Self.edgeHitPx * 2, height: r.height)
-                addCursorRect(tailRect, cursor: .resizeLeftRight)
-                // 首边缘(不包含 roll 切点,若下一片段紧跟则那里已被 roll 热区覆盖)
-                let headRect = NSRect(x: r.minX - Self.edgeHitPx, y: r.minY,
-                                     width: Self.edgeHitPx * 2, height: r.height)
-                addCursorRect(headRect, cursor: .resizeLeftRight)
+        case .hand:  return .openHand
+        case .zoom:  return .crosshair
+        case .trim:  return .resizeLeftRight
+        case .blade: return .crosshair              // 切割:十字精确定位
+        case .select, .position, .range:
+            // 主轴/连接片段边缘、roll 切点 → 双箭头(可 trim);否则箭头。
+            if edgeHit(at: pt) != nil || connectedEdgeHit(at: pt) != nil || rollHit(at: pt) != nil {
+                return .resizeLeftRight
             }
-            // roll 切点:两相邻片段交界处单独设一次(与首/尾重叠也没关系,覆盖即可)
-            if lane0.count >= 2 {
-                for i in 0..<(lane0.count - 1) {
-                    let left  = lane0[i]
-                    let right = lane0[i + 1]
-                    let leftR  = clipRect(left)
-                    let rightR = clipRect(right)
-                    // 仅当两片段紧邻(无 gap)
-                    guard abs(leftR.maxX - rightR.minX) < 2 else { continue }
-                    let cutX = leftR.maxX
-                    let rollRect = NSRect(x: cutX - Self.edgeHitPx, y: leftR.minY,
-                                         width: Self.edgeHitPx * 2, height: leftR.height)
-                    addCursorRect(rollRect, cursor: .resizeLeftRight)
-                }
-            }
-            // 连接片段(字幕/音乐)首尾边缘 → 双箭头(可 trim 时长)
-            for p in placed where p.lane != 0 {
-                let r = clipRect(p)
-                addCursorRect(NSRect(x: r.minX - Self.edgeHitPx, y: r.minY, width: Self.edgeHitPx * 2, height: r.height), cursor: .resizeLeftRight)
-                addCursorRect(NSRect(x: r.maxX - Self.edgeHitPx, y: r.minY, width: Self.edgeHitPx * 2, height: r.height), cursor: .resizeLeftRight)
-            }
-        default:
-            addCursorRect(bounds, cursor: .arrow)
+            return .arrow
         }
     }
 

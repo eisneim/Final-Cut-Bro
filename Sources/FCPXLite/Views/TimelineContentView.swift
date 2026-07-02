@@ -153,6 +153,7 @@ final class TimelineContentView: NSView {
         let oldSelClipIDs = selectedClipIDs
         let oldSelGap = selectedGapID
         let oldSelTrans = selectedTransitionClipID
+        let oldTool = currentTool
         let oldSelectionRect = selectionDirtyRect(selectionClipIDUnion(oldSelClipID, oldSelClipIDs))
 
         // ---- 结构/尺寸变化(需全画,不可避免)----
@@ -178,7 +179,11 @@ final class TimelineContentView: NSView {
         vaRatio = state.vaRatio
 
         if sequenceChanged { sequenceVersion &+= 1; placedCache = nil }
-        window?.invalidateCursorRects(for: self)   // 工具/布局变 → 重建光标(便宜)
+        // 工具切换 → 立即换光标(鼠标在视图内时马上生效,不等移动)。
+        if oldTool != currentTool, let win = window {
+            let mp = convert(win.mouseLocationOutsideOfEventStream, from: nil)
+            if visibleRect.contains(mp) { cursorForPoint(mp).set() }
+        }
 
         // ---- 定向失效 ----
         if structuralChanged { needsDisplay = true; return }   // 全画
