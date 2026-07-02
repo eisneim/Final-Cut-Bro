@@ -12,6 +12,8 @@ import Observation
     @ObservationIgnored private var agentTask: Task<Void, Never>?
     /// Agent 请求用户确认(write_file/edit_file/run_command 等危险操作)。
     @ObservationIgnored var agentConfirm: AgentConfirm? = nil
+    /// run_command 后台命令(ffmpeg/python 等)执行完的结果(AgentService 轮询取用)。
+    @ObservationIgnored var agentAsyncResult: (id: UUID, result: String)? = nil
     /// 复制/粘贴剪贴板(瞬时缓冲,不进文档/不撤销)。
     @ObservationIgnored var clipboard: Clip?
     init(document: Document, ui: UIState = UIState()) {

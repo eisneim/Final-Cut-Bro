@@ -24,7 +24,7 @@ final class AgentService {
     - timeline_edit:改结构(insert/append/connect/delete/move/blade/trim/set_gap/position_move/blade_at/batch_blade/build_subtitle_cut)。
     - clip_adjust:改画面/音频(scale/position/crop/opacity/volume)、特效(add_effect/remove_effect/set_effect_param,kind=color/blur/fade)、停用启用片段(toggle_enabled)。
     - navigate:导航/选择/撤销/导入(playhead/zoom/tool/select/select_asset/undo/redo/import)、导出(export_fcpxml 工程 / export_movie 渲染成片)。
-    - file_ops:本地文件操作(read_file 读文件内容/write_file 写文件(需确认)/edit_file 编辑文件(需确认)/list_directory 列目录)。
+    - file_ops:本地文件操作(read_file 读文件/write_file 写文件(需确认)/edit_file 编辑文件(需确认)/list_directory 列目录)、run_command 跑 shell 命令(ffprobe/ffmpeg 探测音视频、python 数据分析等;高危命令需确认)。
     每个编辑工具都传 type=动作名 + 该动作的参数。操作前先 query_timeline 确认最新 index。
     若要求"做完整条片子",记得最后用 export_movie 导出成片。完成后用一句话总结你做了什么。
     """
@@ -107,32 +107,33 @@ final class AgentService {
             // assistant 发起工具调用 → 执行 → 结果喂回
             wire.append(LLMWireMessage(role: "assistant", content: asstText, toolCalls: roundCalls))
             for tc in roundCalls {
-                let result = registry.execute(name: tc.name, args: tc.args)   // ← 真正改剪辑
-                // 如果需要用户确认(write_file/edit_file/run_command),暂停等待。
+                var result = registry.execute(name: tc.name, args: tc.args)   // ← 真正改剪辑
                 if result == "__PENDING_CONFIRM__" {
+                    // 危险操作:等用户在 confirm 卡片点允许/拒绝。
                     if let tid = toolMsgIds[tc.id] { updateMsg(tid) { $0.text = "等待用户确认…"; $0.streaming = false } }
-                    // 轮询等待用户响应(confirm 卡片会设 agentConfirmResult)
                     while store.agentConfirm != nil {
                         if Task.isCancelled { markStopped(); return }
-                        try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+                        try? await Task.sleep(nanoseconds: 100_000_000)
                     }
-                    // 读取确认结果
-                    let confirmResult = store.agentConfirmResult?.result ?? "用户未响应"
+                    result = store.agentConfirmResult?.result ?? "用户未响应"
                     store.agentConfirmResult = nil
-                    if let tid = toolMsgIds[tc.id] {
-                        updateMsg(tid) { $0.text = confirmResult; $0.streaming = false }
-                    } else {
-                        store.agentMessages.append(AgentMessage(role: .tool, text: confirmResult, toolName: tc.name))
+                } else if result == "__PENDING_ASYNC__" {
+                    // 后台命令(run_command,如 ffmpeg/python):在后台线程跑,主线程不冻结,轮询结果。
+                    if let tid = toolMsgIds[tc.id] { updateMsg(tid) { $0.text = "执行中…"; $0.streaming = false } }
+                    while store.agentAsyncResult == nil {
+                        if Task.isCancelled { markStopped(); return }
+                        try? await Task.sleep(nanoseconds: 100_000_000)
                     }
-                    wire.append(LLMWireMessage(role: "tool", content: confirmResult, toolCallId: tc.id, name: tc.name))
-                } else {
-                    if let tid = toolMsgIds[tc.id] {
-                        updateMsg(tid) { $0.text = result; $0.streaming = false }
-                    } else {
-                        store.agentMessages.append(AgentMessage(role: .tool, text: result, toolName: tc.name))
-                    }
-                    wire.append(LLMWireMessage(role: "tool", content: result, toolCallId: tc.id, name: tc.name))
+                    result = store.agentAsyncResult?.result ?? "(无结果)"
+                    store.agentAsyncResult = nil
                 }
+                // 统一落地:更新 tool 气泡 + 喂回 LLM
+                if let tid = toolMsgIds[tc.id] {
+                    updateMsg(tid) { $0.text = result; $0.streaming = false }
+                } else {
+                    store.agentMessages.append(AgentMessage(role: .tool, text: result, toolName: tc.name))
+                }
+                wire.append(LLMWireMessage(role: "tool", content: result, toolCallId: tc.id, name: tc.name))
             }
         }
         store.agentMessages.append(AgentMessage(role: .assistant, text: "(已达到最大工具步数,停止)"))

@@ -120,7 +120,7 @@ final class AgentAllActionsSmokeTest: XCTestCase {
         let tested: Set<String> = [
             "insert","append","connect","delete","move","blade","trim","position_move","duplicate_clip",
             "slip","slide","add_transition","add_title","overwrite","set_gap","move_to_lane","remove_gap","append_clip","build_subtitle_cut","blade_at","batch_blade",
-            "read_file","write_file","edit_file","list_directory",
+            "read_file","write_file","edit_file","list_directory","run_command",
             "scale","position","crop","opacity","volume","add_effect","set_effect_param","remove_effect",
             "toggle_enabled","add_transform_keyframe","clear_transform_keyframes","add_volume_keyframe",
             "rotate","set_title",

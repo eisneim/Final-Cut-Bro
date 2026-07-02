@@ -13,8 +13,8 @@ struct AssetStripCell: View {
     /// Skim:鼠标在条上移动 → 回调该位置对应的素材秒数(nil=移出,停止 skim)。
     var onSkim: (Double?) -> Void = { _ in }
     @State private var refresh = 0
-    /// skim 位置:x 方向归一化分数(0~1),nil = 未 hover。
-    @State private var skimX: CGFloat? = nil
+    /// skim 位置:鼠标局部坐标(nil = 未 hover)。红条只画在光标所在那一行(一个 bandH 高)。
+    @State private var skimPoint: CGPoint? = nil
 
     private var totalHeight: CGFloat { bandH * CGFloat(max(1, rows)) }
 
@@ -37,12 +37,14 @@ struct AssetStripCell: View {
                 let rect = CGRect(x: 0, y: CGFloat(r) * bandH, width: size.width, height: bandH)
                 drawBand(ctx, in: rect, t0: f0, t1: f1)
             }
-            // skim 位置指示:红色竖线(宽度 1.5px,穿透全高)
-            if let fx = skimX {
-                let x = fx * size.width
+            // skim 位置指示:红色竖线,【只画在光标所在那一行】(一个 bandH 高,不再贯穿多行/两层)。
+            if let p = skimPoint {
+                let row = min(n - 1, max(0, Int(p.y / bandH)))
+                let x = max(0, min(size.width, p.x))
+                let y0 = CGFloat(row) * bandH
                 var bar = Path()
-                bar.move(to: CGPoint(x: x, y: 0))
-                bar.addLine(to: CGPoint(x: x, y: size.height))
+                bar.move(to: CGPoint(x: x, y: y0))
+                bar.addLine(to: CGPoint(x: x, y: y0 + bandH))
                 ctx.stroke(bar, with: .color(.red.opacity(0.85)), lineWidth: 1.5)
             }
         }
@@ -64,10 +66,10 @@ struct AssetStripCell: View {
         .onContinuousHover { phase in
             switch phase {
             case .active(let p):
-                skimX = width > 0 ? max(0, min(1, p.x / width)) : nil
+                skimPoint = p
                 onSkim(skimSeconds(at: p))   // 移动 → skim 到该帧
             case .ended:
-                skimX = nil
+                skimPoint = nil
                 onSkim(nil)                  // 移出 → 停止
             }
         }

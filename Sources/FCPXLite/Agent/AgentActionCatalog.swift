@@ -757,7 +757,75 @@ enum AgentActionCatalog {
                 return out
             } catch { return "错误:读取目录失败 \(error.localizedDescription)" }
         },
+        AgentAction(type: "run_command", domain: .system,
+                    doc: "在本机 shell(/bin/bash -lc)执行命令,返回退出码 + stdout/stderr(前 8000 字符)。"
+                       + "用途:ffprobe/ffmpeg 探测音视频与音量、python 做数据分析(如找静音区间)等。"
+                       + "⚠️ 高危命令(rm -rf/sudo/dd/mkfs/关机/管道执行远程脚本等)会弹确认卡片,用户点允许才执行;"
+                       + "普通命令(python/ffmpeg/ffprobe/ls 等)直接后台执行(不冻结界面)。cwd 可选工作目录。",
+                    params: [ParamSpec(name: "command", kind: .string, required: true, doc: "shell 命令"),
+                             ParamSpec(name: "cwd", kind: .string, required: false, doc: "工作目录(绝对路径),省略=默认")]) { store, a in
+            guard let command = strArg(a, "command"), !command.isEmpty else { return "错误:缺 command" }
+            let cwd = strArg(a, "cwd")
+            if isDangerousCommand(command) {
+                // 高危 → 确认卡片;确认后同步执行(这类命令 rm/sudo 通常很快)
+                store.requestAgentConfirm(tool: "run_command", message: "⚠️ 高危命令,确认执行?\n\(command)", args: a) { confirmed in
+                    guard confirmed else { return "用户拒绝执行该命令" }
+                    return runShell(command, cwd: cwd)
+                }
+                return "__PENDING_CONFIRM__"
+            }
+            // 普通命令 → 后台线程执行(ffmpeg/python 可能耗时,主线程不冻结),结果经 agentAsyncResult 回传。
+            store.agentAsyncResult = nil
+            DispatchQueue.global(qos: .userInitiated).async {
+                let out = runShell(command, cwd: cwd)
+                DispatchQueue.main.async { store.agentAsyncResult = (UUID(), out) }
+            }
+            return "__PENDING_ASYNC__"
+        },
     ]
+
+    /// 高危命令判定:破坏性删除 / 提权 / 磁盘 / 关机 / 管道执行远程脚本 → 需用户确认。
+    /// 普通命令(python/ffmpeg/ffprobe/ls/grep…)直接放行。
+    static func isDangerousCommand(_ cmd: String) -> Bool {
+        let c = " " + cmd.lowercased() + " "
+        let patterns = [
+            "rm -rf", "rm -fr", "rm -r ", "rm -f ", " rm -r", " rm -f", "rmdir ",
+            "sudo ", "dd if=", "dd of=", "mkfs", "diskutil ", ":(){",
+            "shutdown", "reboot", " halt ", "killall", "pkill ", "launchctl ",
+            "chmod -r", "chown -r", "chmod 777", "| sh", "|sh", "| bash", "|bash",
+            "> /dev", "mv /", "> /etc", "> /usr", "> /bin", "> /system", "> /library",
+        ]
+        return patterns.contains { c.contains($0) }
+    }
+
+    /// 同步执行 shell 命令(应在后台线程调用),返回 "退出码 N\n<输出>"(截断 8000 字符,120s 超时)。
+    static func runShell(_ command: String, cwd: String?) -> String {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/bin/bash")
+        proc.arguments = ["-lc", command]   // 登录 shell:带上用户 PATH(conda/ffmpeg/python)
+        if let cwd, FileManager.default.fileExists(atPath: cwd) {
+            proc.currentDirectoryURL = URL(fileURLWithPath: cwd)
+        }
+        let pipe = Pipe()
+        proc.standardOutput = pipe
+        proc.standardError = pipe
+        do { try proc.run() } catch { return "错误:无法执行 \(error.localizedDescription)" }
+        // 120s 超时:后台读输出,超时则终止。
+        let sem = DispatchSemaphore(value: 0)
+        var data = Data()
+        DispatchQueue.global().async {
+            data = pipe.fileHandleForReading.readDataToEndOfFile()
+            sem.signal()
+        }
+        if sem.wait(timeout: .now() + 120) == .timedOut {
+            proc.terminate()
+            return "错误:命令超时(120s)已终止:\(command)"
+        }
+        proc.waitUntilExit()
+        var out = String(data: data, encoding: .utf8) ?? ""
+        if out.count > 8000 { out = String(out.prefix(8000)) + "\n…(输出已截断到 8000 字符)" }
+        return "退出码 \(proc.terminationStatus)\n" + (out.isEmpty ? "(无输出)" : out)
+    }
 
     /// 人类可读的文件大小。
     private static func humanSize(_ bytes: Int) -> String {
