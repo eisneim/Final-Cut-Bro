@@ -760,6 +760,7 @@ enum AgentActionCatalog {
         AgentAction(type: "run_command", domain: .system,
                     doc: "在本机 shell(/bin/bash -lc)执行命令,返回退出码 + stdout/stderr(前 8000 字符)。"
                        + "用途:ffprobe/ffmpeg 探测音视频与音量、python 做数据分析(如找静音区间)等。"
+                       + "【素材文件的绝对路径见 query_timeline 的\"路径:\"行,直接用它,不要 find 全盘找文件】。"
                        + "⚠️ 高危命令(rm -rf/sudo/dd/mkfs/关机/管道执行远程脚本等)会弹确认卡片,用户点允许才执行;"
                        + "普通命令(python/ffmpeg/ffprobe/ls 等)直接后台执行(不冻结界面)。cwd 可选工作目录。",
                     params: [ParamSpec(name: "command", kind: .string, required: true, doc: "shell 命令"),

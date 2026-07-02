@@ -99,7 +99,9 @@ final class AgentToolRegistry {
         var s = "格式 \(store.document.formatWidth)x\(store.document.formatHeight) @\(Int(store.document.frameRate))fps,播放头 \(fmt(store.ui.playhead.seconds))s\n"
         s += "素材库(\(store.document.assetLibrary.count)):\n"
         for (i, a) in store.document.assetLibrary.enumerated() {
+            // 绝对路径给出 → agent 可直接 ffprobe/ffmpeg,不用 find 全盘找文件。
             s += "  [\(i)] \(a.url.lastPathComponent) \(a.kind.rawValue) \(fmt(a.duration.seconds))s\(a.hasAudio ? " 有音频" : "")\n"
+            s += "      路径: \(a.url.path)\n"
         }
         let placed = Layout.compute(store.document.sequence)
         s += "主时间线片段:\n"
