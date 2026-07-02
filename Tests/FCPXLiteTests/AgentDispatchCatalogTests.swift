@@ -177,11 +177,11 @@ final class AgentDispatchCatalogTests: XCTestCase {
         XCTAssertNotNil(store.ui.selectedClipID)
     }
 
-    func testRegistryExposesFiveTools() {
+    func testRegistryExposesSixTools() {
         let store = storeWith2Assets()
         let reg = AgentToolRegistry(store: store)
         let names = Set(reg.tools().map { $0.name })
-        XCTAssertEqual(names, ["query_timeline", "timeline_edit", "clip_adjust", "navigate", "file_ops"])
+        XCTAssertEqual(names, ["query_timeline", "timeline_edit", "clip_adjust", "navigate", "file_ops", "shell"])
     }
 
     func testDispatchToolRoutesToCatalog() {

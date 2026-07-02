@@ -29,6 +29,8 @@ final class AgentToolRegistry {
                          intro: "导航/选择/工具/撤销重做/缩放/导入。"),
             dispatchTool(name: "file_ops", domain: .system,
                          intro: "本地文件操作:读写文件/列目录(写入和编辑需用户确认)。"),
+            dispatchTool(name: "shell", domain: .shell,
+                         intro: "在本机 shell 跑命令(ffprobe/ffmpeg 探测与处理音视频、python 数据分析等)。返回退出码+输出。"),
         ]
     }
 
@@ -88,6 +90,7 @@ final class AgentToolRegistry {
         case .adjust: expectedTool = "clip_adjust"
         case .navigate: expectedTool = "navigate"
         case .system: expectedTool = "file_ops"
+        case .shell: expectedTool = "shell"
         }
         guard name == expectedTool else { return "错误:动作 \(type) 属于 \(expectedTool),不该用 \(name)" }
         return action.apply(store, args)

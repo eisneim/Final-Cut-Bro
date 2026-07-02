@@ -2,7 +2,7 @@ import Foundation
 import CoreGraphics
 
 /// LLM 可见的动作领域。
-enum ActionDomain: String { case timeline, adjust, navigate, system }
+enum ActionDomain: String { case timeline, adjust, navigate, system, shell }
 
 /// 形参规格(供生成 JSON schema)。objectArray 用于批量动作:一个由若干同构对象组成的数组。
 indirect enum ParamKind { case int, number, string; case enumString([String]); case objectArray([ParamSpec]) }
@@ -75,7 +75,7 @@ enum AgentActionCatalog {
         return nil
     }
 
-    static let all: [AgentAction] = timeline + adjust + navigate + system
+    static let all: [AgentAction] = timeline + adjust + navigate + system + shell
 
     // 各 domain 在后续 Task 填充;先放占位让骨架可编译+测试通过。
     static let timeline: [AgentAction] = [
@@ -757,7 +757,11 @@ enum AgentActionCatalog {
                 return out
             } catch { return "错误:读取目录失败 \(error.localizedDescription)" }
         },
-        AgentAction(type: "run_command", domain: .system,
+    ]
+
+    /// shell 命令域 → 独立成 `shell` 工具(不再混在 file_ops 文件工具里)。
+    static let shell: [AgentAction] = [
+        AgentAction(type: "run_command", domain: .shell,
                     doc: "在本机 shell(/bin/bash -lc)执行命令,返回退出码 + stdout/stderr(前 8000 字符)。"
                        + "用途:ffprobe/ffmpeg 探测音视频与音量、python 做数据分析(如找静音区间)等。"
                        + "【素材文件的绝对路径见 query_timeline 的\"路径:\"行,直接用它,不要 find 全盘找文件】。"
@@ -807,10 +811,13 @@ enum AgentActionCatalog {
         if let cwd, FileManager.default.fileExists(atPath: cwd) {
             proc.currentDirectoryURL = URL(fileURLWithPath: cwd)
         }
+        // stdin 接 /dev/null:交互式命令(如 ffmpeg 不带 -y 问"是否覆盖? [y/N]")拿到 EOF 立即退出,
+        // 不再永久等 stdin 卡死(这是"命令一跑就该结束、却傻等"的真正根因)。
+        proc.standardInput = FileHandle.nullDevice
         let pipe = Pipe()
         proc.standardOutput = pipe
         proc.standardError = pipe
-        do { try proc.run() } catch { return "错误:无法执行 \(error.localizedDescription)" }
+        do { try proc.run() } catch { return "错误:无法执行(\(error.localizedDescription)):\(command)" }
         // 120s 超时:后台读输出,超时则终止。
         let sem = DispatchSemaphore(value: 0)
         var data = Data()
@@ -820,12 +827,14 @@ enum AgentActionCatalog {
         }
         if sem.wait(timeout: .now() + 120) == .timedOut {
             proc.terminate()
-            return "错误:命令超时(120s)已终止:\(command)"
+            return "错误:命令超时(120s)已终止,可能是命令本身会一直运行或在等待输入:\(command)"
         }
         proc.waitUntilExit()
         var out = String(data: data, encoding: .utf8) ?? ""
         if out.count > 8000 { out = String(out.prefix(8000)) + "\n…(输出已截断到 8000 字符)" }
-        return "退出码 \(proc.terminationStatus)\n" + (out.isEmpty ? "(无输出)" : out)
+        let status = proc.terminationStatus
+        let tag = status == 0 ? "✅ 退出码 0" : "⚠️ 退出码 \(status)(非 0 = 命令失败)"
+        return "\(tag)\n" + (out.isEmpty ? "(无输出)" : out)
     }
 
     /// 人类可读的文件大小。
