@@ -24,6 +24,8 @@ final class TimelineContentView: NSView {
     private(set) var snappingEnabled: Bool = true
     /// 主时间轴 skimming 开启态(由 apply 推入)。开→鼠标划过驱动 skimmer 线+预览。
     private(set) var timelineSkimming: Bool = false
+    /// 是否正在播放(由 apply 推入)。播放优先级高于 skimming:播放中隐藏 skimmer、hover 不再 skim。
+    private(set) var isPlaying: Bool = false
     /// 当前 skimmer 竖线的 x(画布坐标,nil=无)。纯本地状态,由 mouseMoved 驱动、定向失效重画。
     var skimmerX: CGFloat? = nil
     /// clip 条高度(可调)与 画面/波形 占比(filmstrip 占上方比例)。
@@ -149,6 +151,7 @@ final class TimelineContentView: NSView {
         let clipHeight: CGFloat
         let vaRatio: CGFloat
         let timelineSkimming: Bool
+        let isPlaying: Bool
     }
 
     func apply(state: State) {
@@ -184,10 +187,11 @@ final class TimelineContentView: NSView {
         laneH = state.clipHeight
         vaRatio = state.vaRatio
         timelineSkimming = state.timelineSkimming
+        isPlaying = state.isPlaying
 
         if sequenceChanged { sequenceVersion &+= 1; placedCache = nil }
-        // 关掉 skimming → 清除 skimmer 竖线并擦除(rare event,全画可接受)。
-        if oldSkimming && !timelineSkimming, skimmerX != nil {
+        // 关掉 skimming 或开始播放 → 清除 skimmer 竖线并擦除(rare event,全画可接受)。
+        if (oldSkimming && !timelineSkimming) || isPlaying, skimmerX != nil {
             skimmerX = nil
             needsDisplay = true
         }

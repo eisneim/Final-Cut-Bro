@@ -436,7 +436,7 @@ extension TimelineContentView {
 
     /// skimming 开启时:把 skimmer 移到光标 x,定向失效(只重画旧+新窄条),并驱动预览 seek 到该时间。
     func updateSkim(at pt: NSPoint) {
-        guard timelineSkimming else { return }
+        guard timelineSkimming, !isPlaying else { return }   // 播放优先:播放中不 skim
         let sec = max(0, TimelineGeometry.seconds(forX: pt.x, pxPerSecond: pxPerSecond))
         let newX = TimelineGeometry.x(forSeconds: sec, pxPerSecond: pxPerSecond)
         if let old = skimmerX, abs(old - newX) < 0.5 { return }   // 没动到下一个像素,跳过

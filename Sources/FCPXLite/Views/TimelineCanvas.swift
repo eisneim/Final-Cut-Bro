@@ -19,6 +19,7 @@ struct TimelineCanvas: NSViewRepresentable {
     let clipHeight: CGFloat
     let vaRatio: CGFloat
     let timelineSkimming: Bool
+    let isPlaying: Bool
 
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSScrollView()
@@ -62,7 +63,8 @@ struct TimelineCanvas: NSViewRepresentable {
             snappingEnabled: snappingEnabled,
             clipHeight: clipHeight,
             vaRatio: vaRatio,
-            timelineSkimming: timelineSkimming
+            timelineSkimming: timelineSkimming,
+            isPlaying: isPlaying
         ))
 
         // 尺寸计算复用 content.placed(已按 sequenceVersion 缓存),避免每次 update 再算 2 次 Layout.compute。
@@ -111,7 +113,8 @@ struct TimelineView: View {
             snappingEnabled: store.ui.snappingEnabled,
             clipHeight: CGFloat(store.ui.clipHeight),
             vaRatio: CGFloat(store.ui.videoAudioRatio),
-            timelineSkimming: store.ui.timelineSkimming
+            timelineSkimming: store.ui.timelineSkimming,
+            isPlaying: store.ui.isPlaying
         )
         .background(Tokens.Palette.canvas)
     }

@@ -420,7 +420,13 @@ import Observation
             ui.selectedAssetIDs = []
             ui.selectedAssetID = nil
         case let .setPlaying(v):                 ui.isPlaying = v
-        case .togglePlay:                        ui.isPlaying.toggle()
+        case .togglePlay:
+            // 播放优先级高于 skimming:skimming 中按空格 → 从 skimmer 位置起播 + 取消 skim。
+            if !ui.isPlaying, let s = ui.timelineSkimSeconds {
+                ui.playhead = .seconds(s)
+                ui.timelineSkimSeconds = nil
+            }
+            ui.isPlaying.toggle()
         case .toggleSnapping:                    ui.snappingEnabled.toggle()
         case .toggleTimelineSkimming:
             ui.timelineSkimming.toggle()
@@ -557,9 +563,9 @@ import Observation
         dispatch(.setPlayhead(total))
     }
 
-    /// 在播放头处切割主轴 clip(FCP: ⌘B)。
+    /// 在播放头处切割主轴 clip(FCP: ⌘B)。skimming 时改在【skimmer(鼠标竖线)】处切割 —— 鼠标位置才是切点,不是红色播放头。
     func bladeAtPlayhead() {
-        let playhead = ui.playhead
+        let playhead = Time.seconds(ui.timelineSkimSeconds ?? ui.playhead.seconds)
         // 优先:若选中的是连接片段且播放头在其范围内,切它(FCP:不在主轨也能切)。
         if let id = ui.selectedClipID, let conn = connectedPlacement(id),
            playhead > conn.start, playhead < conn.start + conn.duration {
