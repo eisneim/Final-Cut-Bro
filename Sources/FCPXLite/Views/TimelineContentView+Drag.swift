@@ -507,11 +507,13 @@ extension TimelineContentView {
     /// 按当前工具 + 光标位置决定光标。
     func cursorForPoint(_ pt: NSPoint) -> NSCursor {
         switch currentTool {
-        case .hand:  return .openHand
-        case .zoom:  return .crosshair
-        case .trim:  return .resizeLeftRight
-        case .blade: return .crosshair              // 切割:十字精确定位
-        case .select, .position, .range:
+        case .hand:     return .openHand
+        case .zoom:     return TimelineCursors.zoom          // 放大镜
+        case .trim:     return .resizeLeftRight
+        case .blade:    return TimelineCursors.blade         // 剃刀
+        case .position: return TimelineCursors.move          // 四向移动
+        case .range:    return TimelineCursors.range         // [|]
+        case .select:
             // 主轴/连接片段边缘、roll 切点 → 双箭头(可 trim);否则箭头。
             if edgeHit(at: pt) != nil || connectedEdgeHit(at: pt) != nil || rollHit(at: pt) != nil {
                 return .resizeLeftRight
