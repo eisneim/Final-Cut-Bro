@@ -460,6 +460,20 @@ import Observation
 
     // MARK: - 高层编辑操作(工具栏按钮与键盘快捷键共用)
 
+    /// 基于素材的分辨率/帧率新建项目 —— 保证项目格式与该素材完全一致(竖屏素材→竖屏项目)。
+    /// 宽高向下取偶(项目格式要求 2 的倍数);帧率缺失/非法时回退 25。
+    func createProject(fromAsset asset: Asset) {
+        var w = max(2, Int(asset.naturalSize.width.rounded()))
+        var h = max(2, Int(asset.naturalSize.height.rounded()))
+        if w % 2 != 0 { w -= 1 }
+        if h % 2 != 0 { h -= 1 }
+        let fps = (asset.frameRate ?? 0) > 0 ? asset.frameRate! : 25
+        let name = asset.url.deletingPathExtension().lastPathComponent
+        let p = Project(name: name.isEmpty ? "未命名项目" : name,
+                        formatWidth: w, formatHeight: h, frameRate: fps)
+        dispatch(.createProject(p))
+    }
+
     /// 追加所选素材到主轴末尾。
     func appendSelected() {
         guard let clip = clipFromSelection() else { return }

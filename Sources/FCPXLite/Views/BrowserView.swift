@@ -125,6 +125,10 @@ struct BrowserView: View {
                         store.dispatch(.removeAsset(asset.id))
                     }
                 }
+                Divider()
+                Button("以此素材新建项目(同分辨率/帧率)") {
+                    store.createProject(fromAsset: asset)
+                }
             }
             .onTapGesture {
                 let mods = NSEvent.modifierFlags
