@@ -25,16 +25,29 @@ extension TimelineContentView {
     }
 
     /// 命中某主轴 clip 的首/尾边缘(lane 0,edgeHitPx 内)。
+    /// 【接缝感知】:两片段紧邻时,同一 x 既是左片尾也是右片头 —— 按光标在接缝的哪一侧选:
+    /// 光标在边缘左侧→左片尾(trim tail),右侧→右片头(trim head)。这样接缝处两条边都能独立修剪,
+    /// 不再永远抓到左片尾(修复"拖右片开头却动左片尾/方向反")。
     func edgeHit(at pt: NSPoint) -> (clipID: ClipID, index: Int, edge: TrimEdge)? {
+        var best: (clipID: ClipID, index: Int, edge: TrimEdge, penalty: CGFloat)?
         for p in placed where p.lane == 0 {
             let r = clipRect(p)
             guard pt.y >= r.minY, pt.y <= r.maxY else { continue }
-            if abs(pt.x - r.minX) <= Self.edgeHitPx,
-               let s = spineClipAndIndex(p.clipID) { return (p.clipID, s.index, .head) }
-            if abs(pt.x - r.maxX) <= Self.edgeHitPx,
-               let s = spineClipAndIndex(p.clipID) { return (p.clipID, s.index, .tail) }
+            guard let s = spineClipAndIndex(p.clipID) else { continue }
+            // head 候选:边缘在 r.minX,clip 在其右侧 → 光标应在边缘右侧才"顺手"。
+            if abs(pt.x - r.minX) <= Self.edgeHitPx {
+                let wrongSide: CGFloat = pt.x < r.minX ? 1000 : 0
+                let pen = abs(pt.x - r.minX) + wrongSide
+                if best == nil || pen < best!.penalty { best = (p.clipID, s.index, .head, pen) }
+            }
+            // tail 候选:边缘在 r.maxX,clip 在其左侧 → 光标应在边缘左侧才"顺手"。
+            if abs(pt.x - r.maxX) <= Self.edgeHitPx {
+                let wrongSide: CGFloat = pt.x > r.maxX ? 1000 : 0
+                let pen = abs(pt.x - r.maxX) + wrongSide
+                if best == nil || pen < best!.penalty { best = (p.clipID, s.index, .tail, pen) }
+            }
         }
-        return nil
+        return best.map { ($0.clipID, $0.index, $0.edge) }
     }
 
     /// 命中某【连接片段】(lane≠0,字幕/连接音频)的首/尾边缘,edgeHitPx 内。
@@ -92,11 +105,24 @@ extension TimelineContentView {
 
     // MARK: - mouseDown
 
+    /// 手势内首次真正改动前调用:快照一次并进入撤销合并态(整段拖拽合成一次 undo)。
+    func ensureInteractive() {
+        if !didBeginInteractive { didBeginInteractive = true; beginInteractiveEdit?() }
+    }
+
+    /// 拖拽起点该主轴 clip 的绝对起点/入点/时长(供 trim 绝对重算)。
+    private func trimOrigin(_ clipID: ClipID) -> (start: Double, sourceIn: Double, duration: Double) {
+        let start = placed.first { $0.clipID == clipID }?.absStart.seconds ?? 0
+        let c = spineClipAndIndex(clipID)?.clip
+        return (start, c?.sourceIn.seconds ?? 0, c?.duration.seconds ?? 0)
+    }
+
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
         // 点击/拖拽开始 → 结束 skimming 覆盖,预览交回播放头(避免交互期间预览停留在 skim 帧)。
         if skimmerX != nil { skimmerX = nil; needsDisplay = true }
         if timelineSkimming { dispatch?(.setTimelineSkim(nil)) }
+        didBeginInteractive = false   // 新手势:重置撤销合并标记
         let pt = convert(event.locationInWindow, from: nil)
         let t = TimelineGeometry.seconds(forX: pt.x, pxPerSecond: pxPerSecond)
         // ruler 钉在视口顶部(随竖滚移动),命中判定必须用同一钉顶坐标,否则竖滚后
@@ -122,7 +148,9 @@ extension TimelineContentView {
         case .trim:
             if !inRuler, transitionMouseDown(at: pt) { return }   // 转场优先(选中/调宽)
             if let e = edgeHit(at: pt) {
-                trimDrag = (e.clipID, e.index, e.edge, pt.x - trimEdgeX(e.clipID, e.edge))
+                let o = trimOrigin(e.clipID)
+                trimDrag = (e.clipID, e.index, e.edge, pt.x - trimEdgeX(e.clipID, e.edge),
+                            origStart: o.start, origSourceIn: o.sourceIn, origDuration: o.duration)
                 dispatch?(.selectClip(e.clipID))
                 return
             }
@@ -150,16 +178,21 @@ extension TimelineContentView {
                 if volumeMouseDown(with: event, at: pt) { return }
                 // gap(灰条)最优先:在 gap 上(含边界)就处理 gap,避免被相邻 clip 的 trim/roll 抢走。
                 if gapMouseDown(at: pt) { return }
-                // 1. roll hit(两片段切点)
-                if currentTool == .select, let roll = rollHit(at: pt) {
-                    rollDrag = (roll.leftIndex, roll.rightIndex,
-                                roll.leftClipID, roll.rightClipID, pt.x)
+                // 1. roll hit(两片段切点)—— 仅按住 ⌥ 时触发,默认(不按 ⌥)走单边 trim,
+                //    这样接缝处能独立修剪左片尾/右片头(见 edgeHit 接缝感知)。
+                if currentTool == .select, event.modifierFlags.contains(.option), let roll = rollHit(at: pt),
+                   let ls = spineClipAndIndex(roll.leftClipID), let rs = spineClipAndIndex(roll.rightClipID) {
+                    rollDrag = (roll.leftIndex, roll.rightIndex, roll.leftClipID, roll.rightClipID, pt.x,
+                                origLeftSourceIn: ls.clip.sourceIn.seconds, origLeftDur: ls.clip.duration.seconds,
+                                origRightSourceIn: rs.clip.sourceIn.seconds, origRightDur: rs.clip.duration.seconds)
                     dispatch?(.selectClip(roll.leftClipID))
                     return
                 }
-                // 2. 边缘 trim(select 工具也支持)
+                // 2. 边缘 trim(select 工具也支持;接缝感知按光标侧选左尾/右头)
                 if currentTool == .select, let e = edgeHit(at: pt) {
-                    trimDrag = (e.clipID, e.index, e.edge, pt.x - trimEdgeX(e.clipID, e.edge))
+                    let o = trimOrigin(e.clipID)
+                    trimDrag = (e.clipID, e.index, e.edge, pt.x - trimEdgeX(e.clipID, e.edge),
+                                origStart: o.start, origSourceIn: o.sourceIn, origDuration: o.duration)
                     dispatch?(.selectClip(e.clipID))
                     return
                 }
@@ -252,25 +285,28 @@ extension TimelineContentView {
             dispatch?(.setZoom(Double(zoomStartPx) * max(0.1, factor)))
             return
         }
-        // Roll 编辑:拖动切点,左 clip 向右 / 右 clip 向左等量调整
+        // Roll 编辑:拖动切点,左 clip 向右 / 右 clip 向左等量调整。
+        // 从【拖拽起点】的入点/时长绝对重算(不读已被上一 tick 改过的当前值),否则会逐 tick 累积→跑飞/反向。
         if let rd = rollDrag {
             guard let (leftClip, _)  = spineClipAndIndex(rd.leftClipID),
                   let (rightClip, _) = spineClipAndIndex(rd.rightClipID) else { return }
             let deltaSec = Double(pt.x - rd.startX) / Double(pxPerSecond)
             let leftAssetDur = assetDuration(of: leftClip)
 
-            // clamp:左不超素材;右不低于 1 帧(约 0.04s)
-            let maxExtendLeft  = leftAssetDur.seconds - (leftClip.sourceIn.seconds + leftClip.duration.seconds)
-            let maxShrinkRight = rightClip.duration.seconds - 0.04
+            // clamp:左不超素材;右不低于 1 帧(约 0.04s)—— 都基于拖拽起点值。
+            let maxExtendLeft  = leftAssetDur.seconds - (rd.origLeftSourceIn + rd.origLeftDur)
+            let maxShrinkRight = rd.origRightDur - 0.04
             let clampedDelta = max(-maxShrinkRight, min(maxExtendLeft, deltaSec))
 
-            let newLeftDur  = leftClip.duration.seconds  + clampedDelta
-            let newRightIn  = clampedDelta   // trimLeft deltaIn = 正值收头
+            let newLeftDur = rd.origLeftDur + clampedDelta                       // 绝对时长
+            let desiredRightIn = rd.origRightSourceIn + clampedDelta             // 右片头绝对入点
+            let deltaInRight = desiredRightIn - rightClip.sourceIn.seconds       // 相对当前 → 幂等
 
+            ensureInteractive()
             dispatch?(.trimRight(at: rd.leftIndex,
                                  newDuration: .seconds(max(0.04, newLeftDur)),
                                  assetDuration: leftAssetDur))
-            dispatch?(.trimLeft(at: rd.rightIndex, deltaIn: .seconds(newRightIn)))
+            dispatch?(.trimLeft(at: rd.rightIndex, deltaIn: .seconds(deltaInRight)))
             return
         }
         // Slip/Slide:修剪工具拖片段中段。每 tick 从拖拽起点序列按总位移重算(幂等,不累积)。
@@ -303,19 +339,28 @@ extension TimelineContentView {
             slipDrag = sd
             return
         }
-        // 修剪工具 / select 工具边缘 trim:实时 trim
+        // 修剪工具 / select 工具边缘 trim:实时 trim。头/尾都用【拖拽起点绝对值】重算,幂等不累积。
         if let td = trimDrag {
             guard let (clip, _) = spineClipAndIndex(td.clipID) else { return }
-            let clipStartSec = (placed.first { $0.clipID == td.clipID }?.absStart.seconds) ?? 0
             // 减去抓取偏移 → 边缘精确停在"指哪打哪"处(不跳到光标中心),完全跟手。
             let cursorSec = snapSeconds(TimelineGeometry.seconds(forX: pt.x - td.grabDX, pxPerSecond: pxPerSecond))
             let assetDur = assetDuration(of: clip)
             if td.edge == .tail {
-                let newDur = max(0.04, cursorSec - clipStartSec)
+                // 尾部:绝对时长 = 光标 − 起点(trimRight 本就是绝对设时长,天然幂等)。
+                let newDur = max(0.04, cursorSec - td.origStart)
+                ensureInteractive()
                 dispatch?(.trimRight(at: td.index, newDuration: .seconds(newDur), assetDuration: assetDur))
             } else {
-                let deltaIn = cursorSec - clipStartSec   // 正=向右收头
-                dispatch?(.trimLeft(at: td.index, deltaIn: .seconds(deltaIn)))
+                // 头部:算【期望绝对入点】(随光标移动 cursor−origStart),再算相对当前的增量 →
+                // rippleTrimLeft 是增量式(sourceIn += deltaIn),必须发增量,否则逐 tick 累积会反向/跑飞。
+                let desired = td.origSourceIn + (cursorSec - td.origStart)
+                let maxSourceIn = max(0, td.origSourceIn + td.origDuration - 0.04)
+                let clampedDesired = min(max(0, desired), maxSourceIn)
+                let deltaIn = clampedDesired - clip.sourceIn.seconds
+                if abs(deltaIn) > 1e-6 {
+                    ensureInteractive()
+                    dispatch?(.trimLeft(at: td.index, deltaIn: .seconds(deltaIn)))
+                }
             }
             return
         }
@@ -332,12 +377,14 @@ extension TimelineContentView {
                     let maxDur = max(0.1, assetDuration(of: clip).seconds - clip.sourceIn.seconds)
                     newDur = min(newDur, maxDur)
                 }
+                ensureInteractive()
                 dispatch?(.setConnectedTiming(cd.clipID, offset: nil, sourceIn: nil, duration: .seconds(newDur)))
             } else {
                 let deltaIn = cursorSec - absStart               // 正=向右收头
                 let newOffset = max(0, clip.offset.seconds + deltaIn)
                 let newDur = max(0.1, clip.duration.seconds - deltaIn)
                 let newSourceIn = isMedia ? max(0, clip.sourceIn.seconds + deltaIn) : nil
+                ensureInteractive()
                 dispatch?(.setConnectedTiming(cd.clipID, offset: .seconds(newOffset),
                                               sourceIn: newSourceIn.map { .seconds($0) },
                                               duration: .seconds(newDur)))
@@ -353,16 +400,23 @@ extension TimelineContentView {
                                              contentHeight: bounds.height)
             let dragged = placed.first { $0.clipID == id }
             if dragged?.isConnected == true {
-                // 连接片段(字幕/音乐):平滑重定位 —— 用请求 lane(0 则贴回原侧 ±1),永不变主轴、不跳。
                 let snapped = snappedTargetSeconds(forCursorX: pt.x)
-                let laneForDrag = lane != 0 ? lane : ((dragged?.lane ?? 1) >= 0 ? 1 : -1)
-                dispatch?(.relocateConnected(id, lane: laneForDrag, time: Time.seconds(snapped)))
+                ensureInteractive()
+                if lane == 0 {
+                    // 拖回主轨道:转成 spine 主片段(relocate 的 lane0 分支,磁性插入)。
+                    // 修复:之前连接片段一旦上/下轨就再也拖不回主轨道。
+                    dispatch?(.relocateClip(id, lane: 0, time: Time.seconds(snapped)))
+                } else {
+                    // 连接片段(字幕/音乐)在副轨道间平滑重定位 —— 用请求 lane,不跳。
+                    dispatch?(.relocateConnected(id, lane: lane, time: Time.seconds(snapped)))
+                }
             } else if currentTool == .position {
                 // 位置工具:拖拽中只画 ghost 跟随光标(不 dispatch)。positionMove 会在源处留 gap,
                 // 若每个 tick 都发就会叠出多个 gap("两个黑条")且坐标失效跳变 → 改为松手一次性 commit。
                 needsDisplay = true
             } else {
                 let snapped = snappedTargetSeconds(forCursorX: pt.x)
+                ensureInteractive()
                 dispatch?(.relocateClip(id, lane: lane, time: Time.seconds(snapped)))
             }
             return
@@ -402,6 +456,8 @@ extension TimelineContentView {
         dragClipID = nil; dragStartPoint = nil; dragCurrentPoint = nil
         trimDrag = nil; rollDrag = nil; handLastX = nil; zoomStartX = nil
         slipDrag = nil; connTrimDrag = nil
+        // 结束撤销合并:整段拖拽合成一次 undo。
+        if didBeginInteractive { endInteractiveEdit?(); didBeginInteractive = false }
         needsDisplay = true
     }
 

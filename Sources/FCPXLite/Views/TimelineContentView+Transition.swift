@@ -49,6 +49,7 @@ extension TimelineContentView {
             ? spine[td.clipIndex - 1].duration.seconds : newDur
         let thisDur = spine[td.clipIndex].duration.seconds
         newDur = min(newDur, min(prevDur, thisDur))
+        ensureInteractive()   // 转场调宽:整段合成一次 undo
         dispatch?(.setCrossfade(at: td.clipIndex, duration: .seconds(newDur)))
         return true
     }

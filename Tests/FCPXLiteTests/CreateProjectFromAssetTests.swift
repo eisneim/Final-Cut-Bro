@@ -22,6 +22,12 @@ final class CreateProjectFromAssetTests: XCTestCase {
         XCTAssertEqual(p.frameRate, 30, accuracy: 0.001)
         XCTAssertEqual(p.name, "vertical")
         XCTAssertEqual(store.document.currentProjectID, p.id, "新建后切到该项目")
+        // 素材应已放到主轴上,不必手动加轨道。
+        XCTAssertEqual(p.sequence.spine.count, 1)
+        guard case .clip(let c) = p.sequence.spine[0] else { return XCTFail("主轴应有一个 clip") }
+        XCTAssertEqual(c.assetID, a.id)
+        XCTAssertEqual(c.duration.seconds, 5, accuracy: 0.001, "clip 时长 = 素材时长")
+        XCTAssertEqual(store.ui.playhead.seconds, 0, accuracy: 0.001, "播放头回到 0")
     }
 
     func testOddDimensionsRoundedToEven() {

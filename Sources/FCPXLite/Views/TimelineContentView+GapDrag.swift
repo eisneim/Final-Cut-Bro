@@ -48,6 +48,7 @@ extension TimelineContentView {
     func gapMouseDragged(at pt: NSPoint) -> Bool {
         if let gt = gapTrim {
             let cursorSec = TimelineGeometry.seconds(forX: pt.x, pxPerSecond: pxPerSecond)
+            ensureInteractive()   // gap 修剪:整段合成一次 undo
             if gt.edge == .tail {
                 let newDur = max(0.04, cursorSec - gt.startSec)   // 尾边 → 新时长 = 光标 − 起点
                 dispatch?(.setGapDurationByID(gt.gapID, Time.seconds(newDur)))
@@ -65,6 +66,7 @@ extension TimelineContentView {
             dragCurrentPoint = pt
             if let start = dragStartPoint, hypot(pt.x - start.x, pt.y - start.y) <= Self.dragThresholdPx { return true }
             let raw = max(0, TimelineGeometry.seconds(forX: pt.x - dragGapGrabDX, pxPerSecond: pxPerSecond))
+            ensureInteractive()   // gap 拖动:整段合成一次 undo
             dispatch?(.moveGap(id, time: Time.seconds(raw)))
             return true
         }

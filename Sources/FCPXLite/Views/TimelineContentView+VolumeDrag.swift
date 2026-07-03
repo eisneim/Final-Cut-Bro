@@ -203,6 +203,7 @@ extension TimelineContentView {
     /// 在 mouseDragged 开头检查,返回 true 表示已拦截。
     func volumeMouseDragged(with event: NSEvent, at pt: NSPoint) -> Bool {
         guard let state = volumeDragState else { return false }
+        ensureInteractive()   // 音量线拖拽:整段合成一次 undo
         switch state.kind {
         case let .keyframe(clipID, kfID):
             handleKeyframeDrag(at: pt, clipID: clipID, kfID: kfID, state: state)

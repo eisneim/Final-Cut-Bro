@@ -36,6 +36,11 @@ final class TimelineContentView: NSView {
     var dispatch: ((EditorAction) -> Void)?
     /// 拖拽实时编辑(slip/slide):firstTick=true 压一次撤销,transform 从拖拽起点序列重算。
     var dragEdit: ((Bool, @escaping (Sequence) -> Sequence) -> Void)?
+    /// 拖拽手势级撤销合并:手势内首次改动前调 begin(快照一次+进入合并态),mouseUp 调 end。
+    var beginInteractiveEdit: (() -> Void)?
+    var endInteractiveEdit: (() -> Void)?
+    /// 本次手势是否已 begin 过(保证一次手势只快照一次)。
+    var didBeginInteractive = false
 
     // MARK: - 拖动片段状态(Pass 2)
     /// 正在拖动的片段 id(nil = 未拖动 / 在擦洗播放头)。
@@ -52,9 +57,12 @@ final class TimelineContentView: NSView {
     // MARK: - 工具拖拽状态(D)
     enum TrimEdge { case head, tail }
     /// 修剪工具:正在拖的 clip 边缘。grabDX = 抓取点与边缘的 x 偏移(保持"指哪打哪",边缘不跳到光标中心)。
-    var trimDrag: (clipID: ClipID, index: Int, edge: TrimEdge, grabDX: CGFloat)?
-    /// Roll 编辑:select 工具拖两片段交界切点。
-    var rollDrag: (leftIndex: Int, rightIndex: Int, leftClipID: ClipID, rightClipID: ClipID, startX: CGFloat)?
+    /// orig* = 拖拽起点的该 clip 绝对起点/入点/时长 —— 头部 trim 用它算【绝对目标】,避免逐 tick 累积(反向/跑飞)。
+    var trimDrag: (clipID: ClipID, index: Int, edge: TrimEdge, grabDX: CGFloat,
+                   origStart: Double, origSourceIn: Double, origDuration: Double)?
+    /// Roll 编辑:select 工具 + ⌥ 拖两片段交界切点。orig* = 拖拽起点两侧入点/时长(绝对重算,不累积)。
+    var rollDrag: (leftIndex: Int, rightIndex: Int, leftClipID: ClipID, rightClipID: ClipID, startX: CGFloat,
+                   origLeftSourceIn: Double, origLeftDur: Double, origRightSourceIn: Double, origRightDur: Double)?
     /// Slip/Slide:修剪工具拖片段中段。slip 改入出点(不动位置时长);slide(⌥)移片段并调两侧。
     /// origin = 拖拽开始时的序列快照(每 tick 从 origin 按总位移重算,不累积);firstTick 决定是否压一次撤销。
     var slipDrag: (index: Int, startX: CGFloat, isSlide: Bool, origin: Sequence, firstTick: Bool)?

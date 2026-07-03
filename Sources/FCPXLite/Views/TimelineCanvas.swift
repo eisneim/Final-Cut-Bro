@@ -37,6 +37,8 @@ struct TimelineCanvas: NSViewRepresentable {
         content.dragEdit = { [weak store] firstTick, transform in
             store?.dragEdit(firstTick: firstTick, transform)
         }
+        content.beginInteractiveEdit = { [weak store] in store?.beginInteractiveEdit() }
+        content.endInteractiveEdit = { [weak store] in store?.endInteractiveEdit() }
         scrollView.documentView = content
         return scrollView
     }

@@ -83,6 +83,18 @@ import Observation
         redoStack.removeAll()
     }
 
+    /// 拖拽手势级撤销合并:手势内【首次真正改动前】调用 → 快照一次并进入合并态(复用 inTransaction),
+    /// 其后每个 tick 的 apply/dispatch 不再堆 undo。mouseUp 调 endInteractiveEdit 结束。
+    /// 效果:一整段拖拽(如把结尾从 0 拖到 30)只留【一次】撤销点 → ⌘Z 一步回到拖拽前,而非逐像素回撤。
+    func beginInteractiveEdit() {
+        guard !inTransaction else { return }
+        snapshot()
+        inTransaction = true
+    }
+    func endInteractiveEdit() {
+        inTransaction = false
+    }
+
     func undo() {
         guard let prev = undoStack.popLast() else { return }
         redoStack.append(document)
@@ -462,6 +474,7 @@ import Observation
 
     /// 基于素材的分辨率/帧率新建项目 —— 保证项目格式与该素材完全一致(竖屏素材→竖屏项目)。
     /// 宽高向下取偶(项目格式要求 2 的倍数);帧率缺失/非法时回退 25。
+    /// 新项目直接把该素材放到主轴上并切换过去,不必再手动加轨道。
     func createProject(fromAsset asset: Asset) {
         var w = max(2, Int(asset.naturalSize.width.rounded()))
         var h = max(2, Int(asset.naturalSize.height.rounded()))
@@ -469,9 +482,12 @@ import Observation
         if h % 2 != 0 { h -= 1 }
         let fps = (asset.frameRate ?? 0) > 0 ? asset.frameRate! : 25
         let name = asset.url.deletingPathExtension().lastPathComponent
+        let clip = Clip(assetID: asset.id, sourceIn: .zero, duration: asset.duration)
         let p = Project(name: name.isEmpty ? "未命名项目" : name,
-                        formatWidth: w, formatHeight: h, frameRate: fps)
+                        formatWidth: w, formatHeight: h, frameRate: fps,
+                        sequence: Sequence(spine: [.clip(clip)]))
         dispatch(.createProject(p))
+        dispatch(.setPlayhead(.zero))
     }
 
     /// 追加所选素材到主轴末尾。
