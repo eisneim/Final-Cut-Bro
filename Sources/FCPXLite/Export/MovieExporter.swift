@@ -80,50 +80,67 @@ enum MovieExporter {
 
         try? FileManager.default.removeItem(at: url)
 
+        let totalDuration = CMTimeGetSeconds(composition.duration)
+        // 视频实际内容到哪结束(音频可能更长 = 纯音乐尾巴)。视频 reader 截到这里 → 自然 EOF,不渲染黑尾。
+        let videoContentEnd = composition.tracks(withMediaType: .video)
+            .map { CMTimeGetSeconds($0.timeRange.end) }.max() ?? totalDuration
+
         // --- AVAssetReader path ---
-        guard let reader = try? AVAssetReader(asset: composition) else {
+        // C2 导出卡死修复:视频与音频用【各自独立的 AVAssetReader + 各自的串行队列】。
+        // 旧实现共用一个 reader + 一条队列,视频在 videoContentEnd 处中途放弃(CMSampleBufferInvalidate 不排空)
+        // 会把共享渲染管线塞死 → 音频 copyNextSampleBuffer 永远等不到 → 卡在 "audio reader finalize"。
+        // 现在:视频 reader 用 timeRange 截到 videoContentEnd(自然 EOF,快),音频 reader 读全长,互不影响。
+        let wantVideo = hasVideo && videoComposition != nil
+        let wantAudio = settings.includeAudio && !composition.tracks(withMediaType: .audio).isEmpty
+
+        var videoReader: AVAssetReader?
+        var videoOut: AVAssetReaderVideoCompositionOutput?
+        if wantVideo, let vc = videoComposition, let r = try? AVAssetReader(asset: composition) {
+            let out = AVAssetReaderVideoCompositionOutput(
+                videoTracks: composition.tracks(withMediaType: .video),
+                videoSettings: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA])
+            out.videoComposition = vc
+            out.alwaysCopiesSampleData = false
+            if videoContentEnd > 0, videoContentEnd < totalDuration {
+                r.timeRange = CMTimeRange(start: .zero,
+                                          duration: CMTime(seconds: videoContentEnd, preferredTimescale: 600))
+            }
+            if r.canAdd(out) { r.add(out); videoReader = r; videoOut = out }
+        }
+
+        var audioReader: AVAssetReader?
+        var audioOut: AVAssetReaderAudioMixOutput?
+        if wantAudio, let r = try? AVAssetReader(asset: composition) {
+            let out = AVAssetReaderAudioMixOutput(
+                audioTracks: composition.tracks(withMediaType: .audio), audioSettings: nil)
+            out.audioMix = audioMix
+            out.alwaysCopiesSampleData = false
+            if r.canAdd(out) { r.add(out); audioReader = r; audioOut = out }
+        }
+
+        // 两个 reader 都起不来 → 退回 ExportSession。
+        guard videoReader != nil || audioReader != nil else {
             fallbackExport(document: document, to: url, settings: settings,
                            hasVideo: hasVideo, progress: progress, completion: completion); return
         }
-
-        var readerOutputs: [AVAssetReaderOutput] = []
-
-        if hasVideo, let vc = videoComposition {
-            let videoOut = AVAssetReaderVideoCompositionOutput(
-                videoTracks: composition.tracks(withMediaType: .video),
-                videoSettings: [kCVPixelBufferPixelFormatTypeKey as String:
-                                    kCVPixelFormatType_32BGRA])
-            videoOut.videoComposition = vc
-            videoOut.alwaysCopiesSampleData = false
-            if reader.canAdd(videoOut) { reader.add(videoOut); readerOutputs.append(videoOut) }
+        if let vr = videoReader, !vr.startReading() {
+            NSLog("[MovieExporter] 视频 reader startReading 失败,退回。error=\(String(describing: vr.error))")
+            fallbackExport(document: document, to: url, settings: settings,
+                           hasVideo: hasVideo, progress: progress, completion: completion); return
         }
-
-        var audioOut: AVAssetReaderAudioMixOutput? = nil
-        if settings.includeAudio, !composition.tracks(withMediaType: .audio).isEmpty {
-            let aOut = AVAssetReaderAudioMixOutput(
-                audioTracks: composition.tracks(withMediaType: .audio),
-                audioSettings: nil)
-            aOut.audioMix = audioMix
-            aOut.alwaysCopiesSampleData = false
-            if reader.canAdd(aOut) { reader.add(aOut); audioOut = aOut }
-        }
-
-        guard reader.startReading() else {
-            // 主路径(AVAssetReader+Writer,支持自定义合成器)起不来 → 记录原因再退回。
-            // 退回用的 AVAssetExportSession 对【自定义 AVVideoCompositing】支持不可靠,长复杂时间线易 -11841,
-            // 所以这里必须留诊断:下次 live 失败能看到主路径到底为何起不来。
-            NSLog("[MovieExporter] 主路径 startReading 失败,退回 AVAssetExportSession。reader.error=\(String(describing: reader.error))")
+        if let ar = audioReader, !ar.startReading() {
+            NSLog("[MovieExporter] 音频 reader startReading 失败,退回。error=\(String(describing: ar.error))")
             fallbackExport(document: document, to: url, settings: settings,
                            hasVideo: hasVideo, progress: progress, completion: completion); return
         }
 
         guard let writer = try? AVAssetWriter(outputURL: url, fileType: fileType) else {
-            reader.cancelReading()
+            videoReader?.cancelReading(); audioReader?.cancelReading()
             completion(.failure(MovieExportError.sessionFailed("无法创建 AVAssetWriter"))); return
         }
 
         var writerVideoInput: AVAssetWriterInput? = nil
-        if hasVideo {
+        if videoReader != nil {
             let vSettings = videoSettings(codec: settings.codec, quality: settings.quality, size: renderSize)
             let vInput = AVAssetWriterInput(mediaType: .video, outputSettings: vSettings)
             vInput.expectsMediaDataInRealTime = false
@@ -131,7 +148,7 @@ enum MovieExporter {
         }
 
         var writerAudioInput: AVAssetWriterInput? = nil
-        if audioOut != nil {
+        if audioReader != nil {
             let aSettings: [String: Any] = [
                 AVFormatIDKey: kAudioFormatMPEG4AAC,
                 AVSampleRateKey: 44100,
@@ -146,86 +163,67 @@ enum MovieExporter {
         writer.startWriting()
         writer.startSession(atSourceTime: .zero)
 
-        let totalDuration = CMTimeGetSeconds(composition.duration)
-        // 视频实际内容到哪结束(音频可能更长 = 纯音乐尾巴)。超过这里就停止拉视频帧:
-        // 否则 AVFoundation 对"音频更长、视频已无内容"的尾部逐帧空转,慢到像卡死。
-        // 视频在此截止,音频继续 → 成片末尾是黑屏 + 音乐(标准做法),且导出飞快。
-        let videoContentEnd = composition.tracks(withMediaType: .video)
-            .map { CMTimeGetSeconds($0.timeRange.end) }.max() ?? totalDuration
+        // 两条 pump 队列各自独立;共享状态(finished/done/progress)统一走串行 stateQ,线程安全。
+        let qV = DispatchQueue(label: "fcpxlite.export.video")
+        let qA = DispatchQueue(label: "fcpxlite.export.audio")
+        let stateQ = DispatchQueue(label: "fcpxlite.export.state")
         var doneCalled = false
-        let q = DispatchQueue(label: "fcpxlite.export")
-
-        // 看门狗:记录最后一次"有进度"的时刻;长时间无进度 → 判定卡死并暴露诊断。
+        var videoFinished = (writerVideoInput == nil)
+        var audioFinished = (writerAudioInput == nil)
         var lastActivity = Date()
         var lastProgressPct: Float = 0
         var watchdog: DispatchSourceTimer?
-        func stopWatchdog() { watchdog?.cancel(); watchdog = nil }
-        func statusStr(_ s: AVAssetReader.Status) -> String {
+
+        func statusStr(_ s: AVAssetReader.Status?) -> String {
             switch s {
             case .reading: return "reading"; case .completed: return "completed"
             case .failed: return "failed"; case .cancelled: return "cancelled"
-            case .unknown: return "unknown"
-            @unknown default: return "unknown"
+            default: return "unknown"
             }
         }
-
+        // 以下几个函数只在 stateQ 上调用,访问共享状态安全。
         func finish(result: Result<URL, Error>) {
             guard !doneCalled else { return }
             doneCalled = true
-            stopWatchdog()
+            watchdog?.cancel(); watchdog = nil
             DispatchQueue.main.async { completion(result) }
         }
-
-        // Track per-input completion
-        var videoFinished = (writerVideoInput == nil)
-        var audioFinished = (writerAudioInput == nil)
-
         func checkDone() {
-            guard !doneCalled else { return }   // 看门狗已收尾/已完成 → 不再重入 finishWriting
-            guard videoFinished, audioFinished else { return }
-            stopWatchdog()
+            guard !doneCalled, videoFinished, audioFinished else { return }
+            watchdog?.cancel(); watchdog = nil
             writerVideoInput?.markAsFinished()
             writerAudioInput?.markAsFinished()
-            reader.cancelReading()
+            videoReader?.cancelReading(); audioReader?.cancelReading()
             writer.finishWriting {
-                DispatchQueue.main.async { progress(1.0) }
-                if writer.status == .completed {
-                    finish(result: .success(url))
-                } else {
-                    finish(result: .failure(writer.error ?? MovieExportError.sessionFailed("writer failed")))
+                DispatchQueue.main.async { if writer.status == .completed { progress(1.0) } }
+                stateQ.async {
+                    if writer.status == .completed { finish(result: .success(url)) }
+                    else { finish(result: .failure(writer.error ?? MovieExportError.sessionFailed("writer failed"))) }
                 }
             }
         }
 
-        if let vInput = writerVideoInput,
-           let vOut = readerOutputs.first(where: { $0 is AVAssetReaderVideoCompositionOutput }) {
-            vInput.requestMediaDataWhenReady(on: q) {
+        if let vInput = writerVideoInput, let vOut = videoOut {
+            vInput.requestMediaDataWhenReady(on: qV) {
                 while vInput.isReadyForMoreMediaData {
                     if let buf = vOut.copyNextSampleBuffer() {
-                        let pts = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(buf))
-                        // 视频内容已结束(后面只有更长的音频)→ 停止写视频帧,不渲染慢吞吞的黑尾。
-                        if pts > videoContentEnd + 0.001 {
-                            CMSampleBufferInvalidate(buf)
-                            videoFinished = true
-                            checkDone()
-                            return
-                        }
                         vInput.append(buf)
-                        lastActivity = Date()   // 看门狗:有进度
-                        if totalDuration > 0 {
-                            lastProgressPct = Float(pts / totalDuration) * 0.9
-                            let p = lastProgressPct
-                            DispatchQueue.main.async { progress(p) }
+                        let pts = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(buf))
+                        stateQ.async {
+                            lastActivity = Date()
+                            if totalDuration > 0 {
+                                let p = Float(pts / totalDuration) * 0.9
+                                if p > lastProgressPct { lastProgressPct = p; DispatchQueue.main.async { progress(p) } }
+                            }
                         }
                     } else {
-                        // nil:读完了 OR reader 失败 → 必须区分,否则失败被当成正常结束(静默半截片)。
-                        if reader.status == .failed {
-                            finish(result: .failure(MovieExportError.readerFailed(
-                                "视频轨读取失败:\(String(describing: reader.error))")))
-                            return
+                        let failed = (videoReader?.status == .failed)
+                        let err = videoReader?.error
+                        stateQ.async {
+                            if failed {
+                                finish(result: .failure(MovieExportError.readerFailed("视频轨读取失败:\(String(describing: err))")))
+                            } else { videoFinished = true; checkDone() }
                         }
-                        videoFinished = true
-                        checkDone()
                         return
                     }
                 }
@@ -233,49 +231,49 @@ enum MovieExporter {
         }
 
         if let aInput = writerAudioInput, let aOut = audioOut {
-            aInput.requestMediaDataWhenReady(on: q) {
+            aInput.requestMediaDataWhenReady(on: qA) {
                 while aInput.isReadyForMoreMediaData {
                     if let buf = aOut.copyNextSampleBuffer() {
                         aInput.append(buf)
-                        lastActivity = Date()   // 看门狗:音频也算进度(修复"卡在末尾 audio finalize")
-                    } else {
-                        if reader.status == .failed {
-                            finish(result: .failure(MovieExportError.readerFailed(
-                                "音频轨读取失败:\(String(describing: reader.error))")))
-                            return
+                        let pts = CMTimeGetSeconds(CMSampleBufferGetPresentationTimeStamp(buf))
+                        stateQ.async {
+                            lastActivity = Date()
+                            if totalDuration > 0 {
+                                let p = Float(pts / totalDuration) * 0.9
+                                if p > lastProgressPct { lastProgressPct = p; DispatchQueue.main.async { progress(p) } }
+                            }
                         }
-                        audioFinished = true
-                        checkDone()
+                    } else {
+                        let failed = (audioReader?.status == .failed)
+                        let err = audioReader?.error
+                        stateQ.async {
+                            if failed {
+                                finish(result: .failure(MovieExportError.readerFailed("音频轨读取失败:\(String(describing: err))")))
+                            } else { audioFinished = true; checkDone() }
+                        }
                         return
                     }
                 }
             }
         }
 
-        // 看门狗:每 3s 检查一次;若 stallTimeout 秒内毫无进度 → 判定卡死,取消并暴露诊断
-        // (哪个输入没完成、卡在百分之几、reader 状态/错误)。修复"卡在 80% 无任何提示"。
+        // 看门狗:stallTimeout 秒无进度 → 判定卡死,取消并暴露诊断。
         let stallTimeout: TimeInterval = 30
-        let wd = DispatchSource.makeTimerSource(queue: q)
+        let wd = DispatchSource.makeTimerSource(queue: stateQ)
         wd.schedule(deadline: .now() + 5, repeating: 3)
         wd.setEventHandler {
             if doneCalled { wd.cancel(); return }
             if Date().timeIntervalSince(lastActivity) > stallTimeout {
                 let diag = "停在 \(Int(lastProgressPct * 100))%;video完成=\(videoFinished) audio完成=\(audioFinished);"
-                    + "reader=\(statusStr(reader.status)) writer=\(writer.status.rawValue);"
-                    + "readerErr=\(String(describing: reader.error)) writerErr=\(String(describing: writer.error))"
+                    + "videoReader=\(statusStr(videoReader?.status)) audioReader=\(statusStr(audioReader?.status)) writer=\(writer.status.rawValue);"
+                    + "videoErr=\(String(describing: videoReader?.error)) audioErr=\(String(describing: audioReader?.error)) writerErr=\(String(describing: writer.error))"
                 NSLog("[MovieExporter] 导出卡死:\(diag)")
-                reader.cancelReading()
-                writer.cancelWriting()
+                videoReader?.cancelReading(); audioReader?.cancelReading(); writer.cancelWriting()
                 finish(result: .failure(MovieExportError.stalled(diag)))
             }
         }
         watchdog = wd
         wd.resume()
-
-        // Pure-audio path: no video input, trigger checkDone when audio finishes
-        if writerVideoInput == nil, writerAudioInput == nil {
-            finish(result: .failure(MovieExportError.emptyTimeline))
-        }
     }
 
     // MARK: - Fallback: AVAssetExportSession
