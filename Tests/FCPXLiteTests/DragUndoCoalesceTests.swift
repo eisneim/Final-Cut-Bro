@@ -41,6 +41,23 @@ final class DragUndoCoalesceTests: XCTestCase {
         XCTAssertEqual(store.document.sequence.spine.count, 1, "第二次 undo 回退到只插入了 1 个 clip 的状态")
     }
 
+    /// C1 回归:交互合并态中混入 transaction{} 不应提前结束合并、也不应多堆 undo。
+    func testTransactionDuringInteractiveEditDoesNotBreakCoalescing() {
+        let store = storeWith2Clips()
+        store.beginInteractiveEdit()
+        store.dispatch(.trimRight(at: 0, newDuration: .seconds(7), assetDuration: .seconds(20)))
+        store.transaction {   // 合并态中内嵌事务(不应重置合并标志/不应新堆 undo)
+            store.dispatch(.trimRight(at: 0, newDuration: .seconds(9), assetDuration: .seconds(20)))
+        }
+        store.dispatch(.trimRight(at: 0, newDuration: .seconds(11), assetDuration: .seconds(20)))
+        store.endInteractiveEdit()
+        XCTAssertEqual(firstClipDur(store), 11, accuracy: 0.01)
+        store.undo()
+        XCTAssertEqual(firstClipDur(store), 6, accuracy: 0.01, "整段(含内嵌事务)仍是一次 undo → 回到 6s")
+        store.undo()
+        XCTAssertEqual(store.document.sequence.spine.count, 1, "再 undo 回到 setup 上一步")
+    }
+
     /// 对照:不合并时每次 dispatch 各留一个 undo → 需要 undo 多次。
     func testWithoutCoalesceEachTickIsSeparateUndo() {
         let store = storeWith2Clips()

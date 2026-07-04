@@ -119,6 +119,7 @@ extension TimelineContentView {
         // 点击/拖拽开始 → 结束 skimming 覆盖,预览交回播放头(避免交互期间预览停留在 skim 帧)。
         if skimmerX != nil { skimmerX = nil; needsDisplay = true }
         if timelineSkimming { dispatch?(.setTimelineSkim(nil)) }
+        if didBeginInteractive { endInteractiveEdit?() }   // 防御:上一手势若漏了 end,这里兜底清掉
         didBeginInteractive = false   // 新手势:重置撤销合并标记
         let pt = convert(event.locationInWindow, from: nil)
         let t = TimelineGeometry.seconds(forX: pt.x, pxPerSecond: pxPerSecond)

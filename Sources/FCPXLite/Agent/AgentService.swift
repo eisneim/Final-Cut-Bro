@@ -34,6 +34,8 @@ final class AgentService {
     func send(userText: String) async {
         store.agentMessages.append(AgentMessage(role: .user, text: userText))
         store.agentBusy = true
+        store.agentConfirmResult = nil   // 清掉上一轮(可能被取消)遗留的结果,避免被本轮误取
+        store.agentAsyncResult = nil
         defer { store.agentBusy = false }
 
         var wire: [LLMWireMessage] = [

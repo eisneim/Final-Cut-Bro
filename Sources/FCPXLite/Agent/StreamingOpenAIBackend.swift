@@ -91,8 +91,13 @@ struct StreamingOpenAIBackend: StreamingLLMBackend {
             }
             if (choice["finish_reason"] as? String) != nil {
                 for (_, info) in calls.sorted(by: { $0.key < $1.key }) where !info.id.isEmpty && !info.name.isEmpty {
-                    let args = (try? JSONSerialization.jsonObject(with: Data((info.args.isEmpty ? "{}" : info.args).utf8))) as? [String: Any] ?? [:]
-                    emit(.toolCallEnd(id: info.id, name: info.name, args: args))
+                    let raw = info.args.isEmpty ? "{}" : info.args
+                    let parsed = (try? JSONSerialization.jsonObject(with: Data(raw.utf8))) as? [String: Any]
+                    if parsed == nil && !info.args.isEmpty {
+                        // fail-fast:参数 JSON 解析失败(多半是流被截断)→ 记到日志,别静默当成空参跑工具。
+                        NSLog("[StreamingOpenAIBackend] tool \(info.name) 参数解析失败,原始: \(raw.prefix(200))")
+                    }
+                    emit(.toolCallEnd(id: info.id, name: info.name, args: parsed ?? [:]))
                 }
                 calls.removeAll(); emittedBegin.removeAll()
             }

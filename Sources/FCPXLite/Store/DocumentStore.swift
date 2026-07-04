@@ -64,36 +64,39 @@ import Observation
     private var redoStack: [Document] = []
     private let undoLimit = 80
     private var inTransaction = false
+    /// 拖拽手势级合并态(与 inTransaction 解耦,避免二者互相踩)。
+    private var interactiveOpen = false
+    /// 是否处于"合并/事务"态 → snapshot 只清 redo 不堆 undo。
+    private var isGrouping: Bool { inTransaction || interactiveOpen }
 
     /// 把内部多次 dispatch/apply 合成【一次】撤销(批量动作用,如 build_subtitle_cut)。
     /// 开头快照一次,期间所有 snapshot() 被吞掉;结束后这一整批可被单次 undo 还原。
     func transaction(_ body: () -> Void) {
-        if inTransaction { body(); return }   // 不嵌套
+        if isGrouping { body(); return }   // 已在合并态(事务或拖拽)→ 不重复快照、不动标志位
         snapshot()
         inTransaction = true
         defer { inTransaction = false }
         body()
     }
 
-    /// 文档变更前快照(供撤销)。清空重做栈。事务内不再堆叠(已在事务开头快照过一次)。
+    /// 文档变更前快照(供撤销)。清空重做栈。合并态内不再堆叠(已在开头快照过一次)。
     private func snapshot() {
-        if inTransaction { redoStack.removeAll(); return }
+        if isGrouping { redoStack.removeAll(); return }
         undoStack.append(document)
         if undoStack.count > undoLimit { undoStack.removeFirst() }
         redoStack.removeAll()
     }
 
-    /// 拖拽手势级撤销合并:手势内【首次真正改动前】调用 → 快照一次并进入合并态(复用 inTransaction),
+    /// 拖拽手势级撤销合并:手势内【首次真正改动前】调用 → 快照一次并进入合并态。
     /// 其后每个 tick 的 apply/dispatch 不再堆 undo。mouseUp 调 endInteractiveEdit 结束。
     /// 效果:一整段拖拽(如把结尾从 0 拖到 30)只留【一次】撤销点 → ⌘Z 一步回到拖拽前,而非逐像素回撤。
+    /// 用独立的 interactiveOpen 标志(不复用 inTransaction),避免与 transaction{} 互相污染。
     func beginInteractiveEdit() {
-        guard !inTransaction else { return }
-        snapshot()
-        inTransaction = true
+        guard !interactiveOpen else { return }   // 幂等:一次手势只快照一次
+        if !inTransaction { snapshot() }         // 已在事务里就不重复快照
+        interactiveOpen = true
     }
-    func endInteractiveEdit() {
-        inTransaction = false
-    }
+    func endInteractiveEdit() { interactiveOpen = false }
 
     func undo() {
         guard let prev = undoStack.popLast() else { return }
@@ -297,12 +300,14 @@ import Observation
         }
     }
 
-    /// 停止正在输出的 Agent。
+    /// 停止正在输出的 Agent。清空所有待决/结果槽,避免被取消的一轮遗留结果被下一轮误取(cross-talk)。
     func stopAgent() {
         agentTask?.cancel()
         agentTask = nil
         agentBusy = false
         agentConfirm = nil
+        agentConfirmResult = nil
+        agentAsyncResult = nil
     }
 
     /// Agent 请求用户确认(write_file/edit_file/run_command 等危险操作)。
