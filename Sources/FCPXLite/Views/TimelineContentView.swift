@@ -98,6 +98,31 @@ final class TimelineContentView: NSView {
     private var placedCache: (version: Int, value: [Placed])?
     /// sequence 实际变化时(在 apply 里)bump,使 placed 缓存失效。
     private(set) var sequenceVersion = 0
+    /// assetLibrary 变化时(在 apply 里)bump,使 assetMap 缓存失效。
+    private(set) var assetVersion = 0
+
+    /// clipID → Clip(主轴+连接子项)映射,按 sequenceVersion 缓存。draw/命中测试 O(1) 取 clip,
+    /// 消除逐 clip 全 spine 扫描的 O(N²)(drawClip/clipLabel/转场/音量命中共用)。
+    var clipMap: [ClipID: Clip] {
+        if let c = clipMapCache, c.version == sequenceVersion { return c.value }
+        var m: [ClipID: Clip] = [:]
+        for el in sequence.spine {
+            if case .clip(let c) = el { m[c.id] = c; for ch in c.connected { m[ch.id] = ch } }
+        }
+        clipMapCache = (sequenceVersion, m)
+        return m
+    }
+    private var clipMapCache: (version: Int, value: [ClipID: Clip])?
+
+    /// assetID → Asset 映射,按 assetVersion 缓存。取代散布的 assetLibrary.first{...} 线性查找。
+    var assetMap: [AssetID: Asset] {
+        if let c = assetMapCache, c.version == assetVersion { return c.value }
+        var m: [AssetID: Asset] = [:]
+        for a in assetLibrary { m[a.id] = a }
+        assetMapCache = (assetVersion, m)
+        return m
+    }
+    private var assetMapCache: (version: Int, value: [AssetID: Asset])?
 
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
@@ -175,11 +200,12 @@ final class TimelineContentView: NSView {
 
         // ---- 结构/尺寸变化(需全画,不可避免)----
         let sequenceChanged = sequence != state.sequence
+        let assetChanged = assetLibrary != state.assetLibrary
         let structuralChanged = sequenceChanged
             || pxPerSecond != state.pxPerSecond
             || laneH != state.clipHeight
             || vaRatio != state.vaRatio
-            || assetLibrary != state.assetLibrary
+            || assetChanged
 
         // ---- 赋值 ----
         sequence = state.sequence
@@ -198,6 +224,7 @@ final class TimelineContentView: NSView {
         isPlaying = state.isPlaying
 
         if sequenceChanged { sequenceVersion &+= 1; placedCache = nil }
+        if assetChanged { assetVersion &+= 1 }
         // 关掉 skimming 或开始播放 → 清除 skimmer 竖线并擦除(rare event,全画可接受)。
         if (oldSkimming && !timelineSkimming) || isPlaying, skimmerX != nil {
             skimmerX = nil
@@ -237,7 +264,7 @@ final class TimelineContentView: NSView {
         dirtyRect.fill()   // 只填脏区(其余绘制已被 AppKit 裁到 dirtyRect)
 
         drawMainLaneBand()
-        drawGaps()
+        drawGaps(dirty: dirtyRect)
 
         let ps = placed
         if ps.isEmpty {
@@ -251,7 +278,7 @@ final class TimelineContentView: NSView {
         }
         // 以下都保持无条件(靠 context 裁剪):转场标记会画到片段 rect 左侧之外、
         // ruler/播放头/框选跨全宽或钉顶,单独 cull 会留残影。
-        drawTransitions()
+        drawTransitions(dirty: dirtyRect)
 
         drawClipsOrHint()
         if currentTool == .position, dragClipID != nil { drawDragGhost() }   // 位置工具拖拽:画 ghost 跟随
@@ -283,7 +310,7 @@ final class TimelineContentView: NSView {
         }
 
     /// 画主轴上的 .gap(位置工具留下的灰色占位):lane 0 上的灰条,可被修剪工具调长。
-    func drawGaps() {
+    func drawGaps(dirty: NSRect) {
         let y = TimelineGeometry.laneTopY(lane: 0, rulerHeight: Self.rulerHeight,
                                           laneHeight: laneH, laneGap: Self.laneGap,
                                           contentHeight: bounds.height)
@@ -293,17 +320,19 @@ final class TimelineContentView: NSView {
                 let x = TimelineGeometry.x(forSeconds: acc.seconds, pxPerSecond: pxPerSecond)
                 let w = max(2, TimelineGeometry.x(forSeconds: d.seconds, pxPerSecond: pxPerSecond))
                 let rect = NSRect(x: x, y: y, width: w, height: laneH)
-                let path = NSBezierPath(roundedRect: rect, xRadius: 3, yRadius: 3)
-                TimelineColors.gapFill.setFill(); path.fill()
-                TimelineColors.gapBorder.setStroke(); path.lineWidth = 1; path.stroke()
-                // 选中的 gap:橙色 2pt 边框(像选中的 clip)
-                if gid == selectedGapID {
-                    let sel = NSBezierPath(roundedRect: rect.insetBy(dx: 1, dy: 1), xRadius: 3, yRadius: 3)
-                    TimelineColors.selectBorder.setStroke(); sel.lineWidth = 2; sel.stroke()
+                if rect.intersects(dirty) {   // 只画与脏区相交的 gap
+                    let path = NSBezierPath(roundedRect: rect, xRadius: 3, yRadius: 3)
+                    TimelineColors.gapFill.setFill(); path.fill()
+                    TimelineColors.gapBorder.setStroke(); path.lineWidth = 1; path.stroke()
+                    // 选中的 gap:橙色 2pt 边框(像选中的 clip)
+                    if gid == selectedGapID {
+                        let sel = NSBezierPath(roundedRect: rect.insetBy(dx: 1, dy: 1), xRadius: 3, yRadius: 3)
+                        TimelineColors.selectBorder.setStroke(); sel.lineWidth = 2; sel.stroke()
+                    }
+                    ("间隙" as NSString).draw(at: NSPoint(x: rect.minX + 4, y: rect.minY + 3),
+                        withAttributes: [.font: NSFont.systemFont(ofSize: 9),
+                                         .foregroundColor: TimelineColors.textMuted])
                 }
-                ("间隙" as NSString).draw(at: NSPoint(x: rect.minX + 4, y: rect.minY + 3),
-                    withAttributes: [.font: NSFont.systemFont(ofSize: 9),
-                                     .foregroundColor: TimelineColors.textMuted])
             }
             acc = acc + el.duration
         }
@@ -311,7 +340,7 @@ final class TimelineContentView: NSView {
 
     /// 画交叉叠化转场标记:在带 crossfadeIn 的主轴片段【左接缝】处,跨缝画一块淡紫半透明区 + "蝴蝶结"叠化符号。
     /// 时间线仍按 Layout 顺铺(不重叠);标记只是提示该接缝有 dissolve,宽度=转场时长。
-    func drawTransitions() {
+    func drawTransitions(dirty: NSRect) {
         let laneY = TimelineGeometry.laneTopY(lane: 0, rulerHeight: Self.rulerHeight,
                                               laneHeight: laneH, laneGap: Self.laneGap,
                                               contentHeight: bounds.height)
@@ -320,6 +349,7 @@ final class TimelineContentView: NSView {
             let seamX = clipRect(p).minX
             let rect = TimelineGeometry.transitionRect(seamX: seamX, crossfadeSecs: clip.crossfadeIn.seconds,
                                                        pxPerSecond: pxPerSecond, laneY: laneY, laneHeight: laneH)
+            guard rect.intersects(dirty) else { continue }   // 只画与脏区相交的转场标记
             let selected = clip.id == selectedTransitionClipID
             let path = NSBezierPath(roundedRect: rect, xRadius: 3, yRadius: 3)
             TimelineColors.transition.withAlphaComponent(selected ? 0.5 : 0.35).setFill(); path.fill()
@@ -445,7 +475,7 @@ final class TimelineContentView: NSView {
         // 裁剪到 clip 区域,画 filmstrip(上)+ 波形(下),按 vaRatio 分。
         NSGraphicsContext.current?.saveGraphicsState()
         path.addClip()
-        if let clip = clipByID(p.clipID), !clip.isTitle, assetLibrary.first(where: { $0.id == clip.assetID }) == nil {
+        if let clip = clipByID(p.clipID), !clip.isTitle, assetMap[clip.assetID] == nil {
             // 素材已从素材库删除 → 红色背景 + "素材丢失" 提示
             NSGraphicsContext.current?.restoreGraphicsState()
             NSColor.systemRed.withAlphaComponent(0.3).setFill(); path.fill()
@@ -459,7 +489,7 @@ final class TimelineContentView: NSView {
             NSColor.systemRed.setStroke(); red.lineWidth = 2; red.stroke()
             return
         }
-        if let clip = clipByID(p.clipID), let asset = assetLibrary.first(where: { $0.id == clip.assetID }) {
+        if let clip = clipByID(p.clipID), let asset = assetMap[clip.assetID] {
             // 只显示本 clip 的源区间 [sourceIn, sourceIn+duration) 对应的那段缩略图/波形(blade 后各段不同)。
             let assetDur = max(0.0001, asset.duration.seconds)
             let f0 = max(0, min(1, clip.sourceIn.seconds / assetDur))
@@ -589,8 +619,8 @@ final class TimelineContentView: NSView {
         up.fill()
     }
 
-    /// 取某 clip(主轴或连接子项)。
-    func clipByID(_ id: ClipID) -> Clip? { sequence.clip(id: id) }
+    /// 取某 clip(主轴或连接子项)。O(1),走 clipMap 缓存。
+    func clipByID(_ id: ClipID) -> Clip? { clipMap[id] }
 
     private func drawPlayhead() {
         let x = TimelineGeometry.x(forSeconds: playheadSeconds, pxPerSecond: pxPerSecond)
@@ -657,7 +687,7 @@ final class TimelineContentView: NSView {
     }
 
     private func assetFilename(_ id: AssetID) -> String? {
-        guard let asset = assetLibrary.first(where: { $0.id == id }) else { return nil }
+        guard let asset = assetMap[id] else { return nil }
         return asset.url.deletingPathExtension().lastPathComponent
     }
 

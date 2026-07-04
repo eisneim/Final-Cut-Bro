@@ -167,7 +167,8 @@ enum MovieExporter {
         let qV = DispatchQueue(label: "fcpxlite.export.video")
         let qA = DispatchQueue(label: "fcpxlite.export.audio")
         let stateQ = DispatchQueue(label: "fcpxlite.export.state")
-        var doneCalled = false
+        var doneCalled = false      // 是否已决定收尾(同步置位,防重复 finishWriting/cancel)
+        var delivered = false       // 是否已回调 completion(防重复回调)
         var videoFinished = (writerVideoInput == nil)
         var audioFinished = (writerAudioInput == nil)
         var lastActivity = Date()
@@ -182,14 +183,22 @@ enum MovieExporter {
             }
         }
         // 以下几个函数只在 stateQ 上调用,访问共享状态安全。
-        func finish(result: Result<URL, Error>) {
-            guard !doneCalled else { return }
-            doneCalled = true
+        func deliver(_ result: Result<URL, Error>) {
+            guard !delivered else { return }
+            delivered = true
             watchdog?.cancel(); watchdog = nil
             DispatchQueue.main.async { completion(result) }
         }
+        // 收尾前【同步】置 doneCalled,避免重复入队的 checkDone / 看门狗再次调用 finishWriting(status 崩溃)。
+        func failNow(_ err: Error) {
+            guard !doneCalled else { return }
+            doneCalled = true
+            videoReader?.cancelReading(); audioReader?.cancelReading(); writer.cancelWriting()
+            deliver(.failure(err))
+        }
         func checkDone() {
             guard !doneCalled, videoFinished, audioFinished else { return }
+            doneCalled = true   // 同步置位:后续重复入队的 checkDone 会被上面的 guard 挡掉
             watchdog?.cancel(); watchdog = nil
             writerVideoInput?.markAsFinished()
             writerAudioInput?.markAsFinished()
@@ -197,8 +206,8 @@ enum MovieExporter {
             writer.finishWriting {
                 DispatchQueue.main.async { if writer.status == .completed { progress(1.0) } }
                 stateQ.async {
-                    if writer.status == .completed { finish(result: .success(url)) }
-                    else { finish(result: .failure(writer.error ?? MovieExportError.sessionFailed("writer failed"))) }
+                    if writer.status == .completed { deliver(.success(url)) }
+                    else { deliver(.failure(writer.error ?? MovieExportError.sessionFailed("writer failed"))) }
                 }
             }
         }
@@ -221,7 +230,7 @@ enum MovieExporter {
                         let err = videoReader?.error
                         stateQ.async {
                             if failed {
-                                finish(result: .failure(MovieExportError.readerFailed("视频轨读取失败:\(String(describing: err))")))
+                                failNow(MovieExportError.readerFailed("视频轨读取失败:\(String(describing: err))"))
                             } else { videoFinished = true; checkDone() }
                         }
                         return
@@ -248,7 +257,7 @@ enum MovieExporter {
                         let err = audioReader?.error
                         stateQ.async {
                             if failed {
-                                finish(result: .failure(MovieExportError.readerFailed("音频轨读取失败:\(String(describing: err))")))
+                                failNow(MovieExportError.readerFailed("音频轨读取失败:\(String(describing: err))"))
                             } else { audioFinished = true; checkDone() }
                         }
                         return
@@ -268,8 +277,7 @@ enum MovieExporter {
                     + "videoReader=\(statusStr(videoReader?.status)) audioReader=\(statusStr(audioReader?.status)) writer=\(writer.status.rawValue);"
                     + "videoErr=\(String(describing: videoReader?.error)) audioErr=\(String(describing: audioReader?.error)) writerErr=\(String(describing: writer.error))"
                 NSLog("[MovieExporter] 导出卡死:\(diag)")
-                videoReader?.cancelReading(); audioReader?.cancelReading(); writer.cancelWriting()
-                finish(result: .failure(MovieExportError.stalled(diag)))
+                failNow(MovieExportError.stalled(diag))
             }
         }
         watchdog = wd

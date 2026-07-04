@@ -8,7 +8,7 @@ extension TimelineContentView {
 
     /// 返回 clip 的音频波形区域(与 drawWaveform 使用的区域一致)。
     func audioRegion(for clip: Clip, in rect: NSRect) -> NSRect? {
-        guard let asset = assetLibrary.first(where: { $0.id == clip.assetID }),
+        guard let asset = assetMap[clip.assetID],
               asset.hasAudio else { return nil }
         if asset.kind == .audio {
             return rect

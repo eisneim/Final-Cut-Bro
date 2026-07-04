@@ -43,13 +43,21 @@ struct PreviewView: NSViewRepresentable {
         }
 
         func update(sequence: Sequence, store: DocumentStore, playheadSeconds: Double, isPlaying: Bool, skimming: Bool) {
-            let fp = Self.structureFingerprint(sequence)
-            // 播放器状态没变 → 跳过整个 update(agentMessages 等无关变化会触发 SwiftUI 重渲染到此)。
+            // 先做廉价判断:播放头/播放态/序列是否变。序列比较用 Equatable(O(N)),但避免了每次都拼
+            // 全 spine 指纹字符串(流式对话时每 token 都会触发 updateNSView → 否则每 token 拼一遍全 spine)。
             let playheadChanged = abs(playheadSeconds - lastPlayheadSeconds) > 0.001
             let playingChanged = isPlaying != lastIsPlaying
-            let structureChanged = lastSequence == nil || fp != lastFingerprint
-            let paramsChanged = lastSequence != nil && lastSequence != sequence
-            guard structureChanged || paramsChanged || playheadChanged || playingChanged else { return }
+            let seqChanged = lastSequence == nil || lastSequence != sequence
+            guard seqChanged || playheadChanged || playingChanged else { return }
+            // 仅在序列真的变了时才拼指纹,判定是"结构变(需重建 item)"还是"仅参数变(只更新 videoComposition)"。
+            let structureChanged: Bool
+            if seqChanged {
+                let fp = Self.structureFingerprint(sequence)
+                structureChanged = lastSequence == nil || fp != lastFingerprint
+                lastFingerprint = fp
+            } else {
+                structureChanged = false
+            }
             lastPlayheadSeconds = playheadSeconds
             lastIsPlaying = isPlaying
             // skimming 中:容差 seek(snap 到最近可解码帧),快速划过不逐帧精确解码卡顿。
@@ -58,10 +66,9 @@ struct PreviewView: NSViewRepresentable {
             if structureChanged {
                 // 轨道结构变(增删/移动/trim/blade)→ 重建 item。
                 lastSequence = sequence
-                lastFingerprint = fp
                 player.replaceCurrentItem(with: CompositionBuilder.build(document: store.document))
                 seek(playheadSeconds, exact: exactSeek)
-            } else if lastSequence != sequence {
+            } else if seqChanged {
                 // 仅参数变(inspector 调 transform/opacity)→ 只更新 videoComposition,不换 item(避免黑屏闪烁)。
                 lastSequence = sequence
                 if let item = player.currentItem,

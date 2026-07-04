@@ -54,7 +54,7 @@ extension TimelineContentView {
     func hitTestKeyframe(at pt: NSPoint) -> (ClipID, UUID)? {
         for p in placed {
             guard let clip = clipByID(p.clipID),
-                  let asset = assetLibrary.first(where: { $0.id == clip.assetID }),
+                  let asset = assetMap[clip.assetID],
                   asset.hasAudio else { continue }
             let rect = clipRect(p)
             guard let region = audioRegion(for: clip, in: rect) else { continue }
@@ -72,7 +72,7 @@ extension TimelineContentView {
     func hitTestLevelLine(at pt: NSPoint) -> ClipID? {
         for p in placed {
             guard let clip = clipByID(p.clipID),
-                  let asset = assetLibrary.first(where: { $0.id == clip.assetID }),
+                  let asset = assetMap[clip.assetID],
                   asset.hasAudio else { continue }
             let rect = clipRect(p)
             guard let region = audioRegion(for: clip, in: rect) else { continue }
@@ -88,7 +88,7 @@ extension TimelineContentView {
     func hitTestFadeHandle(at pt: NSPoint) -> (ClipID, Bool)? {
         for p in placed {
             guard let clip = clipByID(p.clipID),
-                  let asset = assetLibrary.first(where: { $0.id == clip.assetID }),
+                  let asset = assetMap[clip.assetID],
                   asset.hasAudio else { continue }
             let rect = clipRect(p)
             guard let region = audioRegion(for: clip, in: rect) else { continue }
@@ -287,7 +287,7 @@ extension TimelineContentView {
         guard currentTool == .select else { return }
         for p in placed {
             guard let clip = clipByID(p.clipID),
-                  let asset = assetLibrary.first(where: { $0.id == clip.assetID }),
+                  let asset = assetMap[clip.assetID],
                   asset.hasAudio else { continue }
             let rect = clipRect(p)
             guard let region = audioRegion(for: clip, in: rect) else { continue }

@@ -18,7 +18,7 @@ extension TimelineContentView {
     }
 
     func assetDuration(of clip: Clip) -> Time {
-        assetLibrary.first(where: { $0.id == clip.assetID })?.duration ?? clip.duration
+        assetMap[clip.assetID]?.duration ?? clip.duration
     }
 
     /// 命中某主轴 clip 的首/尾边缘(lane 0,edgeHitPx 内)。
