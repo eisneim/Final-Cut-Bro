@@ -14,10 +14,7 @@ extension TimelineContentView {
 
     /// 取主轴 clip(及其 spine 下标)by id。
     func spineClipAndIndex(_ id: ClipID) -> (clip: Clip, index: Int)? {
-        for (i, el) in sequence.spine.enumerated() {
-            if case .clip(let c) = el, c.id == id { return (c, i) }
-        }
-        return nil
+        sequence.spineClipAndIndex(id: id)
     }
 
     func assetDuration(of clip: Clip) -> Time {

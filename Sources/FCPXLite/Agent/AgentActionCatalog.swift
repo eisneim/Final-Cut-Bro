@@ -41,13 +41,7 @@ enum AgentActionCatalog {
     }
     /// 按 id 找 clip(主轴或连接子项)。
     static func findClip(_ store: DocumentStore, _ id: ClipID) -> Clip? {
-        for el in store.document.sequence.spine {
-            if case .clip(let c) = el {
-                if c.id == id { return c }
-                for ch in c.connected where ch.id == id { return ch }
-            }
-        }
-        return nil
+        store.document.sequence.clip(id: id)
     }
     static func spineElementIndex(_ store: DocumentStore, clipIndex: Int) -> Int? {
         var n = 0

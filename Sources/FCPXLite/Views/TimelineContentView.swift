@@ -590,15 +590,7 @@ final class TimelineContentView: NSView {
     }
 
     /// 取某 clip(主轴或连接子项)。
-    func clipByID(_ id: ClipID) -> Clip? {
-        for el in sequence.spine {
-            if case .clip(let c) = el {
-                if c.id == id { return c }
-                for ch in c.connected where ch.id == id { return ch }
-            }
-        }
-        return nil
-    }
+    func clipByID(_ id: ClipID) -> Clip? { sequence.clip(id: id) }
 
     private func drawPlayhead() {
         let x = TimelineGeometry.x(forSeconds: playheadSeconds, pxPerSecond: pxPerSecond)
@@ -660,17 +652,8 @@ final class TimelineContentView: NSView {
     }
 
     private func clipLabel(for placed: Placed) -> String {
-        for element in sequence.spine {
-            if case .clip(let c) = element {
-                if c.id == placed.clipID {
-                    return assetFilename(c.assetID) ?? "clip"
-                }
-                for conn in c.connected where conn.id == placed.clipID {
-                    return assetFilename(conn.assetID) ?? "clip"
-                }
-            }
-        }
-        return "clip"
+        guard let c = sequence.clip(id: placed.clipID) else { return "clip" }
+        return assetFilename(c.assetID) ?? "clip"
     }
 
     private func assetFilename(_ id: AssetID) -> String? {

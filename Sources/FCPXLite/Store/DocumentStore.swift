@@ -115,13 +115,7 @@ import Observation
     /// 当前选中的 clip(主轴或连接子项)。
     func selectedClip() -> Clip? {
         guard let id = ui.selectedClipID else { return nil }
-        for el in document.sequence.spine {
-            if case .clip(let c) = el {
-                if c.id == id { return c }
-                for ch in c.connected where ch.id == id { return ch }
-            }
-        }
-        return nil
+        return document.sequence.clip(id: id)
     }
 
     /// 当前选中的素材(inspector 显示 meta 用)。

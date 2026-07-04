@@ -133,13 +133,8 @@ final class AgentToolRegistry {
     // MARK: - 辅助
 
     private func clipName(_ id: ClipID) -> String {
-        for el in store.document.sequence.spine {
-            if case .clip(let c) = el {
-                if c.id == id { return store.document.assetLibrary.first { $0.id == c.assetID }?.url.lastPathComponent ?? "?" }
-                for ch in c.connected where ch.id == id { return store.document.assetLibrary.first { $0.id == ch.assetID }?.url.lastPathComponent ?? "?" }
-            }
-        }
-        return "?"
+        guard let c = store.document.sequence.clip(id: id) else { return "?" }
+        return store.document.asset(c.assetID)?.url.lastPathComponent ?? "?"
     }
     private func fmt(_ x: Double) -> String { String(format: "%.2f", x) }
 
