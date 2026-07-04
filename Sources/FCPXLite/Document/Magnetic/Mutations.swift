@@ -590,56 +590,39 @@ enum Mutations {
         return s
     }
 
-    /// 设置某 clip(主轴或连接子项)的 Adjustments(inspector 调参)。
-    static func setAdjust(clipID: ClipID, _ adjust: Adjustments, in seq: Sequence) -> Sequence {
+    /// 定位某 clip(主轴直接元素或某宿主的连接子项)并就地修改;isConnected=true 表示改的是连接子项。
+    /// 找不到该 id → 原样返回。所有"设某字段"的纯函数共用它(单一真源,避免逐个复制扫描循环)。
+    private static func mutatingClip(_ id: ClipID, in seq: Sequence,
+                                     _ f: (_ clip: inout Clip, _ isConnected: Bool) -> Void) -> Sequence {
         var s = seq
         for (i, el) in s.spine.enumerated() {
             guard case .clip(var c) = el else { continue }
-            if c.id == clipID { c.adjust = adjust; s.spine[i] = .clip(c); return s }
-            if let j = c.connected.firstIndex(where: { $0.id == clipID }) {
-                c.connected[j].adjust = adjust; s.spine[i] = .clip(c); return s
+            if c.id == id { f(&c, false); s.spine[i] = .clip(c); return s }
+            if let j = c.connected.firstIndex(where: { $0.id == id }) {
+                f(&c.connected[j], true); s.spine[i] = .clip(c); return s
             }
         }
         return s
+    }
+
+    /// 设置某 clip(主轴或连接子项)的 Adjustments(inspector 调参)。
+    static func setAdjust(clipID: ClipID, _ adjust: Adjustments, in seq: Sequence) -> Sequence {
+        mutatingClip(clipID, in: seq) { c, _ in c.adjust = adjust }
     }
 
     /// 设置某 clip(主轴或连接子项)的 effects 列表。纯函数，调用方负责 commit。
     static func setEffects(clipID: ClipID, _ effects: [Effect], in seq: Sequence) -> Sequence {
-        var s = seq
-        for (i, el) in s.spine.enumerated() {
-            guard case .clip(var c) = el else { continue }
-            if c.id == clipID { c.effects = effects; s.spine[i] = .clip(c); return s }
-            if let j = c.connected.firstIndex(where: { $0.id == clipID }) {
-                c.connected[j].effects = effects; s.spine[i] = .clip(c); return s
-            }
-        }
-        return s
+        mutatingClip(clipID, in: seq) { c, _ in c.effects = effects }
     }
 
     /// 设置某 clip(主轴或连接子项)的音量关键帧列表。纯函数，调用方负责 commit。
     static func setVolumeKeyframes(clipID: ClipID, _ kfs: [VolumeKeyframe], in seq: Sequence) -> Sequence {
-        var s = seq
-        for (i, el) in s.spine.enumerated() {
-            guard case .clip(var c) = el else { continue }
-            if c.id == clipID { c.volumeKeyframes = kfs; s.spine[i] = .clip(c); return s }
-            if let j = c.connected.firstIndex(where: { $0.id == clipID }) {
-                c.connected[j].volumeKeyframes = kfs; s.spine[i] = .clip(c); return s
-            }
-        }
-        return s
+        mutatingClip(clipID, in: seq) { c, _ in c.volumeKeyframes = kfs }
     }
 
     /// 设置某 clip(主轴或连接子项)的变换关键帧。纯函数,调用方负责 commit。
     static func setTransformKeyframes(clipID: ClipID, _ kfs: [TransformKeyframe], in seq: Sequence) -> Sequence {
-        var s = seq
-        for (i, el) in s.spine.enumerated() {
-            guard case .clip(var c) = el else { continue }
-            if c.id == clipID { c.transformKeyframes = kfs; s.spine[i] = .clip(c); return s }
-            if let j = c.connected.firstIndex(where: { $0.id == clipID }) {
-                c.connected[j].transformKeyframes = kfs; s.spine[i] = .clip(c); return s
-            }
-        }
-        return s
+        mutatingClip(clipID, in: seq) { c, _ in c.transformKeyframes = kfs }
     }
 
     /// 设置主轴第 index 个片段的交叉叠化时长(与前一片段 dissolve)。0=取消。
@@ -654,49 +637,27 @@ enum Mutations {
 
     /// 设置某 clip(主轴或连接子项)的标题规格(文字/字体/颜色/位置)。
     static func setTitle(clipID: ClipID, _ spec: TitleSpec, in seq: Sequence) -> Sequence {
-        var s = seq
-        for (i, el) in s.spine.enumerated() {
-            guard case .clip(var c) = el else { continue }
-            if c.id == clipID { c.title = spec; s.spine[i] = .clip(c); return s }
-            if let j = c.connected.firstIndex(where: { $0.id == clipID }) {
-                c.connected[j].title = spec; s.spine[i] = .clip(c); return s
-            }
-        }
-        return s
+        mutatingClip(clipID, in: seq) { c, _ in c.title = spec }
     }
 
     /// 设置某 clip 的时间线定位:offset(连接片段相对宿主起点的偏移)和/或 duration(时长)。
     /// 用于给【字幕/连接片段】改起止时间(set_title 的 startSeconds/durationSeconds)。
     /// 主轴 clip 的 offset 在磁性布局里无意义,只应用 duration。纯函数,调用方负责 commit。
     static func setClipTiming(clipID: ClipID, offset: Time?, sourceIn: Time?, duration: Time?, in seq: Sequence) -> Sequence {
-        var s = seq
-        for (i, el) in s.spine.enumerated() {
-            guard case .clip(var c) = el else { continue }
-            if c.id == clipID {                                   // 主轴:只改时长
-                if let d = duration { c.duration = d }
-                s.spine[i] = .clip(c); return s
-            }
-            if let j = c.connected.firstIndex(where: { $0.id == clipID }) {   // 连接:offset + sourceIn + 时长
-                if let o = offset { c.connected[j].offset = .seconds(max(0, o.seconds)) }
-                if let si = sourceIn { c.connected[j].sourceIn = .seconds(max(0, si.seconds)) }
-                if let d = duration { c.connected[j].duration = .seconds(max(0.1, d.seconds)) }
-                s.spine[i] = .clip(c); return s
+        mutatingClip(clipID, in: seq) { c, isConnected in
+            if isConnected {                                  // 连接:offset + sourceIn + 时长
+                if let o = offset { c.offset = .seconds(max(0, o.seconds)) }
+                if let si = sourceIn { c.sourceIn = .seconds(max(0, si.seconds)) }
+                if let d = duration { c.duration = .seconds(max(0.1, d.seconds)) }
+            } else if let d = duration {                      // 主轴:只改时长
+                c.duration = d
             }
         }
-        return s
     }
 
     /// 设置某 clip(主轴或连接子项)的启用状态(V 键停用/启用)。纯函数,调用方负责 commit。
     static func setEnabled(clipID: ClipID, _ enabled: Bool, in seq: Sequence) -> Sequence {
-        var s = seq
-        for (i, el) in s.spine.enumerated() {
-            guard case .clip(var c) = el else { continue }
-            if c.id == clipID { c.enabled = enabled; s.spine[i] = .clip(c); return s }
-            if let j = c.connected.firstIndex(where: { $0.id == clipID }) {
-                c.connected[j].enabled = enabled; s.spine[i] = .clip(c); return s
-            }
-        }
-        return s
+        mutatingClip(clipID, in: seq) { c, _ in c.enabled = enabled }
     }
 
     private static func assertInvariants(_ seq: Sequence) {
