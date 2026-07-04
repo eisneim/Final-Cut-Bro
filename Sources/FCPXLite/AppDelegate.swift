@@ -140,11 +140,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.mainMenu = mainMenu
     }
 
-    /// 标准"关于"菜单项(用 NSApp orderFrontStandardAboutPanel)。
+    /// "关于"菜单项 → 自定义关于面板(app 名/图标/版本[读 Info.plist] + 开发者信息)。
     private func aboutItem(_ name: String) -> NSMenuItem {
-        let item = NSMenuItem(title: t("关于") + " \(name)", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
-        item.target = NSApp
+        let item = NSMenuItem(title: t("关于") + " \(name)", action: #selector(showAboutPanel), keyEquivalent: "")
+        item.target = self
         return item
+    }
+
+    @objc private func showAboutPanel() {
+        let info = Bundle.main.infoDictionary
+        let short = info?["CFBundleShortVersionString"] as? String ?? "0.1"
+        let build = info?["CFBundleVersion"] as? String ?? "1"
+        // 开发者信息(标签走 t() 随语言切换)。
+        let credits = NSMutableAttributedString(
+            string: "\(t("开发者")):特里  spdpd@qq.com\n\(t("交流微信")):spdpd_net",
+            attributes: [.font: NSFont.systemFont(ofSize: 11),
+                         .foregroundColor: NSColor.secondaryLabelColor,
+                         .paragraphStyle: { let p = NSMutableParagraphStyle(); p.alignment = .center; p.paragraphSpacing = 3; return p }()])
+        var opts: [NSApplication.AboutPanelOptionKey: Any] = [
+            .applicationName: "Final Cut Bro",
+            .applicationVersion: short,
+            .version: build,
+            .credits: credits,
+        ]
+        if let icon = NSApp.applicationIconImage { opts[.applicationIcon] = icon }
+        NSApp.orderFrontStandardAboutPanel(options: opts)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     /// 是否正在文本框里编辑(此时所有快捷键放行,让打字/复制粘贴正常)。

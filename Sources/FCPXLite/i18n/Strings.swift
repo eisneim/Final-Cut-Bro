@@ -204,6 +204,8 @@ enum Strings {
         "先创建一个项目": [.en: "Create a project first"],
         "以此素材新建项目(同分辨率/帧率)": [.en: "New project from this asset (same resolution/fps)"],
         "关于": [.en: "About"],
+        "开发者": [.en: "Developer"],
+        "交流微信": [.en: "WeChat"],
 
         // MARK: 素材库
         "缩小(更像网格)": [.en: "Smaller (grid-like)"],
