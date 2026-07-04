@@ -7,11 +7,15 @@
 
 ---
 
+<video src="https://github.com/user-attachments/assets/d15e6385-2fe1-4e7f-927a-3fc888643869"></video>
+
+---
+
 ## 这是啥 / What is this
 
-**Final Cut Bro**是一个用 SwiftUI + AppKit 纯手写的 macOS 14 剪辑器,精简克隆了 Final Cut Pro 的磁性时间线。但它真正的野心不是再造一个 FCP——而是造一个**能被对话完整驱动、还能自己测自己**的剪辑环境:每一个编辑操作都是一条可序列化的命令,手动点按钮和 AI Agent 调工具走的是**同一条路**。零外部依赖,纯 Swift Package。
+**Final Cut Bro**是一个用 SwiftUI + AppKit 写的 macOS 14 剪辑器,精简克隆了 Final Cut Pro 的磁性时间线。但它真正的野心不是再造一个 FCP——而是造一个**能被对话完整驱动、还能自己测自己**的剪辑环境:每一个编辑操作都是一条可序列化的命令,手动点按钮和 AI Agent 调工具走的是**同一条路**。零外部依赖,纯 Swift Package。
 
-**Final Cut Bro** (formerly FCPX-lite) is a macOS 14 editor hand-written in pure SwiftUI + AppKit, a trimmed-down clone of Final Cut Pro's magnetic timeline. Its real ambition isn't "another FCP" — it's an editing environment that can be **fully driven by conversation and test itself**: every edit is one serializable command, and clicking a button vs. an AI Agent calling a tool go down the **exact same path**. Zero external deps, pure Swift Package.
+**Final Cut Bro** (formerly FCPX-lite) is a macOS 14 editor written in pure SwiftUI + AppKit, a trimmed-down clone of Final Cut Pro's magnetic timeline. Its real ambition isn't "another FCP" — it's an editing environment that can be **fully driven by conversation and test itself**: every edit is one serializable command, and clicking a button vs. an AI Agent calling a tool go down the **exact same path**. Zero external deps, pure Swift Package.
 
 ## 亮点 / Highlights
 
