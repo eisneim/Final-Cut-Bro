@@ -1,0 +1,66 @@
+import Foundation
+
+/// 中文原文 → { 目标语言: 译文 }。中文是 key(直通,不入表)。加语言 = 每条补一项。
+/// 只收录【用户界面】串;Agent 工具 doc/参数(LLM-facing)不在此列。
+enum Strings {
+    static let table: [String: [Language: String]] = [
+        // MARK: 菜单栏(AppDelegate)
+        "设置…": [.en: "Settings…"],
+        "隐藏 Final Cut Bro": [.en: "Hide Final Cut Bro"],
+        "隐藏其他": [.en: "Hide Others"],
+        "显示全部": [.en: "Show All"],
+        "退出 Final Cut Bro": [.en: "Quit Final Cut Bro"],
+        "文件": [.en: "File"],
+        "新建项目…": [.en: "New Project…"],
+        "导入素材…": [.en: "Import Media…"],
+        "导出成片…": [.en: "Export Movie…"],
+        "导出 FCPXML…": [.en: "Export FCPXML…"],
+        "编辑": [.en: "Edit"],
+        "撤销": [.en: "Undo"],
+        "重做": [.en: "Redo"],
+        "剪切": [.en: "Cut"],
+        "复制": [.en: "Copy"],
+        "粘贴": [.en: "Paste"],
+        "粘贴属性": [.en: "Paste Attributes"],
+        "全选": [.en: "Select All"],
+        "显示": [.en: "View"],
+        "显示/隐藏素材库": [.en: "Show/Hide Library"],
+        "显示/隐藏检查器": [.en: "Show/Hide Inspector"],
+        "显示/隐藏 Agent 面板": [.en: "Show/Hide Agent Panel"],
+
+        // MARK: 顶栏 / 语言
+        "语言": [.en: "Language"],
+        "界面语言": [.en: "Interface Language"],
+        "素材库": [.en: "Library"],
+        "检查器": [.en: "Inspector"],
+        "Agent 面板": [.en: "Agent Panel"],
+        "导出": [.en: "Export"],
+
+        // MARK: 时间线工具栏
+        "时间线": [.en: "Timeline"],
+        "连接到主情节 (Q)": [.en: "Connect to primary (Q)"],
+        "插入到播放头处 (W)": [.en: "Insert at playhead (W)"],
+        "追加到末尾 (E)": [.en: "Append (E)"],
+        "覆盖 (D)": [.en: "Overwrite (D)"],
+        "缩小 (⌘−)": [.en: "Zoom out (⌘−)"],
+        "放大 (⌘+)": [.en: "Zoom in (⌘+)"],
+        "减小素材条高度": [.en: "Decrease clip height"],
+        "增大素材条高度": [.en: "Increase clip height"],
+        "画面/波形 占比": [.en: "Video/waveform ratio"],
+        "效果开关 ⌘5": [.en: "Effects panel ⌘5"],
+        "跳读预览:开(鼠标划过时间轴即预览该帧)": [.en: "Skimming: on (hover timeline to preview)"],
+        "跳读预览:关": [.en: "Skimming: off"],
+        "磁吸编辑:开(N 切换)": [.en: "Snapping: on (N)"],
+        "磁吸编辑:关(N 切换)": [.en: "Snapping: off (N)"],
+
+        // MARK: 通用按钮
+        "添加": [.en: "Add"],
+        "保存修改": [.en: "Save"],
+        "取消": [.en: "Cancel"],
+        "取消编辑": [.en: "Cancel edit"],
+        "删除": [.en: "Delete"],
+        "确定": [.en: "OK"],
+        "关闭": [.en: "Close"],
+        "播放 / 暂停 (空格)": [.en: "Play / Pause (Space)"],
+    ]
+}
