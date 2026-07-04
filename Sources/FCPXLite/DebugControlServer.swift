@@ -29,13 +29,18 @@ final class DebugControlServer {
 
     func start() {
         do {
-            listener = try NWListener(using: .tcp, on: NWEndpoint.Port(rawValue: port)!)
+            // 安全:只绑定 loopback(127.0.0.1)。否则 NWListener 默认监听所有网卡(0.0.0.0),
+            // 局域网内任何人都能打到 /cmd /agent(可跑 shell 命令)→ 远程控制风险。仅本机可连。
+            let params = NWParameters.tcp
+            params.requiredLocalEndpoint = NWEndpoint.hostPort(host: "127.0.0.1",
+                                                               port: NWEndpoint.Port(rawValue: port)!)
+            listener = try NWListener(using: params)
             listener?.newConnectionHandler = { [weak self] conn in
                 conn.start(queue: .global())
                 self?.receive(conn, buffer: Data())
             }
             listener?.start(queue: .global())
-            NSLog("[DebugControlServer] http://127.0.0.1:\(port)  (/state /cmd /screenshot)")
+            NSLog("[DebugControlServer] http://127.0.0.1:\(port)  (/state /cmd /screenshot) — loopback only")
         } catch {
             NSLog("[DebugControlServer] start failed: \(error)")
         }
