@@ -153,6 +153,7 @@ enum Strings {
         "高斯模糊": [.en: "Gaussian blur"],
         "radius 可调": [.en: "adjustable radius"],
         "音频淡入淡出": [.en: "Audio fade in/out"],
+        "淡入淡出": [.en: "Fade in/out"],
         "交叉叠化": [.en: "Cross dissolve"],
         "1s,与前一片段 dissolve": [.en: "1s dissolve with previous clip"],
         "复合": [.en: "Composite"],
@@ -228,5 +229,8 @@ enum Strings {
         "方向": [.en: "Direction"],
         "无": [.en: "None"],
         "有": [.en: "Yes"],
+        "间隙": [.en: "Gap"],
+        "素材丢失": [.en: "Media missing"],
+        "把素材从左侧拖到这里": [.en: "Drag media here from the left"],
     ]
 }

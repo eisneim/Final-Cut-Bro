@@ -74,7 +74,7 @@ extension TimelineContentView {
                         let sel = NSBezierPath(roundedRect: rect.insetBy(dx: 1, dy: 1), xRadius: 3, yRadius: 3)
                         TimelineColors.selectBorder.setStroke(); sel.lineWidth = 2; sel.stroke()
                     }
-                    ("间隙" as NSString).draw(at: NSPoint(x: rect.minX + 4, y: rect.minY + 3),
+                    (t("间隙") as NSString).draw(at: NSPoint(x: rect.minX + 4, y: rect.minY + 3),
                         withAttributes: [.font: NSFont.systemFont(ofSize: 9),
                                          .foregroundColor: TimelineColors.textMuted])
                 }
@@ -224,7 +224,7 @@ extension TimelineContentView {
             // 素材已从素材库删除 → 红色背景 + "素材丢失" 提示
             NSGraphicsContext.current?.restoreGraphicsState()
             NSColor.systemRed.withAlphaComponent(0.3).setFill(); path.fill()
-            let miss = NSAttributedString(string: "素材丢失", attributes: [
+            let miss = NSAttributedString(string: t("素材丢失"), attributes: [
                 .font: NSFont.systemFont(ofSize: 11, weight: .medium),
                 .foregroundColor: NSColor.white
             ])
@@ -294,7 +294,7 @@ extension TimelineContentView {
             TimelineColors.selectBorder.setStroke(); sel.lineWidth = 2; sel.stroke()
         }
         // 文字(标题内容)
-        let text = (clip.title?.text ?? "标题") as NSString
+        let text = (clip.title?.text ?? t("标题")) as NSString
         let attrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 10, weight: .medium),
             .foregroundColor: NSColor.white,
@@ -394,7 +394,7 @@ extension TimelineContentView {
     }
 
     private func drawEmptyHint() {
-        let hint = "把素材从左侧拖到这里" as NSString
+        let hint = t("把素材从左侧拖到这里") as NSString
         let attrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 12),
             .foregroundColor: TimelineColors.textMuted,

@@ -26,7 +26,7 @@ struct InspectorEffectsSection: View {
     }
 
     private func label(_ k: EffectKind) -> String {
-        switch k { case .color: return "调色"; case .blur: return "高斯模糊"; case .fade: return "淡入淡出" }
+        switch k { case .color: return t("调色"); case .blur: return t("高斯模糊"); case .fade: return t("淡入淡出") }
     }
 
     @ViewBuilder private func effectRow(_ idx: Int, _ e: Effect) -> some View {
