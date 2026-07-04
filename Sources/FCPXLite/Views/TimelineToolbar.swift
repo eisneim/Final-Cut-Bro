@@ -6,7 +6,7 @@ struct TimelineToolbar: View {
     var body: some View {
         HStack(spacing: 8) {
             // 左:标题 + 动作按钮 + 工具下拉(全部靠左)
-            Text("时间线").font(Tokens.Typeface.title).foregroundStyle(Tokens.Palette.textPrimary)
+            Text(t("时间线")).font(Tokens.Typeface.title).foregroundStyle(Tokens.Palette.textPrimary)
             editButtons
             toolSelector
             Spacer()
@@ -25,10 +25,10 @@ struct TimelineToolbar: View {
 
     private var editButtons: some View {
         HStack(spacing: 2) {
-            editButton(icon: ConnectIcon(), help: "连接到主情节 (Q)") { store.connectAtPlayhead() }
-            editButton(icon: InsertIcon(), help: "插入到播放头处 (W)") { store.insertAtPlayhead() }
-            editButton(icon: AppendIcon(), help: "追加到末尾 (E)") { store.appendSelected() }
-            editButton(icon: OverwriteIcon(), help: "覆盖 (D)") { store.overwriteAtPlayhead() }
+            editButton(icon: ConnectIcon(), help: t("连接到主情节 (Q)")) { store.connectAtPlayhead() }
+            editButton(icon: InsertIcon(), help: t("插入到播放头处 (W)")) { store.insertAtPlayhead() }
+            editButton(icon: AppendIcon(), help: t("追加到末尾 (E)")) { store.appendSelected() }
+            editButton(icon: OverwriteIcon(), help: t("覆盖 (D)")) { store.overwriteAtPlayhead() }
         }
         .disabled(store.document.assetLibrary.isEmpty)
     }
@@ -80,7 +80,7 @@ struct TimelineToolbar: View {
             Button { store.dispatch(.setZoom(store.ui.pxPerSecond / 1.5)) } label: {
                 Text("−").font(Tokens.Typeface.body).foregroundStyle(Tokens.Palette.textIcon)
             }
-            .buttonStyle(.plain).frame(width: 22, height: 22).help("缩小 (⌘−)")
+            .buttonStyle(.plain).frame(width: 22, height: 22).help(t("缩小 (⌘−)"))
 
             Text("\(Int(store.ui.pxPerSecond)) px/s")
                 .font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted).frame(width: 52)
@@ -88,7 +88,7 @@ struct TimelineToolbar: View {
             Button { store.dispatch(.setZoom(store.ui.pxPerSecond * 1.5)) } label: {
                 Text("+").font(Tokens.Typeface.body).foregroundStyle(Tokens.Palette.textIcon)
             }
-            .buttonStyle(.plain).frame(width: 22, height: 22).help("放大 (⌘+)")
+            .buttonStyle(.plain).frame(width: 22, height: 22).help(t("放大 (⌘+)"))
 
             // 磁吸编辑开关:吸铁石图标。开=切割/修剪/平移自动 snap 到邻近编辑点。
             Button { store.dispatch(.toggleSnapping) } label: {
@@ -97,7 +97,7 @@ struct TimelineToolbar: View {
                     .foregroundStyle(store.ui.snappingEnabled ? Tokens.Palette.selectYellow : Tokens.Palette.textMuted)
             }
             .buttonStyle(.plain).frame(width: 24, height: 22)
-            .help(store.ui.snappingEnabled ? "磁吸编辑:开(N 切换)" : "磁吸编辑:关(N 切换)")
+            .help(store.ui.snappingEnabled ? t("磁吸编辑:开(N 切换)") : t("磁吸编辑:关(N 切换)"))
         }
     }
 
@@ -107,15 +107,15 @@ struct TimelineToolbar: View {
         HStack(spacing: 4) {
             Button { store.dispatch(.setClipHeight(store.ui.clipHeight - 12)) } label: {
                 Text("▭−").font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textIcon)
-            }.buttonStyle(.plain).frame(width: 22, height: 20).help("减小素材条高度")
+            }.buttonStyle(.plain).frame(width: 22, height: 20).help(t("减小素材条高度"))
             Button { store.dispatch(.setClipHeight(store.ui.clipHeight + 12)) } label: {
                 Text("▭+").font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textIcon)
-            }.buttonStyle(.plain).frame(width: 22, height: 20).help("增大素材条高度")
+            }.buttonStyle(.plain).frame(width: 22, height: 20).help(t("增大素材条高度"))
             Slider(value: Binding(
                 get: { store.ui.videoAudioRatio },
                 set: { store.dispatch(.setVideoAudioRatio($0)) }
             ), in: 0.1...0.9)
-            .frame(width: 70).help("画面/波形 占比")
+            .frame(width: 70).help(t("画面/波形 占比"))
         }
     }
 
@@ -128,7 +128,7 @@ struct TimelineToolbar: View {
                 .foregroundStyle(store.ui.timelineSkimming ? Tokens.Palette.selectYellow : Tokens.Palette.textMuted)
         }
         .buttonStyle(.plain).frame(width: 24, height: 22)
-        .help(store.ui.timelineSkimming ? "跳读预览:开(鼠标划过时间轴即预览该帧)" : "跳读预览:关")
+        .help(store.ui.timelineSkimming ? t("跳读预览:开(鼠标划过时间轴即预览该帧)") : t("跳读预览:关"))
     }
 
     // MARK: - Effects toggle (最右)
@@ -137,7 +137,7 @@ struct TimelineToolbar: View {
         Button { store.dispatch(.setShowEffects(!store.ui.showEffects)) } label: {
             Text("▤▤").font(Tokens.Typeface.body)
         }
-        .help("效果开关 ⌘5")
+        .help(t("效果开关 ⌘5"))
         .buttonStyle(.plain)
         .foregroundStyle(store.ui.showEffects ? Tokens.Palette.selectYellow : Tokens.Palette.textMuted)
         .padding(.leading, 6)

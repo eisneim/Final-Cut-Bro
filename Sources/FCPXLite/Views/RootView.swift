@@ -68,7 +68,7 @@ struct RootView: View {
                     timelineResizeHandle(availableHeight: avail)
                     TimelineToolbar(store: store)
                     Divider().overlay(Tokens.Palette.divider)
-                    // 无项目 → 时间轴门控:灰色"先创建项目"。有项目 → 真时间轴。
+                    // 无项目 → 时间轴门控:灰色t("先创建项目")。有项目 → 真时间轴。
                     Group {
                         if store.document.hasProject {
                             HStack(spacing: 0) {
@@ -97,7 +97,7 @@ struct RootView: View {
             Button { store.dispatch(.setShowProjectModal(true)) } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "plus.rectangle.on.rectangle")
-                    Text("先创建一个项目")
+                    Text(t("先创建一个项目"))
                 }
                 .font(Tokens.Typeface.body).foregroundStyle(Tokens.Palette.textMuted)
                 .padding(.horizontal, 16).padding(.vertical, 10)
@@ -113,7 +113,7 @@ struct RootView: View {
     private var formatToolbar: some View {
         HStack {
             Spacer()
-            Text("1080p HD 25p,立体声").font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
+            Text(t("1080p HD 25p,立体声")).font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
             Spacer()
         }
         .padding(.horizontal, 12).frame(height: Tokens.Metric.toolbarHeight)

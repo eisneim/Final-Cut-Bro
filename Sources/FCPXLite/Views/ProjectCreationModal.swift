@@ -5,7 +5,7 @@ import SwiftUI
 struct ProjectCreationModal: View {
     let store: DocumentStore
 
-    @State private var name = "未命名项目"
+    @State private var name = t("未命名项目")
     @State private var preset: ResPreset = .p1080
     @State private var portrait = false
     @State private var customW = "1920"
@@ -15,7 +15,7 @@ struct ProjectCreationModal: View {
     enum ResPreset: String, CaseIterable, Identifiable {
         case p720, p1080, p2160, custom
         var id: String { rawValue }
-        var label: String { switch self { case .p720: return "720p"; case .p1080: return "1080p"; case .p2160: return "4K"; case .custom: return "自定义" } }
+        var label: String { switch self { case .p720: return "720p"; case .p1080: return "1080p"; case .p2160: return "4K"; case .custom: return t("自定义") } }
         /// 横屏基准尺寸(竖屏时宽高对调)。custom 返回 nil。
         var landscape: (Int, Int)? {
             switch self {
@@ -30,17 +30,17 @@ struct ProjectCreationModal: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("创建项目").font(Tokens.Typeface.title).foregroundStyle(Tokens.Palette.textPrimary)
+                Text(t("创建项目")).font(Tokens.Typeface.title).foregroundStyle(Tokens.Palette.textPrimary)
                 Spacer()
                 Button { store.dispatch(.setShowProjectModal(false)) } label: {
                     Image(systemName: "xmark").foregroundStyle(Tokens.Palette.textMuted)
                 }.buttonStyle(.plain)
             }
 
-            field("名称") { TextField("项目名", text: $name).textFieldStyle(.plain)
+            field(t("名称")) { TextField(t("项目名"), text: $name).textFieldStyle(.plain)
                 .padding(7).background(Tokens.Palette.elevated).cornerRadius(5) }
 
-            field("分辨率") {
+            field(t("分辨率")) {
                 Picker("", selection: $preset) {
                     ForEach(ResPreset.allCases) { Text($0.label).tag($0) }
                 }.labelsHidden().pickerStyle(.segmented)
@@ -48,21 +48,21 @@ struct ProjectCreationModal: View {
 
             if preset == .custom {
                 HStack(spacing: 8) {
-                    Text("宽").font(.system(size: 10)).foregroundStyle(Tokens.Palette.textMuted)
-                    TextField("宽", text: $customW).textFieldStyle(.plain).frame(width: 70)
+                    Text(t("宽")).font(.system(size: 10)).foregroundStyle(Tokens.Palette.textMuted)
+                    TextField(t("宽"), text: $customW).textFieldStyle(.plain).frame(width: 70)
                         .padding(6).background(Tokens.Palette.elevated).cornerRadius(5)
-                    Text("高").font(.system(size: 10)).foregroundStyle(Tokens.Palette.textMuted)
-                    TextField("高", text: $customH).textFieldStyle(.plain).frame(width: 70)
+                    Text(t("高")).font(.system(size: 10)).foregroundStyle(Tokens.Palette.textMuted)
+                    TextField(t("高"), text: $customH).textFieldStyle(.plain).frame(width: 70)
                         .padding(6).background(Tokens.Palette.elevated).cornerRadius(5)
-                    Text("(须为2的倍数)").font(.system(size: 9)).foregroundStyle(Tokens.Palette.textMuted)
+                    Text(t("(须为2的倍数)")).font(.system(size: 9)).foregroundStyle(Tokens.Palette.textMuted)
                 }
             } else {
                 Toggle(isOn: $portrait) {
-                    Text("竖屏(宽高对调)").font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textPrimary)
+                    Text(t("竖屏(宽高对调)")).font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textPrimary)
                 }.toggleStyle(.checkbox)
             }
 
-            field("帧率") {
+            field(t("帧率")) {
                 Picker("", selection: $fps) {
                     Text("24").tag(24.0); Text("25").tag(25.0); Text("30").tag(30.0); Text("60").tag(60.0)
                 }.labelsHidden().pickerStyle(.segmented)
@@ -75,7 +75,7 @@ struct ProjectCreationModal: View {
 
             HStack {
                 Spacer()
-                Button("创建") { create() }
+                Button(t("创建")) { create() }
                     .buttonStyle(.plain).padding(.horizontal, 16).padding(.vertical, 6)
                     .background(validationError == nil ? Tokens.Palette.clipBlue : Tokens.Palette.elevated)
                     .foregroundStyle(Tokens.Palette.onAccent).cornerRadius(6)
@@ -102,20 +102,20 @@ struct ProjectCreationModal: View {
     }
 
     private var sizeSummary: String {
-        guard let s = resolvedSize else { return "尺寸无效" }
+        guard let s = resolvedSize else { return t("尺寸无效") }
         return "输出尺寸:\(s.w) × \(s.h) @ \(Int(fps))fps"
     }
 
     private var validationError: String? {
-        guard let s = resolvedSize else { return "宽高必须是数字" }
-        guard s.w >= 2, s.h >= 2 else { return "宽高太小" }
-        guard s.w % 2 == 0, s.h % 2 == 0 else { return "宽高必须是 2 的倍数" }
+        guard let s = resolvedSize else { return t("宽高必须是数字") }
+        guard s.w >= 2, s.h >= 2 else { return t("宽高太小") }
+        guard s.w % 2 == 0, s.h % 2 == 0 else { return t("宽高必须是 2 的倍数") }
         return nil
     }
 
     private func create() {
         guard let s = resolvedSize, validationError == nil else { return }
-        let p = Project(name: name.isEmpty ? "未命名项目" : name,
+        let p = Project(name: name.isEmpty ? t("未命名项目") : name,
                         formatWidth: s.w, formatHeight: s.h, frameRate: fps)
         store.dispatch(.createProject(p))
         store.dispatch(.setShowProjectModal(false))

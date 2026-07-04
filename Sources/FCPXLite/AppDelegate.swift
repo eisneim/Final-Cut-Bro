@@ -142,7 +142,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// 标准"关于"菜单项(用 NSApp orderFrontStandardAboutPanel)。
     private func aboutItem(_ name: String) -> NSMenuItem {
-        let item = NSMenuItem(title: t("关于 \(name)"), action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        let item = NSMenuItem(title: t("关于") + " \(name)", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         item.target = NSApp
         return item
     }

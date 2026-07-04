@@ -31,16 +31,16 @@ struct BrowserView: View {
 
     private var browserHeader: some View {
         HStack(spacing: 8) {
-            Text("片段 (\(store.document.assetLibrary.count))")
+            Text(t("片段") + " (\(store.document.assetLibrary.count))")
                 .font(Tokens.Typeface.label)
                 .foregroundStyle(Tokens.Palette.textPrimary)
             // FCPX 式片段外观缩放:- 缩小成网格小方块,+ 放大成长胶片条
             HStack(spacing: 2) {
-                zoomButton("minus", delta: 0.66, help: "缩小(更像网格)")
-                zoomButton("plus", delta: 1.5, help: "放大(长胶片条)")
+                zoomButton("minus", delta: 0.66, help: t("缩小(更像网格)"))
+                zoomButton("plus", delta: 1.5, help: t("放大(长胶片条)"))
             }
             Spacer()
-            Button("导入") { ImportPanel.present(into: store) }
+            Button(t("导入")) { ImportPanel.present(into: store) }
                 .font(Tokens.Typeface.label)
                 .buttonStyle(.plain)
                 .foregroundStyle(Tokens.Palette.selectYellow)
@@ -68,7 +68,7 @@ struct BrowserView: View {
     private var emptyState: some View {
         VStack(spacing: 8) {
             Spacer()
-            Text("点击「导入」或\n从 Finder 拖入素材")
+            Text(t("点击「导入」或\n从 Finder 拖入素材"))
                 .font(Tokens.Typeface.label)
                 .foregroundStyle(Tokens.Palette.textMuted)
                 .multilineTextAlignment(.center)
@@ -117,16 +117,16 @@ struct BrowserView: View {
             .contextMenu {
                 let sel = store.ui.selectedAssetIDs
                 if sel.count > 1 && sel.contains(asset.id) {
-                    Button("删除 \(sel.count) 个素材", role: .destructive) {
+                    Button(String(format: t("删除 %d 个素材"), sel.count), role: .destructive) {
                         store.removeAssets(sel)
                     }
                 } else {
-                    Button("删除素材", role: .destructive) {
+                    Button(t("删除素材"), role: .destructive) {
                         store.dispatch(.removeAsset(asset.id))
                     }
                 }
                 Divider()
-                Button("以此素材新建项目(同分辨率/帧率)") {
+                Button(t("以此素材新建项目(同分辨率/帧率)")) {
                     store.createProject(fromAsset: asset)
                 }
             }

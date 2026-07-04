@@ -12,7 +12,7 @@ struct ExportPanel: View {
         VStack(alignment: .leading, spacing: 14) {
             // Header
             HStack {
-                Text("导出").font(Tokens.Typeface.title).foregroundStyle(Tokens.Palette.textPrimary)
+                Text(t("导出")).font(Tokens.Typeface.title).foregroundStyle(Tokens.Palette.textPrimary)
                 Spacer()
                 Button { store.dispatch(.setShowExport(false)) } label: {
                     Image(systemName: "xmark").foregroundStyle(Tokens.Palette.textMuted)
@@ -21,8 +21,8 @@ struct ExportPanel: View {
 
             // Tab selector
             Picker("", selection: $tab) {
-                Text("导出视频").tag(0)
-                Text("导出工程").tag(1)
+                Text(t("导出视频")).tag(0)
+                Text(t("导出工程")).tag(1)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -50,7 +50,7 @@ struct ExportPanel: View {
                 if let err = store.ui.exportError { errorBanner(err) }   // 失败/卡死 → 顶部醒目红条
                 // Resolution
                 HStack {
-                    Text("分辨率").font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
+                    Text(t("分辨率")).font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
                         .frame(width: 60, alignment: .leading)
                     Picker("", selection: $settings.resolution) {
                         ForEach(ExportResolution.allCases, id: \.self) { r in
@@ -61,7 +61,7 @@ struct ExportPanel: View {
 
                 // Codec
                 HStack {
-                    Text("编码").font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
+                    Text(t("编码")).font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
                         .frame(width: 60, alignment: .leading)
                     Picker("", selection: $settings.codec) {
                         ForEach(ExportCodec.allCases, id: \.self) { c in
@@ -72,7 +72,7 @@ struct ExportPanel: View {
 
                 // Quality (disabled for ProRes)
                 HStack {
-                    Text("质量").font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
+                    Text(t("质量")).font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
                         .frame(width: 60, alignment: .leading)
                     Picker("", selection: $settings.quality) {
                         ForEach(ExportQuality.allCases, id: \.self) { q in
@@ -86,14 +86,14 @@ struct ExportPanel: View {
 
                 // Audio toggle
                 HStack {
-                    Text("包含音频").font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
+                    Text(t("包含音频")).font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
                         .frame(width: 60, alignment: .leading)
                     Toggle("", isOn: $settings.includeAudio).labelsHidden()
                     Spacer()
                 }
 
                 // Export button
-                Button("导出…") { exportVideo() }
+                Button(t("导出…")) { exportVideo() }
                     .buttonStyle(.plain).padding(8)
                     .frame(maxWidth: .infinity)
                     .background(Tokens.Palette.clipBlue).cornerRadius(6)
@@ -126,10 +126,10 @@ struct ExportPanel: View {
 
     @ViewBuilder private var projectExportTab: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("导出 FCPXML 工程文件,可在 Final Cut Pro 中继续编辑。")
+            Text(t("导出 FCPXML 工程文件,可在 Final Cut Pro 中继续编辑。"))
                 .font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
-            Button("导出 FCPXML 工程…") { exportFCPXML() }
+            Button(t("导出 FCPXML 工程…")) { exportFCPXML() }
                 .buttonStyle(.plain).padding(8)
                 .frame(maxWidth: .infinity)
                 .background(Tokens.Palette.elevated).cornerRadius(6)
@@ -143,7 +143,7 @@ struct ExportPanel: View {
 
     private func exportVideo() {
         let ext = settings.codec == .prores ? "mov" : "mp4"
-        let base = store.document.currentProject?.name ?? "导出"
+        let base = store.document.currentProject?.name ?? t("导出")
         let panel = NSSavePanel()
         panel.nameFieldStringValue = "\(base).\(ext)"
         if panel.runModal() == .OK, let url = panel.url {
@@ -152,7 +152,7 @@ struct ExportPanel: View {
     }
 
     private func exportFCPXML() {
-        let base = store.document.currentProject?.name ?? "导出"
+        let base = store.document.currentProject?.name ?? t("导出")
         let panel = NSSavePanel()
         panel.nameFieldStringValue = "\(base).fcpxml"
         guard panel.runModal() == .OK, let url = panel.url else { return }

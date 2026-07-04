@@ -49,7 +49,7 @@ struct PreviewView: NSViewRepresentable {
             let playingChanged = isPlaying != lastIsPlaying
             let seqChanged = lastSequence == nil || lastSequence != sequence
             guard seqChanged || playheadChanged || playingChanged else { return }
-            // 仅在序列真的变了时才拼指纹,判定是"结构变(需重建 item)"还是"仅参数变(只更新 videoComposition)"。
+            // 仅在序列真的变了时才拼指纹,判定是t("结构变(需重建 item)")还是t("仅参数变(只更新 videoComposition)")。
             let structureChanged: Bool
             if seqChanged {
                 let fp = Self.structureFingerprint(sequence)
@@ -230,7 +230,7 @@ struct ViewerView: View {
                     .foregroundStyle(Tokens.Palette.textIcon)
             }
             .buttonStyle(.plain)
-            .help("播放 / 暂停 (空格)")
+            .help(t("播放 / 暂停 (空格)"))
 
             Text(timecode(store.ui.playhead.seconds))
                 .font(Tokens.Typeface.timecode)

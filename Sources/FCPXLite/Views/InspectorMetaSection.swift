@@ -30,9 +30,9 @@ private func fmtDuration(_ seconds: Double) -> String {
 /// 宽高比方向判定。
 private func orientationLabel(w: Int, h: Int) -> String {
     if w == 0 || h == 0 { return "—" }
-    if w > h { return "横屏 (Landscape)" }
-    if h > w { return "竖屏 (Portrait)" }
-    return "方形 (Square)"
+    if w > h { return t("横屏 (Landscape)") }
+    if h > w { return t("竖屏 (Portrait)") }
+    return t("方形 (Square)")
 }
 
 /// 项目信息面板。
@@ -47,14 +47,14 @@ struct InspectorProjectMeta: View {
         let total = Layout.compute(doc.sequence).map { ($0.absStart + $0.duration).seconds }.max() ?? 0
         return ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                metaHeader("项目")
+                metaHeader(t("项目"))
                 Divider().overlay(Tokens.Palette.divider)
-                metaRow("名称", doc.currentProject?.name ?? "—")
-                metaRow("分辨率", "\(w) × \(h)")
-                metaRow("方向", orientationLabel(w: w, h: h))
-                metaRow("帧率", "\(Int(doc.frameRate.rounded())) fps")
-                metaRow("片段数", "\(clipCount)")
-                metaRow("时长", fmtDuration(total))
+                metaRow(t("名称"), doc.currentProject?.name ?? "—")
+                metaRow(t("分辨率"), "\(w) × \(h)")
+                metaRow(t("方向"), orientationLabel(w: w, h: h))
+                metaRow(t("帧率"), "\(Int(doc.frameRate.rounded())) fps")
+                metaRow(t("片段数"), "\(clipCount)")
+                metaRow(t("时长"), fmtDuration(total))
             }
         }
         .background(Tokens.Palette.chrome)
@@ -68,31 +68,31 @@ struct InspectorAssetMeta: View {
     var body: some View {
         let kindLabel: String = {
             switch asset.kind {
-            case .video: return "视频"
-            case .audio: return "音频"
-            case .image: return "图片"
+            case .video: return t("视频")
+            case .audio: return t("音频")
+            case .image: return t("图片")
             }
         }()
         return ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                metaHeader("素材")
+                metaHeader(t("素材"))
                 Divider().overlay(Tokens.Palette.divider)
-                metaRow("文件", asset.url.lastPathComponent)
-                metaRow("类型", kindLabel)
+                metaRow(t("文件"), asset.url.lastPathComponent)
+                metaRow(t("类型"), kindLabel)
                 if asset.kind != .audio {
                     let w = Int(asset.naturalSize.width.rounded())
                     let h = Int(asset.naturalSize.height.rounded())
-                    metaRow("分辨率", "\(w) × \(h)")
-                    metaRow("方向", orientationLabel(w: w, h: h))
+                    metaRow(t("分辨率"), "\(w) × \(h)")
+                    metaRow(t("方向"), orientationLabel(w: w, h: h))
                 }
                 if asset.kind == .video, let fr = asset.frameRate, fr > 0 {
-                    metaRow("帧率", String(format: "%.2f fps", fr))
+                    metaRow(t("帧率"), String(format: "%.2f fps", fr))
                 }
                 if asset.kind != .image {
-                    metaRow("时长", fmtDuration(asset.duration.seconds))
+                    metaRow(t("时长"), fmtDuration(asset.duration.seconds))
                 }
                 if asset.kind == .video {
-                    metaRow("音频", asset.hasAudio ? "有" : "无")
+                    metaRow(t("音频"), asset.hasAudio ? t("有") : t("无"))
                 }
             }
         }

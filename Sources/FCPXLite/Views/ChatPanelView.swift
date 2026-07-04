@@ -32,7 +32,7 @@ struct ChatPanelView: View {
                 Image(systemName: "gearshape").foregroundStyle(Tokens.Palette.textMuted)
             }
             .buttonStyle(.plain)
-            .help("设置(配置 AI provider)")
+            .help(t("设置(配置 AI provider)"))
         }
         .padding(8)
         .background(Tokens.Palette.elevated)
@@ -42,7 +42,7 @@ struct ChatPanelView: View {
     private var providerPicker: some View {
         Menu {
             if store.providers.isEmpty {
-                Text("未配置 provider")
+                Text(t("未配置 provider"))
             } else {
                 ForEach(store.providers) { p in
                     Button {
@@ -57,7 +57,7 @@ struct ChatPanelView: View {
                 }
             }
             Divider()
-            Button("配置 Provider…") { store.ui.showSettings = true }
+            Button(t("配置 Provider…")) { store.ui.showSettings = true }
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "cpu").font(.system(size: 10)).foregroundStyle(Tokens.Palette.textMuted)
@@ -71,7 +71,7 @@ struct ChatPanelView: View {
     }
 
     private var currentModelLabel: String {
-        store.currentProvider()?.model ?? "选择模型"
+        store.currentProvider()?.model ?? t("选择模型")
     }
 
     // MARK: - 消息列表
@@ -115,7 +115,7 @@ struct ChatPanelView: View {
                 Image(systemName: collapsed ? "chevron.right" : "chevron.down")
                     .font(.system(size: 8)).foregroundStyle(Tokens.Palette.textMuted).padding(.top, 2)
                 if collapsed {
-                    Text("💭 思考过程(点击展开)").font(.system(size: 10))
+                    Text(t("💭 思考过程(点击展开)")).font(.system(size: 10))
                         .foregroundStyle(Tokens.Palette.textMuted).lineLimit(1)
                 } else {
                     // 分块渲染:thinking 越来越长,只有最后一块重排,前面的冻结(内容可见)。
@@ -167,13 +167,13 @@ struct ChatPanelView: View {
         }
     }
 
-    /// 确认卡片:黄色警告 + "允许"/"拒绝" 按钮,用户点后 Agent 继续。
+    /// 确认卡片:黄色警告 + t("允许")/t("拒绝") 按钮,用户点后 Agent 继续。
     private func confirmCard(_ m: AgentMessage) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.yellow)
-                Text("需要确认").font(.system(size: 11, weight: .semibold))
+                Text(t("需要确认")).font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Tokens.Palette.textPrimary)
             }
             Text(m.text).font(Tokens.Typeface.label)
@@ -181,12 +181,12 @@ struct ChatPanelView: View {
                 .textSelection(.enabled)
             HStack(spacing: 10) {
                 Button { store.respondAgentConfirm(approve: true) } label: {
-                    Text("允许").font(.system(size: 11, weight: .medium))
+                    Text(t("允许")).font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.white).padding(.horizontal, 14).padding(.vertical, 5)
                         .background(Color.green).cornerRadius(6)
                 }.buttonStyle(.plain)
                 Button { store.respondAgentConfirm(approve: false) } label: {
-                    Text("拒绝").font(.system(size: 11, weight: .medium))
+                    Text(t("拒绝")).font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.white).padding(.horizontal, 14).padding(.vertical, 5)
                         .background(Color.red).cornerRadius(6)
                 }.buttonStyle(.plain)
@@ -208,7 +208,7 @@ struct ChatPanelView: View {
     private var inputArea: some View {
         VStack(spacing: 4) {
             HStack(alignment: .bottom, spacing: 6) {
-                TextField("和 Agent 对话…", text: Binding(
+                TextField(t("和 Agent 对话…"), text: Binding(
                     get: { store.ui.agentInput }, set: { store.ui.agentInput = $0 }
                 ), axis: .vertical)
                 .textFieldStyle(.plain)
@@ -225,7 +225,7 @@ struct ChatPanelView: View {
             }
             HStack {
                 Spacer()
-                Text("⌘ + ↵ 发送").font(.system(size: 9)).foregroundStyle(Tokens.Palette.textMuted)
+                Text(t("⌘ + ↵ 发送")).font(.system(size: 9)).foregroundStyle(Tokens.Palette.textMuted)
             }
         }
         .padding(8)
@@ -238,7 +238,7 @@ struct ChatPanelView: View {
                     Image(systemName: "stop.fill").foregroundStyle(.white)
                         .frame(width: 36, height: 36).background(Tokens.Palette.windowClose).cornerRadius(8)
                 }
-                .buttonStyle(.plain).help("停止")
+                .buttonStyle(.plain).help(t("停止"))
             } else {
                 Button(action: send) {
                     Image(systemName: "paperplane.fill")

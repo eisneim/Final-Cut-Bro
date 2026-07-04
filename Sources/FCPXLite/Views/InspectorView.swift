@@ -30,7 +30,7 @@ struct InspectorView: View {
         } else {
             ZStack {
                 Tokens.Palette.chrome
-                Text("不检查任何对象").font(Tokens.Typeface.body).foregroundStyle(Tokens.Palette.textMuted)
+                Text(t("不检查任何对象")).font(Tokens.Typeface.body).foregroundStyle(Tokens.Palette.textMuted)
             }
         }
     }
@@ -41,22 +41,22 @@ struct InspectorView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     if clip.isTitle { InspectorTitleSection(store: store) }
-                    section("复合", reset: { store.updateSelectedAdjust { $0.opacity = 1 } }) {
-                        sliderRow("不透明度", value: bind(\.opacity, scale: 100), range: 0...100, suffix: "%", display: clip.adjust.opacity * 100)
+                    section(t("复合"), reset: { store.updateSelectedAdjust { $0.opacity = 1 } }) {
+                        sliderRow(t("不透明度"), value: bind(\.opacity, scale: 100), range: 0...100, suffix: "%", display: clip.adjust.opacity * 100)
                     }
-                    section("变换", reset: { store.updateSelectedAdjust { $0.transform = Transform() } }) {
-                        xyRow("位置",
+                    section(t("变换"), reset: { store.updateSelectedAdjust { $0.transform = Transform() } }) {
+                        xyRow(t("位置"),
                               x: bindCG(\.transform.position.x), y: bindCG(\.transform.position.y),
                               dx: clip.adjust.transform.position.x, dy: clip.adjust.transform.position.y, suffix: "px")
-                        sliderRow("旋转", value: bind(\.transform.rotation), range: -180...180, suffix: "°", display: clip.adjust.transform.rotation)
-                        sliderRow("缩放(全部)", value: scaleAllBinding(clip), range: 1...400, suffix: "%", display: clip.adjust.transform.scale.width * 100)
+                        sliderRow(t("旋转"), value: bind(\.transform.rotation), range: -180...180, suffix: "°", display: clip.adjust.transform.rotation)
+                        sliderRow(t("缩放(全部)"), value: scaleAllBinding(clip), range: 1...400, suffix: "%", display: clip.adjust.transform.scale.width * 100)
                         keyframeRow(clip)
                     }
-                    section("裁剪", reset: { store.updateSelectedAdjust { $0.crop = Crop() } }) {
-                        sliderRow("左", value: bind(\.crop.left), range: 0...1000, suffix: "px", display: clip.adjust.crop.left)
-                        sliderRow("右", value: bind(\.crop.right), range: 0...1000, suffix: "px", display: clip.adjust.crop.right)
-                        sliderRow("上", value: bind(\.crop.top), range: 0...1000, suffix: "px", display: clip.adjust.crop.top)
-                        sliderRow("下", value: bind(\.crop.bottom), range: 0...1000, suffix: "px", display: clip.adjust.crop.bottom)
+                    section(t("裁剪"), reset: { store.updateSelectedAdjust { $0.crop = Crop() } }) {
+                        sliderRow(t("左"), value: bind(\.crop.left), range: 0...1000, suffix: "px", display: clip.adjust.crop.left)
+                        sliderRow(t("右"), value: bind(\.crop.right), range: 0...1000, suffix: "px", display: clip.adjust.crop.right)
+                        sliderRow(t("上"), value: bind(\.crop.top), range: 0...1000, suffix: "px", display: clip.adjust.crop.top)
+                        sliderRow(t("下"), value: bind(\.crop.bottom), range: 0...1000, suffix: "px", display: clip.adjust.crop.bottom)
                     }
                     InspectorEffectsSection(store: store)
                 }
@@ -96,20 +96,20 @@ struct InspectorView: View {
     /// 变换关键帧行:在播放头加关键帧(抓当前位移/缩放/不透明度)+ 显示已有数 + 清除。
     private func keyframeRow(_ clip: Clip) -> some View {
         HStack(spacing: 8) {
-            Text("关键帧").font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
+            Text(t("关键帧")).font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
                 .frame(width: 80, alignment: .leading)
             Button {
                 store.addTransformKeyframeAtPlayhead()
             } label: {
                 HStack(spacing: 3) {
                     Image(systemName: "diamond.fill").font(.system(size: 8))
-                    Text("加关键帧").font(Tokens.Typeface.label)
+                    Text(t("加关键帧")).font(Tokens.Typeface.label)
                 }
                 .foregroundStyle(Tokens.Palette.selectYellow)
                 .padding(.horizontal, 6).padding(.vertical, 2)
                 .background(Tokens.Palette.elevated).cornerRadius(4)
             }
-            .buttonStyle(.plain).help("在播放头处记录当前变换为关键帧")
+            .buttonStyle(.plain).help(t("在播放头处记录当前变换为关键帧"))
             if !clip.transformKeyframes.isEmpty {
                 Text("\(clip.transformKeyframes.count)")
                     .font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
@@ -117,7 +117,7 @@ struct InspectorView: View {
                     Image(systemName: "xmark.circle").font(.system(size: 11))
                         .foregroundStyle(Tokens.Palette.textMuted)
                 }
-                .buttonStyle(.plain).help("清除全部变换关键帧")
+                .buttonStyle(.plain).help(t("清除全部变换关键帧"))
             }
             Spacer()
         }
@@ -134,7 +134,7 @@ struct InspectorView: View {
                         Image(systemName: "arrow.counterclockwise")
                             .font(.system(size: 11)).foregroundStyle(Tokens.Palette.textMuted)
                     }
-                    .buttonStyle(.plain).help("重置该组参数")
+                    .buttonStyle(.plain).help(t("重置该组参数"))
                 }
             }
             .padding(.horizontal, 10).padding(.vertical, 6)

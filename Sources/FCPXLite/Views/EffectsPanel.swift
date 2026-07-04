@@ -3,7 +3,7 @@ import SwiftUI
 /// 效果/转场库面板(⌘5)。点击某项 → 应用到当前选中片段。
 /// - 效果:color(调色)/ blur(模糊)/ fade(音频淡入淡出),追加到 clip.effects。
 /// - 转场:crossfade(交叉叠化),设到选中【主轴片段】的 crossfadeIn(与前一片段叠化)。
-/// 拖放到时间线较复杂,先做"选中片段 → 点击应用",Agent 已有对应 catalog 动作。
+/// 拖放到时间线较复杂,先做t("选中片段 → 点击应用"),Agent 已有对应 catalog 动作。
 struct EffectsPanel: View {
     let store: DocumentStore
     @State private var toast: String?
@@ -18,33 +18,33 @@ struct EffectsPanel: View {
 
     private var effectItems: [Item] {
         [
-            Item(title: "调色", subtitle: "亮度/对比度/饱和度", icon: "dial.medium") { s in
-                s.addEffectToSelected(.color); return "已加调色到所选片段"
+            Item(title: t("调色"), subtitle: t("亮度/对比度/饱和度"), icon: "dial.medium") { s in
+                s.addEffectToSelected(.color); return t("已加调色到所选片段")
             },
-            Item(title: "高斯模糊", subtitle: "radius 可调", icon: "drop.fill") { s in
-                s.addEffectToSelected(.blur); return "已加模糊到所选片段"
+            Item(title: t("高斯模糊"), subtitle: t("radius 可调"), icon: "drop.fill") { s in
+                s.addEffectToSelected(.blur); return t("已加模糊到所选片段")
             },
-            Item(title: "音频淡入淡出", subtitle: "inSeconds/outSeconds", icon: "speaker.wave.2.fill") { s in
-                s.addEffectToSelected(.fade); return "已加音频淡入淡出"
+            Item(title: t("音频淡入淡出"), subtitle: "inSeconds/outSeconds", icon: "speaker.wave.2.fill") { s in
+                s.addEffectToSelected(.fade); return t("已加音频淡入淡出")
             },
         ]
     }
     private var transitionItems: [Item] {
         [
-            Item(title: "交叉叠化", subtitle: "1s,与前一片段 dissolve", icon: "square.on.square.dashed") { s in
-                s.addCrossfadeToSelected(seconds: 1.0) ? "已加 1s 叠化转场" : "需先选中非首个主轴片段"
+            Item(title: t("交叉叠化"), subtitle: t("1s,与前一片段 dissolve"), icon: "square.on.square.dashed") { s in
+                s.addCrossfadeToSelected(seconds: 1.0) ? t("已加 1s 叠化转场") : t("需先选中非首个主轴片段")
             },
         ]
     }
     private var titleItems: [Item] {
         [
-            Item(title: "基本标题", subtitle: "屏幕中央一行文字", icon: "textformat") { s in
-                s.addTitleAtPlayhead(text: "标题"); return "已加标题(可在检查器/画面中编辑)"
+            Item(title: t("基本标题"), subtitle: t("屏幕中央一行文字"), icon: "textformat") { s in
+                s.addTitleAtPlayhead(text: t("标题")); return t("已加标题(可在检查器/画面中编辑)")
             },
-            Item(title: "下方字幕", subtitle: "屏幕下方小字幕条", icon: "captions.bubble") { s in
-                let id = s.addTitleAtPlayhead(text: "字幕")
+            Item(title: t("下方字幕"), subtitle: t("屏幕下方小字幕条"), icon: "captions.bubble") { s in
+                let id = s.addTitleAtPlayhead(text: t("字幕"))
                 s.updateSelectedTitle { $0.fontSize = 56; $0.position = CGPoint(x: 0, y: 380) }
-                _ = id; return "已加下方字幕"
+                _ = id; return t("已加下方字幕")
             },
         ]
     }
@@ -54,13 +54,13 @@ struct EffectsPanel: View {
             header
             Divider().overlay(Tokens.Palette.divider)
             if store.selectedClip() == nil {
-                hint("先在时间线选中一个片段,再点这里的效果/转场应用上去。")
+                hint(t("先在时间线选中一个片段,再点这里的效果/转场应用上去。"))
             }
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    section("标题", titleItems)
-                    section("效果", effectItems)
-                    section("转场", transitionItems)
+                    section(t("标题"), titleItems)
+                    section(t("效果"), effectItems)
+                    section(t("转场"), transitionItems)
                 }
                 .padding(10)
             }
@@ -78,7 +78,7 @@ struct EffectsPanel: View {
     private var header: some View {
         HStack {
             Image(systemName: "wand.and.stars").font(.system(size: 12))
-            Text("效果 / 转场").font(Tokens.Typeface.body)
+            Text(t("效果 / 转场")).font(Tokens.Typeface.body)
             Spacer()
         }
         .foregroundStyle(Tokens.Palette.textPrimary)
@@ -120,6 +120,6 @@ struct EffectsPanel: View {
             .background(Tokens.Palette.elevated).cornerRadius(6)
         }
         .buttonStyle(.plain)
-        .help("应用到当前选中片段")
+        .help(t("应用到当前选中片段"))
     }
 }

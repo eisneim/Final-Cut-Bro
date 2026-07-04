@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 项目区:顶部 toolbar(左"项目"文字 + 右"+"创建)+ 下方项目卡片(带预览缩略图的方块,纵向换行)。
+/// 项目区:顶部 toolbar(左t("项目")文字 + 右"+"创建)+ 下方项目卡片(带预览缩略图的方块,纵向换行)。
 /// 仿 FCP:项目以缩略方块呈现,当前项目高亮。无自带滚动 —— 由左侧栏统一 ScrollView 整体滚动。
 struct ProjectBar: View {
     let store: DocumentStore
@@ -18,7 +18,7 @@ struct ProjectBar: View {
             toolbarHeader
             // 卡片(纵向换行,可有很多个项目)
             if store.document.projects.isEmpty {
-                Text("还没有项目,点 + 创建")
+                Text(t("还没有项目,点 + 创建"))
                     .font(.system(size: 10)).foregroundStyle(Tokens.Palette.textMuted)
                     .padding(.horizontal, 8).padding(.bottom, 6)
             } else {
@@ -34,7 +34,7 @@ struct ProjectBar: View {
     /// toolbar:左文字,右创建。
     var toolbarHeader: some View {
         HStack {
-            Text("项目").font(Tokens.Typeface.body).foregroundStyle(Tokens.Palette.textCool)
+            Text(t("项目")).font(Tokens.Typeface.body).foregroundStyle(Tokens.Palette.textCool)
             Spacer()
             Button { store.dispatch(.setShowProjectModal(true)) } label: {
                 Image(systemName: "plus").font(.system(size: 12, weight: .bold))
@@ -42,7 +42,7 @@ struct ProjectBar: View {
                     .frame(width: 24, height: 22)
                     .background(Tokens.Palette.elevated).cornerRadius(5)
             }
-            .buttonStyle(.plain).help("创建项目")
+            .buttonStyle(.plain).help(t("创建项目"))
         }
         .padding(.horizontal, 8).padding(.vertical, 5)
     }
@@ -69,7 +69,7 @@ struct ProjectBar: View {
                 .frame(width: 84, height: 48)
                 // 名称:双击进入重命名 → TextField;否则文本。
                 if editingID == p.id {
-                    TextField("项目名", text: $editingName)
+                    TextField(t("项目名"), text: $editingName)
                         .textFieldStyle(.plain)
                         .font(.system(size: 10))
                         .foregroundStyle(Tokens.Palette.textPrimary)
@@ -95,8 +95,8 @@ struct ProjectBar: View {
         .buttonStyle(.plain)
         .simultaneousGesture(TapGesture(count: 2).onEnded { beginRename(p) })  // 双击改名
         .contextMenu {
-            Button("重命名") { beginRename(p) }
-            Button("删除项目", role: .destructive) { store.dispatch(.removeProject(p.id)) }
+            Button(t("重命名")) { beginRename(p) }
+            Button(t("删除项目"), role: .destructive) { store.dispatch(.removeProject(p.id)) }
         }
     }
 

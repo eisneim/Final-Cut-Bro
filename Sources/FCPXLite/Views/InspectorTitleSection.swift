@@ -7,7 +7,7 @@ struct InspectorTitleSection: View {
     let store: DocumentStore
 
     private var spec: TitleSpec? { store.selectedClip()?.title }
-    private static let sysFont = "系统默认"
+    private static let sysFont = t("系统默认")
     private static let fontFamilies: [String] = [sysFont] + NSFontManager.shared.availableFontFamilies.sorted()
 
     var body: some View {
@@ -16,7 +16,7 @@ struct InspectorTitleSection: View {
                 header
 
                 // 文字内容(多行,可直接改错别字)
-                Text("文字(可直接改错别字)").font(.system(size: 10))
+                Text(t("文字(可直接改错别字)")).font(.system(size: 10))
                     .foregroundStyle(Tokens.Palette.textMuted).padding(.horizontal, 10)
                 TextEditor(text: Binding(
                     get: { store.selectedClip()?.title?.text ?? "" },
@@ -28,35 +28,35 @@ struct InspectorTitleSection: View {
                     .overlay(RoundedRectangle(cornerRadius: 5).stroke(Tokens.Palette.divider, lineWidth: 1))
                     .padding(.horizontal, 10)
 
-                row("字体") {
+                row(t("字体")) {
                     Picker("", selection: Binding(
                         get: { s.fontName ?? Self.sysFont },
                         set: { v in store.updateSelectedTitle { $0.fontName = (v == Self.sysFont ? nil : v) } })) {
                         ForEach(Self.fontFamilies, id: \.self) { Text($0).font(.system(size: 11)).tag($0) }
                     }.labelsHidden().frame(maxWidth: .infinity)
                 }
-                row("字号") {
+                row(t("字号")) {
                     Slider(value: titleD(\.fontSize), in: 16...300)
                     Text("\(Int(s.fontSize))").font(Tokens.Typeface.label)
                         .foregroundStyle(Tokens.Palette.textMuted).frame(width: 34)
                 }
-                row("颜色") {
+                row(t("颜色")) {
                     ColorPicker("", selection: colorBind(\.colorHex)).labelsHidden()
-                    Toggle("粗体", isOn: Binding(get: { s.bold },
+                    Toggle(t("粗体"), isOn: Binding(get: { s.bold },
                                                set: { v in store.updateSelectedTitle { $0.bold = v } }))
                         .toggleStyle(.checkbox).font(Tokens.Typeface.label)
                     Spacer()
                 }
-                row("对齐") {
+                row(t("对齐")) {
                     Picker("", selection: Binding(get: { s.align },
                                                   set: { v in store.updateSelectedTitle { $0.align = v } })) {
-                        Text("左").tag(0); Text("中").tag(1); Text("右").tag(2)
+                        Text(t("左")).tag(0); Text(t("中")).tag(1); Text(t("右")).tag(2)
                     }.pickerStyle(.segmented).labelsHidden().frame(width: 140)
                     Spacer()
                 }
 
                 // 描边(border)
-                row("描边") {
+                row(t("描边")) {
                     Slider(value: titleD(\.strokeWidth), in: 0...12)
                     Text("\(Int(s.strokeWidth))").font(Tokens.Typeface.label)
                         .foregroundStyle(Tokens.Palette.textMuted).frame(width: 22)
@@ -64,25 +64,25 @@ struct InspectorTitleSection: View {
                 }
 
                 // 阴影(shadow)
-                row("阴影") {
-                    Toggle("启用", isOn: Binding(get: { s.shadowEnabled },
+                row(t("阴影")) {
+                    Toggle(t("启用"), isOn: Binding(get: { s.shadowEnabled },
                                                set: { v in store.updateSelectedTitle { $0.shadowEnabled = v } }))
                         .toggleStyle(.checkbox).font(Tokens.Typeface.label)
                     Spacer()
                 }
                 if s.shadowEnabled {
-                    row("模糊") {
+                    row(t("模糊")) {
                         Slider(value: titleD(\.shadowRadius), in: 0...30)
                         ColorPicker("", selection: colorBind(\.shadowColorHex)).labelsHidden()
                     }
-                    row("偏移") {
+                    row(t("偏移")) {
                         stepper("X", s.shadowDX) { dx in store.updateSelectedTitle { $0.shadowDX += dx } }
                         stepper("Y", s.shadowDY) { dy in store.updateSelectedTitle { $0.shadowDY += dy } }
                         Spacer()
                     }
                 }
 
-                row("位置") {
+                row(t("位置")) {
                     stepper("X", s.position.x) { dx in store.updateSelectedTitle { $0.position.x += dx } }
                     stepper("Y", s.position.y) { dy in store.updateSelectedTitle { $0.position.y += dy } }
                     Spacer()
@@ -95,7 +95,7 @@ struct InspectorTitleSection: View {
     private var header: some View {
         HStack {
             Image(systemName: "textformat").font(.system(size: 11))
-            Text("标题").font(Tokens.Typeface.body)
+            Text(t("标题")).font(Tokens.Typeface.body)
             Spacer()
         }
         .foregroundStyle(Tokens.Palette.textPrimary)
