@@ -600,17 +600,6 @@ final class TimelineContentView: NSView {
         return nil
     }
 
-    /// 取某 clip(主轴或连接子项)的 assetID。
-    private func assetID(of id: ClipID) -> AssetID? {
-        for el in sequence.spine {
-            if case .clip(let c) = el {
-                if c.id == id { return c.assetID }
-                for ch in c.connected where ch.id == id { return ch.assetID }
-            }
-        }
-        return nil
-    }
-
     private func drawPlayhead() {
         let x = TimelineGeometry.x(forSeconds: playheadSeconds, pxPerSecond: pxPerSecond)
         TimelineColors.playheadRed.setFill()

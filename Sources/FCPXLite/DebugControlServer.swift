@@ -410,10 +410,6 @@ final class DebugControlServer {
         return (try? enc.encode(Snap(document: document, ui: ui, agentBusy: agentBusy))) ?? Data("{}".utf8)
     }
 
-    private func snapshotJSON() -> Data {
-        encodeSnapshot(store.document, store.ui, store.agentBusy)
-    }
-
     private func screenshotPNG() -> Data? {
         guard let view = window?.contentView else { return nil }
         let bounds = view.bounds

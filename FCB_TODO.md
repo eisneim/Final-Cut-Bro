@@ -1,6 +1,9 @@
 
+1. multi language i18n，先做 中文和英文，但是可以扩展成其他语言，如果只有两个语言，右上角就只需要有一个toggle可以切换CN和en。但是如果变成了多语言，比如说有的用户他想多语言，他在设置里面选择支持的语言更多的时候呢，就做成一个下拉菜单了。就点击之后是个下拉菜单；
+
+2. 检查是否有security related issue， 有没有暴漏api key之类的？
+3.编写README 准备分享到Github开源
 
 
-主时间轴的skimming 我们可以尝试做一下，我们可以在时间轴右上方增加一个toggle，这个toggle就是scheming，这个是final cut 也是这样的逻辑。一旦开启skimming之后，我们的鼠标在timeline上移动的时候，在harbor移动的时候呢，也会也会出现什么，也会出现skimming的效果
 
 
