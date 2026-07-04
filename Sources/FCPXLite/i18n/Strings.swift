@@ -76,5 +76,23 @@ enum Strings {
         "确定": [.en: "OK"],
         "关闭": [.en: "Close"],
         "播放 / 暂停 (空格)": [.en: "Play / Pause (Space)"],
+
+        // MARK: 设置 / Provider
+        "在切换器中显示的语言": [.en: "Languages in switcher"],
+        "配置大模型 Provider": [.en: "Configure LLM Provider"],
+        "填写一个 OpenAI 兼容的模型服务(Base URL / API Key / 模型名)。勾选「支持视觉」后该模型可接收参考图。":
+            [.en: "Enter an OpenAI-compatible model service (Base URL / API Key / model). Check \"Vision\" to let it accept reference images."],
+        "快速填充": [.en: "Quick fill"],
+        "名称(选填)": [.en: "Name (optional)"],
+        "如 我的 MiniMax": [.en: "e.g. My MiniMax"],
+        "(留空则不变)": [.en: " (leave blank to keep)"],
+        "••••(留空则不变)": [.en: "•••• (leave blank to keep)"],
+        "模型名称": [.en: "Model name"],
+        "如 MiniMax-M3": [.en: "e.g. MiniMax-M3"],
+        "支持视觉 / 图片输入(多模态)": [.en: "Vision / image input (multimodal)"],
+        "已配置": [.en: "Configured"],
+        "还没有配置任何 provider": [.en: "No provider configured yet"],
+        "· 使用中": [.en: "· in use"],
+        "⚠ 无 key": [.en: "⚠ no key"],
     ]
 }

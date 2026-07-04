@@ -19,6 +19,7 @@ struct SettingsView: View {
             Divider().overlay(Tokens.Palette.divider)
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
+                    languageSection
                     hint
                     presets
                     form
@@ -32,11 +33,36 @@ struct SettingsView: View {
         .background(Tokens.Palette.chrome)
     }
 
+    // MARK: - 界面语言
+
+    private var languageSection: some View {
+        let i18n = Localization.shared
+        return VStack(alignment: .leading, spacing: 6) {
+            Text(t("界面语言")).font(.system(size: 10)).foregroundStyle(Tokens.Palette.textMuted)
+            Picker("", selection: Binding(get: { i18n.language }, set: { i18n.language = $0 })) {
+                ForEach(i18n.enabledLanguages) { Text($0.nativeName).tag($0) }
+            }
+            .pickerStyle(.segmented).labelsHidden().frame(maxWidth: 260)
+            Text(t("在切换器中显示的语言")).font(.system(size: 10)).foregroundStyle(Tokens.Palette.textMuted)
+            ForEach(Language.allCases) { lang in
+                Toggle(isOn: Binding(
+                    get: { i18n.enabledLanguages.contains(lang) },
+                    set: { i18n.setEnabled(lang, $0) }
+                )) {
+                    Text(lang.nativeName).font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textPrimary)
+                }
+                .toggleStyle(.checkbox)
+                .disabled(lang == i18n.language)   // 当前语言不可停用
+            }
+            Divider().overlay(Tokens.Palette.divider)
+        }
+    }
+
     // MARK: - Header
 
     private var header: some View {
         HStack {
-            Text("配置大模型 Provider").font(Tokens.Typeface.title).foregroundStyle(Tokens.Palette.textPrimary)
+            Text(t("配置大模型 Provider")).font(Tokens.Typeface.title).foregroundStyle(Tokens.Palette.textPrimary)
             Spacer()
             Button { store.ui.showSettings = false } label: {
                 Image(systemName: "xmark").foregroundStyle(Tokens.Palette.textMuted)
@@ -46,7 +72,7 @@ struct SettingsView: View {
     }
 
     private var hint: some View {
-        Text("填写一个 OpenAI 兼容的模型服务(Base URL / API Key / 模型名)。勾选「支持视觉」后该模型可接收参考图。")
+        Text(t("填写一个 OpenAI 兼容的模型服务(Base URL / API Key / 模型名)。勾选「支持视觉」后该模型可接收参考图。"))
             .font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
     }
 
@@ -54,7 +80,7 @@ struct SettingsView: View {
 
     private var presets: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("快速填充").font(.system(size: 10)).foregroundStyle(Tokens.Palette.textMuted)
+            Text(t("快速填充")).font(.system(size: 10)).foregroundStyle(Tokens.Palette.textMuted)
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 4), spacing: 6) {
                 ForEach(ProviderPreset.all) { p in
                     Button {
@@ -73,24 +99,24 @@ struct SettingsView: View {
 
     private var form: some View {
         VStack(alignment: .leading, spacing: 8) {
-            field("名称(选填)", text: $label, placeholder: "如 我的 MiniMax")
+            field(t("名称(选填)"), text: $label, placeholder: t("如 我的 MiniMax"))
             field("Base URL", text: $baseURL, placeholder: "https://api.xxx.com/v1")
-            secureField("API Key" + (editingId != nil ? "(留空则不变)" : ""), text: $apiKey,
-                        placeholder: editingId != nil ? "••••(留空则不变)" : "sk-...")
-            field("模型名称", text: $model, placeholder: "如 MiniMax-M3")
+            secureField("API Key" + (editingId != nil ? t("(留空则不变)") : ""), text: $apiKey,
+                        placeholder: editingId != nil ? t("••••(留空则不变)") : "sk-...")
+            field(t("模型名称"), text: $model, placeholder: t("如 MiniMax-M3"))
             Toggle(isOn: $vision) {
-                Text("支持视觉 / 图片输入(多模态)").font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textPrimary)
+                Text(t("支持视觉 / 图片输入(多模态)")).font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textPrimary)
             }
             .toggleStyle(.checkbox)
             HStack {
                 Button(action: save) {
-                    Text(editingId != nil ? "保存修改" : "添加")
+                    Text(editingId != nil ? t("保存修改") : t("添加"))
                         .font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.onAccent)
                         .padding(.horizontal, 14).padding(.vertical, 6)
                         .background(canSave ? Tokens.Palette.clipBlue : Tokens.Palette.elevated).cornerRadius(6)
                 }.buttonStyle(.plain).disabled(!canSave)
                 if editingId != nil {
-                    Button("取消编辑", action: resetForm).buttonStyle(.plain)
+                    Button(t("取消编辑"), action: resetForm).buttonStyle(.plain)
                         .font(.system(size: 11)).foregroundStyle(Tokens.Palette.textMuted)
                 }
             }
@@ -119,9 +145,9 @@ struct SettingsView: View {
 
     private var list: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("已配置(\(store.providers.count))").font(.system(size: 10)).foregroundStyle(Tokens.Palette.textMuted)
+            Text(t("已配置") + "(\(store.providers.count))").font(.system(size: 10)).foregroundStyle(Tokens.Palette.textMuted)
             if store.providers.isEmpty {
-                Text("还没有配置任何 provider").font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
+                Text(t("还没有配置任何 provider")).font(Tokens.Typeface.label).foregroundStyle(Tokens.Palette.textMuted)
                     .padding(.vertical, 8)
             } else {
                 ForEach(store.providers) { p in providerRow(p) }
@@ -136,16 +162,16 @@ struct SettingsView: View {
                 HStack(spacing: 4) {
                     Text(p.label).font(Tokens.Typeface.body).foregroundStyle(Tokens.Palette.textPrimary)
                     if p.vision { Text("🖼").font(.system(size: 10)) }
-                    if isCurrent { Text("· 使用中").font(.system(size: 9)).foregroundStyle(Tokens.Palette.selectYellow) }
+                    if isCurrent { Text(t("· 使用中")).font(.system(size: 9)).foregroundStyle(Tokens.Palette.selectYellow) }
                 }
-                Text("\(p.model) · \(p.host) · \(p.hasKey ? "🔑 ••••" : "⚠ 无 key")")
+                Text("\(p.model) · \(p.host) · \(p.hasKey ? "🔑 ••••" : t("⚠ 无 key"))")
                     .font(.system(size: 10)).foregroundStyle(Tokens.Palette.textMuted)
             }
             Spacer()
             Button { startEdit(p) } label: { Image(systemName: "pencil").foregroundStyle(Tokens.Palette.textMuted) }
-                .buttonStyle(.plain).help("编辑")
+                .buttonStyle(.plain).help(t("编辑"))
             Button { store.deleteProvider(p.id) } label: { Image(systemName: "trash").foregroundStyle(Tokens.Palette.windowClose) }
-                .buttonStyle(.plain).help("删除")
+                .buttonStyle(.plain).help(t("删除"))
         }
         .padding(8)
         .background(editingId == p.id ? Tokens.Palette.elevated : Tokens.Palette.chatPanel)
