@@ -27,6 +27,16 @@ enum Strings {
         "显示/隐藏素材库": [.en: "Show/Hide Library"],
         "显示/隐藏检查器": [.en: "Show/Hide Inspector"],
         "显示/隐藏 Agent 面板": [.en: "Show/Hide Agent Panel"],
+        "显示/隐藏效果面板": [.en: "Show/Hide Effects Panel"],
+        "切换磁吸吸附": [.en: "Toggle Snapping"],
+        "放大时间线": [.en: "Zoom In Timeline"],
+        "缩小时间线": [.en: "Zoom Out Timeline"],
+        "窗口": [.en: "Window"],
+        "最小化": [.en: "Minimize"],
+        "缩放": [.en: "Zoom"],
+        "前置全部窗口": [.en: "Bring All to Front"],
+        "帮助": [.en: "Help"],
+        "Final Cut Bro 帮助": [.en: "Final Cut Bro Help"],
 
         // MARK: 顶栏 / 语言
         "语言": [.en: "Language"],
@@ -35,6 +45,10 @@ enum Strings {
         "检查器": [.en: "Inspector"],
         "Agent 面板": [.en: "Agent Panel"],
         "导出": [.en: "Export"],
+        "导出(⌘E)": [.en: "Export (⌘E)"],
+        "素材库(左)": [.en: "Library (left)"],
+        "检查器(右)⌘4": [.en: "Inspector (right) ⌘4"],
+        "Agent 面板(右)": [.en: "Agent panel (right)"],
 
         // MARK: 时间线工具栏
         "时间线": [.en: "Timeline"],

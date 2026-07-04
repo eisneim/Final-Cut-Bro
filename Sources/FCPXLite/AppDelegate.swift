@@ -25,6 +25,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         installMenu()
         installKeyboardShortcuts()
+        // 语言切换 → 重建菜单栏(AppKit 菜单不像 SwiftUI 会自动刷新)。
+        NotificationCenter.default.addObserver(forName: .fcbLanguageChanged, object: nil, queue: .main) { [weak self] _ in
+            self?.installMenu()
+        }
         #if DEBUG
         debugServer = DebugControlServer(store: store, window: window)
         debugServer?.start()
@@ -55,80 +59,80 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let appMenu = NSMenu(title: "Final Cut Bro")
         appMenu.addItem(aboutItem("Final Cut Bro"))
         appMenu.addItem(.separator())
-        let settingsItem = NSMenuItem(title: "设置…", action: #selector(showSettingsMenu), keyEquivalent: ",")
+        let settingsItem = NSMenuItem(title: t("设置…"), action: #selector(showSettingsMenu), keyEquivalent: ",")
         settingsItem.target = self; appMenu.addItem(settingsItem)
         appMenu.addItem(.separator())
-        appMenu.addItem(NSMenuItem(title: "隐藏 Final Cut Bro", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h"))
-        let hideOthers = NSMenuItem(title: "隐藏其他", action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
+        appMenu.addItem(NSMenuItem(title: t("隐藏 Final Cut Bro"), action: #selector(NSApplication.hide(_:)), keyEquivalent: "h"))
+        let hideOthers = NSMenuItem(title: t("隐藏其他"), action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
         hideOthers.keyEquivalentModifierMask = [.command, .option]; appMenu.addItem(hideOthers)
-        appMenu.addItem(NSMenuItem(title: "显示全部", action: #selector(NSApplication.unhideAllApplications(_:)), keyEquivalent: ""))
+        appMenu.addItem(NSMenuItem(title: t("显示全部"), action: #selector(NSApplication.unhideAllApplications(_:)), keyEquivalent: ""))
         appMenu.addItem(.separator())
-        appMenu.addItem(NSMenuItem(title: "退出 Final Cut Bro", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        appMenu.addItem(NSMenuItem(title: t("退出 Final Cut Bro"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         appItem.submenu = appMenu
 
         // ── 文件 ──
         let fileItem = NSMenuItem(); mainMenu.addItem(fileItem)
-        let fileMenu = NSMenu(title: "文件")
-        let newProj = NSMenuItem(title: "新建项目…", action: #selector(newProjectMenu), keyEquivalent: "n")
+        let fileMenu = NSMenu(title: t("文件"))
+        let newProj = NSMenuItem(title: t("新建项目…"), action: #selector(newProjectMenu), keyEquivalent: "n")
         newProj.keyEquivalentModifierMask = [.command, .shift]; newProj.target = self; fileMenu.addItem(newProj)
-        let importItem = NSMenuItem(title: "导入素材…", action: #selector(importMenu), keyEquivalent: "i")
+        let importItem = NSMenuItem(title: t("导入素材…"), action: #selector(importMenu), keyEquivalent: "i")
         importItem.target = self; fileMenu.addItem(importItem)
         fileMenu.addItem(.separator())
-        let exportItem = NSMenuItem(title: "导出成片…", action: #selector(showExportMenu), keyEquivalent: "e")
+        let exportItem = NSMenuItem(title: t("导出成片…"), action: #selector(showExportMenu), keyEquivalent: "e")
         exportItem.target = self; fileMenu.addItem(exportItem)
-        let exportFCP = NSMenuItem(title: "导出 FCPXML…", action: #selector(exportFCPXMLMenu), keyEquivalent: "e")
+        let exportFCP = NSMenuItem(title: t("导出 FCPXML…"), action: #selector(exportFCPXMLMenu), keyEquivalent: "e")
         exportFCP.keyEquivalentModifierMask = [.command, .shift]; exportFCP.target = self; fileMenu.addItem(exportFCP)
         fileItem.submenu = fileMenu
 
         // ── 编辑 ──
         let editItem = NSMenuItem(); mainMenu.addItem(editItem)
-        let editMenu = NSMenu(title: "编辑")
-        editMenu.addItem(NSMenuItem(title: "撤销", action: Selector(("undo:")), keyEquivalent: "z"))
-        let redo = NSMenuItem(title: "重做", action: Selector(("redo:")), keyEquivalent: "z")
+        let editMenu = NSMenu(title: t("编辑"))
+        editMenu.addItem(NSMenuItem(title: t("撤销"), action: Selector(("undo:")), keyEquivalent: "z"))
+        let redo = NSMenuItem(title: t("重做"), action: Selector(("redo:")), keyEquivalent: "z")
         redo.keyEquivalentModifierMask = [.command, .shift]; editMenu.addItem(redo)
         editMenu.addItem(.separator())
-        editMenu.addItem(NSMenuItem(title: "剪切", action: #selector(NSText.cut(_:)), keyEquivalent: "x"))
-        editMenu.addItem(NSMenuItem(title: "复制", action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
-        editMenu.addItem(NSMenuItem(title: "粘贴", action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
-        let pasteAttr = NSMenuItem(title: "粘贴属性", action: #selector(pasteAttributesMenu), keyEquivalent: "v")
+        editMenu.addItem(NSMenuItem(title: t("剪切"), action: #selector(NSText.cut(_:)), keyEquivalent: "x"))
+        editMenu.addItem(NSMenuItem(title: t("复制"), action: #selector(NSText.copy(_:)), keyEquivalent: "c"))
+        editMenu.addItem(NSMenuItem(title: t("粘贴"), action: #selector(NSText.paste(_:)), keyEquivalent: "v"))
+        let pasteAttr = NSMenuItem(title: t("粘贴属性"), action: #selector(pasteAttributesMenu), keyEquivalent: "v")
         pasteAttr.keyEquivalentModifierMask = [.command, .shift]; pasteAttr.target = self; editMenu.addItem(pasteAttr)
-        editMenu.addItem(NSMenuItem(title: "全选", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
+        editMenu.addItem(NSMenuItem(title: t("全选"), action: #selector(NSText.selectAll(_:)), keyEquivalent: "a"))
         editItem.submenu = editMenu
 
         // ── 显示 ──
         let viewItem = NSMenuItem(); mainMenu.addItem(viewItem)
-        let viewMenu = NSMenu(title: "显示")
-        let browserItem = NSMenuItem(title: "显示/隐藏素材库", action: #selector(toggleBrowserMenu), keyEquivalent: "1")
+        let viewMenu = NSMenu(title: t("显示"))
+        let browserItem = NSMenuItem(title: t("显示/隐藏素材库"), action: #selector(toggleBrowserMenu), keyEquivalent: "1")
         browserItem.target = self; viewMenu.addItem(browserItem)
-        let inspItem = NSMenuItem(title: "显示/隐藏检查器", action: #selector(toggleInspectorMenu), keyEquivalent: "4")
+        let inspItem = NSMenuItem(title: t("显示/隐藏检查器"), action: #selector(toggleInspectorMenu), keyEquivalent: "4")
         inspItem.target = self; viewMenu.addItem(inspItem)
-        let chatItem = NSMenuItem(title: "显示/隐藏 Agent 面板", action: #selector(toggleChatMenu), keyEquivalent: "0")
+        let chatItem = NSMenuItem(title: t("显示/隐藏 Agent 面板"), action: #selector(toggleChatMenu), keyEquivalent: "0")
         chatItem.target = self; viewMenu.addItem(chatItem)
-        let fxItem = NSMenuItem(title: "显示/隐藏效果面板", action: #selector(toggleEffectsMenu), keyEquivalent: "5")
+        let fxItem = NSMenuItem(title: t("显示/隐藏效果面板"), action: #selector(toggleEffectsMenu), keyEquivalent: "5")
         fxItem.target = self; viewMenu.addItem(fxItem)
-        let snapItem = NSMenuItem(title: "切换磁吸吸附", action: #selector(toggleSnappingMenu), keyEquivalent: "n")
+        let snapItem = NSMenuItem(title: t("切换磁吸吸附"), action: #selector(toggleSnappingMenu), keyEquivalent: "n")
         snapItem.target = self; viewMenu.addItem(snapItem)
         viewMenu.addItem(.separator())
-        let zoomIn = NSMenuItem(title: "放大时间线", action: #selector(zoomInMenu), keyEquivalent: "=")
+        let zoomIn = NSMenuItem(title: t("放大时间线"), action: #selector(zoomInMenu), keyEquivalent: "=")
         zoomIn.target = self; viewMenu.addItem(zoomIn)
-        let zoomOut = NSMenuItem(title: "缩小时间线", action: #selector(zoomOutMenu), keyEquivalent: "-")
+        let zoomOut = NSMenuItem(title: t("缩小时间线"), action: #selector(zoomOutMenu), keyEquivalent: "-")
         zoomOut.target = self; viewMenu.addItem(zoomOut)
         viewItem.submenu = viewMenu
 
         // ── 窗口 ──
         let windowItem = NSMenuItem(); mainMenu.addItem(windowItem)
-        let windowMenu = NSMenu(title: "窗口")
-        windowMenu.addItem(NSMenuItem(title: "最小化", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m"))
-        windowMenu.addItem(NSMenuItem(title: "缩放", action: #selector(NSWindow.performZoom(_:)), keyEquivalent: ""))
+        let windowMenu = NSMenu(title: t("窗口"))
+        windowMenu.addItem(NSMenuItem(title: t("最小化"), action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m"))
+        windowMenu.addItem(NSMenuItem(title: t("缩放"), action: #selector(NSWindow.performZoom(_:)), keyEquivalent: ""))
         windowMenu.addItem(.separator())
-        windowMenu.addItem(NSMenuItem(title: "前置全部窗口", action: #selector(NSApplication.arrangeInFront(_:)), keyEquivalent: ""))
+        windowMenu.addItem(NSMenuItem(title: t("前置全部窗口"), action: #selector(NSApplication.arrangeInFront(_:)), keyEquivalent: ""))
         windowItem.submenu = windowMenu
         NSApp.windowsMenu = windowMenu
 
         // ── 帮助 ──
         let helpItem = NSMenuItem(); mainMenu.addItem(helpItem)
-        let helpMenu = NSMenu(title: "帮助")
-        let helpMain = NSMenuItem(title: "Final Cut Bro 帮助", action: #selector(showHelpMenu), keyEquivalent: "?")
+        let helpMenu = NSMenu(title: t("帮助"))
+        let helpMain = NSMenuItem(title: t("Final Cut Bro 帮助"), action: #selector(showHelpMenu), keyEquivalent: "?")
         helpMain.target = self; helpMenu.addItem(helpMain)
         helpItem.submenu = helpMenu
         NSApp.helpMenu = helpMenu
@@ -138,7 +142,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// 标准"关于"菜单项(用 NSApp orderFrontStandardAboutPanel)。
     private func aboutItem(_ name: String) -> NSMenuItem {
-        let item = NSMenuItem(title: "关于 \(name)", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        let item = NSMenuItem(title: t("关于 \(name)"), action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         item.target = NSApp
         return item
     }
@@ -287,21 +291,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 extension NSToolbarItem.Identifier {
+    static let fcbLang    = NSToolbarItem.Identifier("fcbLang")
     static let fcbToggles = NSToolbarItem.Identifier("fcbToggles")
     static let fcbExport  = NSToolbarItem.Identifier("fcbExport")
 }
 
 extension AppDelegate: NSToolbarDelegate {
     func toolbarDefaultItemIdentifiers(_ t: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.flexibleSpace, .fcbToggles, .fcbExport]   // flexibleSpace 把两组推到右侧,挨在一起
+        [.flexibleSpace, .fcbLang, .fcbToggles, .fcbExport]   // flexibleSpace 把各组推到右侧,挨在一起
     }
     func toolbarAllowedItemIdentifiers(_ t: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.flexibleSpace, .fcbToggles, .fcbExport]
+        [.flexibleSpace, .fcbLang, .fcbToggles, .fcbExport]
     }
     func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier id: NSToolbarItem.Identifier,
                  willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
         let item = NSToolbarItem(itemIdentifier: id)
         switch id {
+        case .fcbLang:
+            let v = NSHostingView(rootView: LanguageSwitcher())
+            v.frame = NSRect(x: 0, y: 0, width: 40, height: 30)
+            item.view = v
         case .fcbToggles:
             let v = NSHostingView(rootView: TitlebarToggleGroup(store: store))
             v.frame = NSRect(x: 0, y: 0, width: 150, height: 30)

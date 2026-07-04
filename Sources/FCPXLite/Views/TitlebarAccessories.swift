@@ -9,15 +9,15 @@ struct TitlebarToggleGroup: View {
     let store: DocumentStore
     var body: some View {
         HStack(spacing: 0) {
-            btn(active: store.ui.showBrowser, help: "素材库(左)") {
+            btn(active: store.ui.showBrowser, help: t("素材库(左)")) {
                 store.dispatch(.setShowBrowser(!store.ui.showBrowser))
             } icon: { LibraryToggleIcon(color: $0) }
             divider
-            btn(active: store.ui.showInspector, help: "检查器(右)⌘4") {
+            btn(active: store.ui.showInspector, help: t("检查器(右)⌘4")) {
                 store.dispatch(.setInspector(!store.ui.showInspector))
             } icon: { InspectorToggleIcon(color: $0) }
             divider
-            btn(active: store.ui.showChat, help: "Agent 面板(右)") {
+            btn(active: store.ui.showChat, help: t("Agent 面板(右)")) {
                 store.dispatch(.setShowChat(!store.ui.showChat))
             } icon: { AgentToggleIcon(color: $0) }
         }
@@ -48,6 +48,46 @@ struct TitlebarExportButton: View {
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(Tokens.Palette.divider, lineWidth: 1))
         }
-        .buttonStyle(.plain).help("导出(⌘E)")
+        .buttonStyle(.plain).help(t("导出(⌘E)"))
+    }
+}
+
+/// 语言切换器(顶栏右侧)。启用语言 ≤2 → toggle(显示当前短码,点击切下一个);>2 → 下拉菜单。
+struct LanguageSwitcher: View {
+    let i18n = Localization.shared
+    var body: some View {
+        Group {
+            if i18n.enabledLanguages.count > 2 {
+                Menu {
+                    ForEach(i18n.enabledLanguages) { lang in
+                        Button { i18n.language = lang } label: {
+                            if lang == i18n.language { Label(lang.nativeName, systemImage: "checkmark") }
+                            else { Text(lang.nativeName) }
+                        }
+                    }
+                } label: {
+                    Text(i18n.language.shortCode)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Tokens.Palette.textIcon)
+                }
+                .menuStyle(.borderlessButton).fixedSize()
+                .frame(height: 28).padding(.horizontal, 4)
+                .background(Tokens.Palette.elevated)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Tokens.Palette.divider, lineWidth: 1))
+                .help(t("界面语言"))
+            } else {
+                Button { i18n.toggle() } label: {
+                    Text(i18n.language.shortCode)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Tokens.Palette.textIcon)
+                        .frame(width: 34, height: 28)
+                        .background(Tokens.Palette.elevated)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Tokens.Palette.divider, lineWidth: 1))
+                }
+                .buttonStyle(.plain).help(t("界面语言"))
+            }
+        }
     }
 }
