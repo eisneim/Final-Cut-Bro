@@ -353,7 +353,7 @@ final class DebugControlServer {
             let i = cmd.index ?? -1
             if store.document.sequence.spine.indices.contains(i),
                case .clip(let c) = store.document.sequence.spine[i] {
-                let assetDur = store.document.assetLibrary.first { $0.id == c.assetID }?.duration ?? c.duration
+                let assetDur = store.document.assetDuration(of: c)
                 if cmd.tool == "head" {
                     store.dispatch(.trimLeft(at: i, deltaIn: .seconds(cmd.seconds ?? 0)))
                 } else {

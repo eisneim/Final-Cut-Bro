@@ -685,7 +685,7 @@ import Observation
             var newDur = ui.playhead.seconds - absStart.seconds
             guard newDur > 0.1 else { return }
             if clip.title == nil {   // 媒体:不超素材尾
-                let assetDur = document.assetLibrary.first { $0.id == clip.assetID }?.duration.seconds ?? newDur
+                let assetDur = document.assetDuration(of: clip).seconds
                 newDur = min(newDur, max(0.1, assetDur - clip.sourceIn.seconds))
             }
             dispatch(.setConnectedTiming(clip.id, offset: nil, sourceIn: nil, duration: .seconds(newDur)))
@@ -694,7 +694,7 @@ import Observation
         guard let (i, clipStart, clip) = clipAtPlayhead() else { return }
         let newDur = ui.playhead - clipStart     // 新时长 = 光标 − 片段起点
         guard newDur > .zero else { return }
-        let assetDur = document.assetLibrary.first { $0.id == clip.assetID }?.duration ?? clip.duration
+        let assetDur = document.assetDuration(of: clip)
         dispatch(.trimRight(at: i, newDuration: newDur, assetDuration: assetDur))
     }
 

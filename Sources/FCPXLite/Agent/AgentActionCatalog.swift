@@ -165,7 +165,7 @@ enum AgentActionCatalog {
             let sec = numArg(a, "seconds") ?? 0
             if strArg(a, "edge") == "head" { store.dispatch(.trimLeft(at: ei, deltaIn: .seconds(sec))) }
             else {
-                let assetDur = store.document.assetLibrary.first { $0.id == c.assetID }?.duration ?? c.duration
+                let assetDur = store.document.assetDuration(of: c)
                 store.dispatch(.trimRight(at: ei, newDuration: .seconds(sec), assetDuration: assetDur))
             }
             return "已修剪片段 \(intArg(a, "clipIndex")!) \(strArg(a, "edge") ?? "")"
@@ -213,7 +213,7 @@ enum AgentActionCatalog {
                              ParamSpec(name: "deltaSeconds", kind: .number, required: true, doc: "入点偏移(秒),正/负")]) { store, a in
             guard let ei = spineElementIndex(store, clipIndex: intArg(a, "clipIndex") ?? -1),
                   case .clip(let c) = store.document.sequence.spine[ei] else { return "错误:clipIndex 无效" }
-            let assetDur = store.document.assetLibrary.first { $0.id == c.assetID }?.duration ?? c.duration
+            let assetDur = store.document.assetDuration(of: c)
             store.dispatch(.slip(at: ei, delta: .seconds(numArg(a, "deltaSeconds") ?? 0), assetDuration: assetDur))
             return "已滑移片段 \(intArg(a, "clipIndex")!)"
         },
@@ -227,8 +227,8 @@ enum AgentActionCatalog {
                   case .clip(let prev) = spine[ei - 1], case .clip(let next) = spine[ei + 1] else {
                 return "错误:slide 需要前后都是片段(非间隙/非边缘)"
             }
-            let prevDur = store.document.assetLibrary.first { $0.id == prev.assetID }?.duration ?? prev.duration
-            let nextDur = store.document.assetLibrary.first { $0.id == next.assetID }?.duration ?? next.duration
+            let prevDur = store.document.assetDuration(of: prev)
+            let nextDur = store.document.assetDuration(of: next)
             store.dispatch(.slide(at: ei, delta: .seconds(numArg(a, "deltaSeconds") ?? 0),
                                   prevAssetDuration: prevDur, nextAssetDuration: nextDur))
             return "已滑动片段 \(intArg(a, "clipIndex")!)"
