@@ -75,8 +75,7 @@ final class FCPXMLExporterTests: XCTestCase {
         XCTAssertTrue(XMLParser(data: Data(xml.utf8)).parse(), "含字幕的导出仍应结构合法")
     }
 
-    /// 连接字幕的 offset 必须是【父级本地坐标 = 宿主 sourceIn + 相对 offset】,不是相对值也不是绝对时间线。
-    /// 这是导入 FCP 后字幕不错位的关键(此前直接写相对值,大 sourceIn 时字幕堆到 0)。
+    /// 连接字幕的 offset 必须是【父级本地坐标 = 宿主 sourceIn + 相对 offset】,且按帧对齐。
     func testConnectedTitleOffsetIsParentStartPlusRelative() {
         let a = videoAsset()
         let clipA = Clip(assetID: a.id, sourceIn: .zero, duration: .seconds(5))
@@ -86,13 +85,47 @@ final class FCPXMLExporterTests: XCTestCase {
         let clipB = Clip(assetID: a.id, sourceIn: .seconds(10), duration: .seconds(8), connected: [title])
         let xml = FCPXMLExporter.export(doc([.clip(clipA), .clip(clipB)], assets: [a]))
 
-        // 顶层 clip 的 offset = 绝对时间线:A=0s, B=5s
-        XCTAssertTrue(xml.contains("offset=\"\(Time.seconds(0).fcpxmlString)\""), "A 应在 0s")
-        XCTAssertTrue(xml.contains("offset=\"\(Time.seconds(5).fcpxmlString)\""), "B 应在 5s")
-        // 字幕 offset = 宿主 sourceIn(10) + 相对(2) = 12s(父级本地坐标)
-        let expected = Time.seconds(12).fcpxmlString
-        XCTAssertTrue(xml.contains("offset=\"\(expected)\""), "字幕 offset 应 = sourceIn+相对 = 12s(得到 \(xml))")
+        // 顶层 clip offset = 绝对时间线(帧对齐,25fps):A=0s, B=5s=125帧=12500/2500s
+        XCTAssertTrue(xml.contains("offset=\"0s\""), "A 应在 0s")
+        XCTAssertTrue(xml.contains("offset=\"12500/2500s\""), "B 应在 5s(125帧)")
+        // 字幕 offset = 宿主 sourceIn(10) + 相对(2) = 12s = 300帧 = 30000/2500s
+        XCTAssertTrue(xml.contains("offset=\"30000/2500s\""), "字幕 offset 应=sourceIn+相对=12s;得到 \(xml)")
         XCTAssertTrue(XMLParser(data: Data(xml.utf8)).parse())
+    }
+
+    /// 所有编辑点时间必须落在整数帧边界(否则 FCP 报"此项目不在编辑帧边界上")。
+    func testTimesAreFrameAligned() {
+        let a = videoAsset()   // 25fps
+        // 故意用非帧对齐的秒数(ASR 时间戳那样)
+        let title = Clip(assetID: AssetID(), sourceIn: .zero, duration: .seconds(0.137),
+                         lane: 1, offset: .seconds(3.1267), title: TitleSpec(text: "x"))
+        let host = Clip(assetID: a.id, sourceIn: .seconds(0.44), duration: .seconds(2.9), connected: [title])
+        let xml = FCPXMLExporter.export(doc([.clip(host)], assets: [a]))
+        // 抽出所有 offset/duration/start 的 "N/2500s",其分子必须是 100 的倍数(=整数帧)
+        let re = try! NSRegularExpression(pattern: "\"(\\d+)/2500s\"")
+        let ns = xml as NSString
+        let matches = re.matches(in: xml, range: NSRange(location: 0, length: ns.length))
+        XCTAssertFalse(matches.isEmpty, "应有帧对齐时间")
+        for m in matches {
+            let num = Int(ns.substring(with: m.range(at: 1)))!
+            XCTAssertEqual(num % 100, 0, "时间 \(num)/2500s 不在帧边界(分子非 100 倍数)")
+        }
+        XCTAssertTrue(XMLParser(data: Data(xml.utf8)).parse())
+    }
+
+    /// 字幕 fontSize 按分辨率缩放:1080 为基准 ×1,4K(2160)×2。
+    func testFontSizeScalesWithResolution() {
+        let make: (Int, Int) -> String = { w, h in
+            let asset = Asset(id: AssetID(), url: URL(fileURLWithPath: "/tmp/a.mov"), kind: .video,
+                              duration: .seconds(10), naturalSize: CGSize(width: w, height: h), frameRate: 25, hasAudio: true)
+            let title = Clip(assetID: AssetID(), sourceIn: .zero, duration: .seconds(2), lane: 1,
+                             title: TitleSpec(text: "字", fontSize: 50))
+            let host = Clip(assetID: asset.id, sourceIn: .zero, duration: .seconds(5), connected: [title])
+            let d = Document(formatWidth: w, formatHeight: h, frameRate: 25, assetLibrary: [asset], sequence: Sequence(spine: [.clip(host)]))
+            return FCPXMLExporter.export(d)
+        }
+        XCTAssertTrue(make(1920, 1080).contains("fontSize=\"50\""), "1080p:50→50")
+        XCTAssertTrue(make(3840, 2160).contains("fontSize=\"100\""), "4K:50→100(×2)")
     }
 
     /// 字幕位置:TitleSpec.position(渲染像素,y 向下为正)→ FCP adjust-transform 百分比(1=1%,y 向上为正)。
