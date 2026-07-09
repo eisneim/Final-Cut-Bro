@@ -254,13 +254,14 @@ extension AgentActionCatalog {
             return "已每隔 \(interval)s 切割,共 \(cnt) 段"
         },
         AgentAction(type: "build_subtitle_cut", domain: .timeline,
-                    doc: "【字幕剪辑一键成片 —— 处理 ASR/字幕剪辑请【只用这一个】动作,不要用几十次 append_clip/add_title】。你先在脑子里根据字幕【规划】要保留哪些句子(丢掉口误/重拍/思考废话/和别的句子重复的),然后把保留的句子【一次性】作为 segments 数组全部传进来。本动作会按顺序:逐段从源视频提取该时间区间拼到时间线 + 给该段加屏幕下方字幕,(若给了 exportPath)最后直接导出成片。一次调用完成全部工作。\n  segments: 保留段数组,每项 {from:源起始秒, to:源结束秒, text:该段字幕文字};按成片先后顺序排列。\n  assetIndex: 源视频在素材库的索引(默认0)。fontSize 字号(默认56)。y 字幕垂直位置(默认380=屏幕下方)。colorHex 颜色(默认#FFFFFF)。exportPath 给了就剪完导出到该绝对路径。",
+                    doc: "【字幕剪辑一键成片 —— 处理 ASR/字幕剪辑请【只用这一个】动作,不要用几十次 append_clip/add_title】。你先在脑子里根据字幕【规划】要保留哪些句子(丢掉口误/重拍/思考废话/和别的句子重复的),然后把保留的句子【一次性】作为 segments 数组全部传进来。本动作会按顺序:逐段从源视频提取该时间区间拼到时间线 + 给该段加屏幕下方字幕,(若给了 exportPath)最后直接导出成片。一次调用完成全部工作。\n  segments: 保留段数组,每项 {from:源起始秒, to:源结束秒, text:该段字幕文字, assetIndex:该段来自哪个素材(可选)};按成片先后顺序排列。\n  【多素材/多镜头拼成一条片子】:实拍常是多段视频,每段是独立素材。把每个 segment 的 assetIndex 指到它所属的那个源视频(用 list_assets 先看清素材↔索引映射),就能跨多个源视频剪成一条连贯成片;省略 assetIndex 的段用顶层 assetIndex(默认0)。\n  assetIndex: 顶层默认源视频索引(默认0,仅用于未指定 assetIndex 的段)。fontSize 字号(默认56)。y 字幕垂直位置(默认380=屏幕下方)。colorHex 颜色(默认#FFFFFF)。exportPath 给了就剪完导出到该绝对路径。",
                     params: [ParamSpec(name: "segments", kind: .objectArray([
                                 ParamSpec(name: "from", kind: .number, required: true, doc: "源起始秒"),
                                 ParamSpec(name: "to", kind: .number, required: true, doc: "源结束秒"),
-                                ParamSpec(name: "text", kind: .string, required: true, doc: "该段字幕文字")]),
+                                ParamSpec(name: "text", kind: .string, required: true, doc: "该段字幕文字"),
+                                ParamSpec(name: "assetIndex", kind: .int, required: false, doc: "该段来自哪个素材(0基,可选;省略=用顶层 assetIndex)")]),
                                 required: true, doc: "保留段数组(按成片顺序)"),
-                             ParamSpec(name: "assetIndex", kind: .int, required: false, doc: "源视频索引,默认0"),
+                             ParamSpec(name: "assetIndex", kind: .int, required: false, doc: "顶层默认源视频索引,默认0(仅用于未指定 assetIndex 的段)"),
                              ParamSpec(name: "fontSize", kind: .number, required: false, doc: "字号,默认56"),
                              ParamSpec(name: "y", kind: .number, required: false, doc: "字幕垂直位置,默认380"),
                              ParamSpec(name: "colorHex", kind: .string, required: false, doc: "颜色#RRGGBB,默认白"),
@@ -269,16 +270,19 @@ extension AgentActionCatalog {
             guard !segs.isEmpty else { return "错误:segments 为空,需先规划保留段再传入" }
             let i = intArg(a, "assetIndex") ?? 0
             guard store.document.assetLibrary.indices.contains(i) else { return "错误:assetIndex \(i) 无效" }
-            let assetID = store.document.assetLibrary[i].id
             let fs = numArg(a, "fontSize") ?? 56
             let yy = numArg(a, "y") ?? 380
             let color = strArg(a, "colorHex") ?? "#FFFFFF"
             var built = 0
             var bad: [Int] = []
+            var usedAssets = Set<Int>()
             store.transaction {
                 for (k, seg) in segs.enumerated() {
                     guard let from = numArg(seg, "from"), let to = numArg(seg, "to"), to > from else { bad.append(k); continue }
-                    _ = store.appendSourceRange(assetID: assetID, from: from, to: to)   // 拼接并把播放头移到该段起点
+                    let segIdx = intArg(seg, "assetIndex") ?? i   // 该段来源:优先段内 assetIndex,否则顶层默认
+                    guard store.document.assetLibrary.indices.contains(segIdx) else { bad.append(k); continue }
+                    usedAssets.insert(segIdx)
+                    _ = store.appendSourceRange(assetID: store.document.assetLibrary[segIdx].id, from: from, to: to)   // 拼接并把播放头移到该段起点
                     let text = strArg(seg, "text") ?? ""
                     if !text.isEmpty {
                         _ = store.addTitleAtPlayhead(text: text, duration: .seconds(to - from))
@@ -289,7 +293,7 @@ extension AgentActionCatalog {
             }
             var total = 0.0
             for el in store.document.sequence.spine { total += el.duration.seconds }
-            var msg = "已一键构建 \(built) 段(提取+字幕),成片时长 \(String(format: "%.2f", total))s"
+            var msg = "已一键构建 \(built) 段(提取+字幕),来自 \(usedAssets.count) 个素材,成片时长 \(String(format: "%.2f", total))s"
             if !bad.isEmpty { msg += ";跳过无效段 \(bad)" }
             if let ep = strArg(a, "exportPath"), !ep.isEmpty {
                 store.exportMovie(to: URL(fileURLWithPath: ep), settings: ExportSettings())

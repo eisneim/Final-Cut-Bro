@@ -27,12 +27,29 @@ extension AgentActionCatalog {
             guard store.document.assetLibrary.indices.contains(i) else { return "错误:assetIndex 无效" }
             store.dispatch(.selectAsset(store.document.assetLibrary[i].id)); return "已选中素材 \(i)"
         },
+        AgentAction(type: "list_assets", domain: .navigate,
+                    doc: "列出素材库里所有素材及其【索引】(0基)、文件名、类型、时长、分辨率、帧率。多素材/多镜头剪辑前【先调这个】看清哪个文件对应哪个 assetIndex,再把 build_subtitle_cut 每段的 assetIndex 填对。",
+                    params: []) { store, _ in
+            let lib = store.document.assetLibrary
+            guard !lib.isEmpty else { return "素材库为空(先 import)" }
+            let lines = lib.enumerated().map { (i, asset) -> String in
+                let w = Int(asset.naturalSize.width), h = Int(asset.naturalSize.height)
+                let fps = asset.frameRate.map { String(format: "%.3g", $0) } ?? "?"
+                return "[\(i)] \(asset.url.lastPathComponent) · \(asset.kind.rawValue) · \(String(format: "%.2f", asset.duration.seconds))s · \(w)×\(h) · \(fps)fps"
+            }
+            return "素材库(\(lib.count) 个):\n" + lines.joined(separator: "\n")
+        },
         AgentAction(type: "undo", domain: .navigate, doc: "撤销上一次编辑。", params: []) { store, _ in store.undo(); return "已撤销" },
         AgentAction(type: "redo", domain: .navigate, doc: "重做。", params: []) { store, _ in store.redo(); return "已重做" },
-        AgentAction(type: "import", domain: .navigate, doc: "从磁盘绝对路径导入媒体(视频/音乐)到素材库。",
+        AgentAction(type: "import", domain: .navigate, doc: "从磁盘绝对路径导入媒体(视频/音乐)到素材库。返回它分配到的素材索引 assetIndex。",
                     params: [ParamSpec(name: "path", kind: .string, required: true, doc: "媒体文件绝对路径")]) { store, a in
             guard let p = strArg(a, "path") else { return "错误:缺 path" }
-            do { let asset = try MediaImporter.importAsset(from: URL(fileURLWithPath: p)); store.dispatch(.importAsset(asset)); return "已导入 \(URL(fileURLWithPath: p).lastPathComponent)" }
+            do {
+                let asset = try MediaImporter.importAsset(from: URL(fileURLWithPath: p))
+                store.dispatch(.importAsset(asset))
+                let idx = store.document.assetLibrary.firstIndex(where: { $0.id == asset.id }) ?? (store.document.assetLibrary.count - 1)
+                return "已导入 \(URL(fileURLWithPath: p).lastPathComponent) → 素材[\(idx)]"
+            }
             catch { return "错误:导入失败 \(error)" }
         },
         AgentAction(type: "export_fcpxml", domain: .navigate, doc: "把当前剪辑导出为 .fcpxml 工程文件到磁盘绝对路径(可回真 FCP 继续剪)。",

@@ -23,10 +23,11 @@ final class AgentService {
     - query_timeline:先调它看当前素材库/时间线(片段用 0 基 index,时间用秒)。
     - timeline_edit:改结构(insert/append/connect/delete/move/blade/trim/set_gap/position_move/blade_at/batch_blade/build_subtitle_cut)。
     - clip_adjust:改画面/音频(scale/position/crop/opacity/volume)、特效(add_effect/remove_effect/set_effect_param,kind=color/blur/fade)、停用启用片段(toggle_enabled)。
-    - navigate:导航/选择/撤销/导入(playhead/zoom/tool/select/select_asset/undo/redo/import)、导出(export_fcpxml 工程 / export_movie 渲染成片)。
+    - navigate:导航/选择/撤销/导入(playhead/zoom/tool/select/select_asset/list_assets/undo/redo/import)、导出(export_fcpxml 工程 / export_movie 渲染成片)。
     - file_ops:本地文件操作(read_file 读文件/write_file 写文件(需确认)/edit_file 编辑文件(需确认)/list_directory 列目录)。
     - shell:跑 shell 命令 run_command(ffprobe/ffmpeg 探测处理音视频、python 数据分析等;素材绝对路径见 query_timeline;高危命令需确认)。
     每个编辑工具都传 type=动作名 + 该动作的参数。操作前先 query_timeline 确认最新 index。
+    【多素材/多镜头剪成一条片子】实拍常是多段视频,每段是独立素材。此时:先 list_assets 看清每个文件对应的 assetIndex,再用【一次】build_subtitle_cut——把各素材要保留的句子按成片顺序放进 segments,每段用 assetIndex 指明它来自哪个源视频(省略=顶层默认 assetIndex)。不要为每段反复 append。
     若要求"做完整条片子",记得最后用 export_movie 导出成片。完成后用一句话总结你做了什么。
     """
 

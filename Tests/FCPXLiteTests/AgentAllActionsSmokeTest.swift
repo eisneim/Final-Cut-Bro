@@ -99,6 +99,7 @@ final class AgentAllActionsSmokeTest: XCTestCase {
         ok(s, "tool", ["name": "blade"])
         ok(s, "select", ["clipIndex": 0])
         ok(s, "select_asset", ["assetIndex": 0])
+        ok(s, "list_assets", [:])
         _ = run(s, "scale", ["clipIndex": 0, "value": 2])   // 制造一步可撤销
         ok(s, "undo", [:])
         ok(s, "redo", [:])
@@ -124,7 +125,7 @@ final class AgentAllActionsSmokeTest: XCTestCase {
             "scale","position","crop","opacity","volume","add_effect","set_effect_param","remove_effect",
             "toggle_enabled","add_transform_keyframe","clear_transform_keyframes","add_volume_keyframe",
             "rotate","set_title",
-            "playhead","zoom","tool","select","select_asset","undo","redo","create_project","toggle_snapping",
+            "playhead","zoom","tool","select","select_asset","list_assets","undo","redo","create_project","toggle_snapping",
             "rename_project","select_project","remove_project",
             "export_fcpxml","export_movie","import",
         ]
