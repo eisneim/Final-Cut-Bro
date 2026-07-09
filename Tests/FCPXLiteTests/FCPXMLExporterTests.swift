@@ -67,29 +67,53 @@ final class FCPXMLExporterTests: XCTestCase {
 
         XCTAssertTrue(xml.contains("<title "), "字幕应导出为 <title> 元素")
         XCTAssertTrue(xml.contains("你好世界"), "字幕文本应出现在导出里")
-        XCTAssertTrue(xml.contains("<effect id=\"r_title\""), "应声明 Basic Title 生成器资源")
-        XCTAssertTrue(xml.contains("Bumper:Opener.localized"), "uid 子目录段须为 Bumper:Opener(FCP 才解析得到)")
+        XCTAssertTrue(xml.contains("<effect id=\"r_title\""), "应声明字幕生成器资源")
+        XCTAssertTrue(xml.contains("Custom.localized/Custom.moti"), "用 Custom.moti(跨版本最稳)")
         XCTAssertTrue(xml.contains("fontSize=\"64\""), "字号应进 text-style")
         XCTAssertTrue(xml.contains("fontColor=\"1 0 0 1\""), "颜色 #FF0000 → \"1 0 0 1\"")
         XCTAssertTrue(xml.contains("<text-style-def"), "应有 text-style-def")
         XCTAssertTrue(XMLParser(data: Data(xml.utf8)).parse(), "含字幕的导出仍应结构合法")
     }
 
-    /// 字幕位置:TitleSpec.position(y 向下为正)→ FCP adjust-transform(y 向上为正,翻符号)。
-    func testTitlePositionMapsToTransform() {
+    /// 连接字幕的 offset 必须是【父级本地坐标 = 宿主 sourceIn + 相对 offset】,不是相对值也不是绝对时间线。
+    /// 这是导入 FCP 后字幕不错位的关键(此前直接写相对值,大 sourceIn 时字幕堆到 0)。
+    func testConnectedTitleOffsetIsParentStartPlusRelative() {
         let a = videoAsset()
-        let spec = TitleSpec(text: "底部字幕", fontSize: 56, position: CGPoint(x: 0, y: 380))
-        let titleClip = Clip(assetID: AssetID(), sourceIn: .zero, duration: .seconds(3),
-                             lane: 1, offset: .zero, title: spec)
-        let host = Clip(assetID: a.id, sourceIn: .zero, duration: .seconds(5), connected: [titleClip])
-        let xml = FCPXMLExporter.export(doc([.clip(host)], assets: [a]))
-        XCTAssertTrue(xml.contains("<adjust-transform position=\"0 -380\""), "y=380(向下)应映射为 FCP y=-380(向上)")
-        // DTD 顺序:adjust-transform 必须在 text/text-style-def 之后,否则 FCP 报 "content does not follow the DTD"。
+        let clipA = Clip(assetID: a.id, sourceIn: .zero, duration: .seconds(5))
+        let title = Clip(assetID: AssetID(), sourceIn: .zero, duration: .seconds(1),
+                         lane: 1, offset: .seconds(2), title: TitleSpec(text: "字幕"))
+        // 第二段:源入点 sourceIn=10s,时间线位于 5s 起(A 之后)
+        let clipB = Clip(assetID: a.id, sourceIn: .seconds(10), duration: .seconds(8), connected: [title])
+        let xml = FCPXMLExporter.export(doc([.clip(clipA), .clip(clipB)], assets: [a]))
+
+        // 顶层 clip 的 offset = 绝对时间线:A=0s, B=5s
+        XCTAssertTrue(xml.contains("offset=\"\(Time.seconds(0).fcpxmlString)\""), "A 应在 0s")
+        XCTAssertTrue(xml.contains("offset=\"\(Time.seconds(5).fcpxmlString)\""), "B 应在 5s")
+        // 字幕 offset = 宿主 sourceIn(10) + 相对(2) = 12s(父级本地坐标)
+        let expected = Time.seconds(12).fcpxmlString
+        XCTAssertTrue(xml.contains("offset=\"\(expected)\""), "字幕 offset 应 = sourceIn+相对 = 12s(得到 \(xml))")
+        XCTAssertTrue(XMLParser(data: Data(xml.utf8)).parse())
+    }
+
+    /// 字幕位置:TitleSpec.position(渲染像素,y 向下为正)→ FCP adjust-transform 百分比(1=1%,y 向上为正)。
+    func testTitlePositionMapsToTransformPercent() {
+        let a = Asset(id: AssetID(), url: URL(fileURLWithPath: "/tmp/a.mov"), kind: .video,
+                      duration: .seconds(10), naturalSize: CGSize(width: 1000, height: 1000), frameRate: 25, hasAudio: true)
+        // 1000×1000 画幅,y=250px → 25% → FCP -25(向下 25%)
+        let d = Document(formatWidth: 1000, formatHeight: 1000, frameRate: 25,
+                         assetLibrary: [a], sequence: Sequence(spine: []))
+        let spec = TitleSpec(text: "底部字幕", fontSize: 56, position: CGPoint(x: 0, y: 250))
+        let title = Clip(assetID: AssetID(), sourceIn: .zero, duration: .seconds(3), lane: 1, offset: .zero, title: spec)
+        let host = Clip(assetID: a.id, sourceIn: .zero, duration: .seconds(5), connected: [title])
+        var doc2 = d; doc2.sequence = Sequence(spine: [.clip(host)])
+        let xml = FCPXMLExporter.export(doc2)
+
+        XCTAssertTrue(xml.contains("<adjust-transform position=\"0 -25\""), "y=250px/1000 → 25% 向下 → -25;实际: \(xml)")
+        // DTD 顺序:adjust-transform 在 text/text-style-def 之后
         let posText = xml.range(of: "<text>")!.lowerBound
         let posStyleDef = xml.range(of: "</text-style-def>")!.lowerBound
         let posTransform = xml.range(of: "<adjust-transform")!.lowerBound
-        XCTAssertTrue(posText < posTransform, "<text> 应在 <adjust-transform> 之前")
-        XCTAssertTrue(posStyleDef < posTransform, "</text-style-def> 应在 <adjust-transform> 之前")
+        XCTAssertTrue(posText < posTransform && posStyleDef < posTransform, "adjust-transform 应在 text/text-style-def 之后")
         XCTAssertTrue(XMLParser(data: Data(xml.utf8)).parse())
     }
     func testFormatOmitsNameAndHasColorSpace() {
