@@ -253,6 +253,35 @@ final class DebugControlServer {
             let w = Int(cmd.width ?? 1920), h = Int(cmd.seconds ?? 1080)
             store.dispatch(.createProject(Project(name: cmd.path ?? "测试项目",
                 formatWidth: w, formatHeight: h, frameRate: 25)))
+        case "exportFCPXML":
+            // 自测:直接导出 FCPXML 工程到绝对路径(不经 LLM)。
+            if let p = cmd.path {
+                MainActor.assumeIsolated {
+                    do { try store.exportFCPXML(to: URL(fileURLWithPath: p)); NSLog("[DebugControlServer] exportFCPXML → \(p)") }
+                    catch { NSLog("[DebugControlServer] exportFCPXML 失败: \(error)") }
+                }
+            }
+        case "exportMovie":
+            // 自测:直接渲染导出成片到绝对路径(异步)。
+            if let p = cmd.path {
+                MainActor.assumeIsolated { store.exportMovie(to: URL(fileURLWithPath: p), settings: ExportSettings()) }
+            }
+        case "saveProject":
+            // 项目持久化:保存整个文档到 .fcbro(素材引用 + 所有项目 + 时间线 + 效果)。
+            if let p = cmd.path {
+                MainActor.assumeIsolated {
+                    do { try store.saveProject(to: URL(fileURLWithPath: p)); NSLog("[DebugControlServer] saveProject → \(p)") }
+                    catch { NSLog("[DebugControlServer] saveProject 失败: \(error)") }
+                }
+            }
+        case "openProject":
+            // 项目持久化:从 .fcbro 打开,整体替换当前文档。
+            if let p = cmd.path {
+                MainActor.assumeIsolated {
+                    do { try store.openProject(from: URL(fileURLWithPath: p)); NSLog("[DebugControlServer] openProject ← \(p)") }
+                    catch { NSLog("[DebugControlServer] openProject 失败: \(error)") }
+                }
+            }
         case "agentSend":
             // 端到端:走【真实输入框路径】—— 注入输入框文字 + 调和 UI 按钮同一个 send。
             store.ui.agentInput = cmd.path ?? ""
@@ -271,6 +300,18 @@ final class DebugControlServer {
         case "setInspector": store.dispatch(.setInspector((cmd.width ?? 1) > 0))
         case "setShowEffects": store.dispatch(.setShowEffects((cmd.width ?? 1) > 0))
         case "addTitle": _ = store.addTitleAtPlayhead(text: cmd.path ?? "标题")
+        case "addTitleAt":
+            // 解耦字幕:视频段已 merge、字幕独立叠加多段 —— 在时间线任意位置加带时长的字幕。
+            // 复用 add_title action(已支持 text/atSeconds/duration/fontSize/colorHex/y),从 JSON body 取全参数。
+            if let raw = try? JSONSerialization.jsonObject(with: body) as? [String: Any] {
+                var args: [String: Any] = ["type": "add_title"]
+                for k in ["text", "atSeconds", "duration", "fontSize", "colorHex", "y"] {
+                    if let v = raw[k] { args[k] = v }
+                }
+                if let action = AgentActionCatalog.find("add_title") {
+                    MainActor.assumeIsolated { NSLog("[DebugControlServer] addTitleAt → \(action.apply(store, args))") }
+                }
+            }
         case "setAssetStripZoom": store.dispatch(.setAssetStripZoom(cmd.width ?? 6))
         case "setSkim":
             // index<0 或缺省 → 清除;否则对素材库第 index 个素材 skim 到 seconds。
@@ -343,13 +384,20 @@ final class DebugControlServer {
             }
         case "dispatchAction":
             // 自测:直接执行一个 catalog 动作,不经 LLM。type 走 path 字段,参数从通用字段组装。
+            // 通用字符串/任意参数:body 里带 "args":{...} 会整体合并进去(可传 path/text/name/colorHex 等)。
             if let type = cmd.path {
                 var args: [String: Any] = ["type": type]
                 if let i = cmd.index { args["clipIndex"] = i; args["assetIndex"] = i; args["spineIndex"] = i; args["fromClipIndex"] = i }
                 if let s = cmd.seconds { args["atSeconds"] = s; args["seconds"] = s; args["value"] = s }
                 if let l = cmd.lane { args["lane"] = l }
                 if let w = cmd.width { args["value"] = w; args["pxPerSecond"] = w }
-                if let action = AgentActionCatalog.find(type) { MainActor.assumeIsolated { _ = action.apply(store, args) } }
+                if let raw = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
+                   let extra = raw["args"] as? [String: Any] {
+                    for (k, v) in extra { args[k] = v }   // 覆盖/补充:可传 export_fcpxml/export_movie/import 的 path 等字符串参数
+                }
+                if let action = AgentActionCatalog.find(type) {
+                    MainActor.assumeIsolated { NSLog("[DebugControlServer] dispatchAction \(type) → \(action.apply(store, args))") }
+                }
             }
         case "setGapDuration":
             store.dispatch(.setGapDuration(at: cmd.index ?? 0, duration: .seconds(cmd.seconds ?? 1)))

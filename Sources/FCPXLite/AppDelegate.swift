@@ -75,8 +75,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let fileMenu = NSMenu(title: t("文件"))
         let newProj = NSMenuItem(title: t("新建项目…"), action: #selector(newProjectMenu), keyEquivalent: "n")
         newProj.keyEquivalentModifierMask = [.command, .shift]; newProj.target = self; fileMenu.addItem(newProj)
+        let openProj = NSMenuItem(title: t("打开项目…"), action: #selector(openProjectMenu), keyEquivalent: "o")
+        openProj.target = self; fileMenu.addItem(openProj)
         let importItem = NSMenuItem(title: t("导入素材…"), action: #selector(importMenu), keyEquivalent: "i")
         importItem.target = self; fileMenu.addItem(importItem)
+        fileMenu.addItem(.separator())
+        let saveProj = NSMenuItem(title: t("保存项目…"), action: #selector(saveProjectMenu), keyEquivalent: "s")
+        saveProj.target = self; fileMenu.addItem(saveProj)
         fileMenu.addItem(.separator())
         let exportItem = NSMenuItem(title: t("导出成片…"), action: #selector(showExportMenu), keyEquivalent: "e")
         exportItem.target = self; fileMenu.addItem(exportItem)
@@ -288,6 +293,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func showSettingsMenu() { store.dispatch(.setShowSettings(true)) }
     @objc private func newProjectMenu() { store.dispatch(.setShowProjectModal(true)) }
     @objc private func importMenu() { ImportPanel.present(into: store) }
+    @objc private func openProjectMenu() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.init(filenameExtension: ProjectPersistence.fileExtension)!]
+        panel.allowsMultipleSelection = false
+        panel.begin { resp in
+            guard resp == .OK, let url = panel.url else { return }
+            do { try self.store.openProject(from: url) }
+            catch { self.presentError(error, title: t("打开项目失败")) }
+        }
+    }
+    @objc private func saveProjectMenu() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.init(filenameExtension: ProjectPersistence.fileExtension)!]
+        let name = store.document.currentProject?.name ?? "Final Cut Bro"
+        panel.nameFieldStringValue = "\(name).\(ProjectPersistence.fileExtension)"
+        panel.begin { resp in
+            guard resp == .OK, let url = panel.url else { return }
+            do { try self.store.saveProject(to: url) }
+            catch { self.presentError(error, title: t("保存项目失败")) }
+        }
+    }
+    private func presentError(_ error: Error, title: String) {
+        let a = NSAlert(); a.messageText = title; a.informativeText = "\(error)"; a.runModal()
+    }
     @objc private func exportFCPXMLMenu() {
         let panel = NSSavePanel(); panel.allowedContentTypes = [.init(filenameExtension: "fcpxml")!]
         panel.nameFieldStringValue = "Final Cut Bro.fcpxml"

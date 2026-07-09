@@ -58,6 +58,16 @@ import Observation
         document.sequence = transform(document.sequence)
     }
 
+    /// 用一个新文档整体替换当前状态(打开 .fcbro 项目文件用):
+    /// 清空撤销/重做栈(新文档没有历史),复位播放头与选择,避免旧选择指向不存在的 id。
+    func replaceDocument(_ doc: Document) {
+        document = doc
+        undoStack.removeAll(); redoStack.removeAll()
+        ui.playhead = .zero
+        ui.selectedClipID = nil; ui.selectedClipIDs = []
+        ui.selectedAssetID = nil; ui.selectedAssetIDs = []
+    }
+
     // MARK: - 撤销 / 重做
 
     private var undoStack: [Document] = []
